@@ -4,3 +4,8 @@ void fparRSB_partMesh(int *part, long long *vtx, int *nel,
 
 int parRSB_partMesh(int *part, long long *vtx, int nel, int nve, int *options,
                     MPI_Comm comm);
+//
+// Dump the map file
+//
+int parRSBWriteMapFile(int nelt,int nv,int *pmap,int *vtx,char *fileName,
+		       MPI_Comm comm);

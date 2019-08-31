@@ -31,7 +31,8 @@ CSRCS:= $(SRCDIR)/genmap.c \
 	$(SRCDIR)/parrsb-binsort.c \
 	$(SRCDIR)/parrsb-histogram.c \
 	$(SRCDIR)/genmap-chelpers.c \
-	$(SRCDIR)/parRSB.c 
+	$(SRCDIR)/parRSB.c \
+	$(SRCDIR)/parRSB-map.c
 COBJS:=$(CSRCS:.c=.o)
 
 SRCOBJS:=$(COBJS)

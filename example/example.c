@@ -59,6 +59,7 @@ int main(int argc, char *argv[]) {
   free(part);
   conFree(&con);
 
+#if 0
   crystal_init(&cr, &comm);
   sarray_transfer(elm_data, &eList, proc, 0, &cr);
   crystal_free(&cr);
@@ -77,6 +78,24 @@ int main(int argc, char *argv[]) {
 
   free(el);
   free(vl);
+#endif
+
+  buffer buf; buffer_init(&buf,1024);
+  sarray_sort(elm_data,eList.ptr,(unsigned int)nel,id,1,&buf);
+  int *eli = (int*) malloc(nel * sizeof(int));
+  int *vli = (int*) malloc(nv * nel * sizeof(int));
+  for(data = eList.ptr, e = 0; e < nel; ++e) {
+    eli[e] = data[e].proc;
+    for(n = 0; n < nv; ++n) {
+      vli[e * nv + n] = data[e].vtx[n];
+    }
+  }
+  parRSBWriteMapFile(nel,nv,eli,vli,"example.ma2",MPI_COMM_WORLD);
+
+  free(eli);
+  free(vli);
+  buffer_free(&buf);
+
   array_free(&eList);
   comm_free(&comm);
 
