@@ -20,6 +20,7 @@ int mergeSegments(Mesh mesh,struct comm *c,int i,GenmapScalar tolSquared)
 {
   uint nPoints=mesh->elements.n;
   Point points=mesh->elements.ptr;
+  int nDim = mesh->nDim;
 
   sint rank=c->id,size=c->np;
 
@@ -48,30 +49,35 @@ int mergeSegments(Mesh mesh,struct comm *c,int i,GenmapScalar tolSquared)
   return 0;
 }
 
-int findSegments(Mesh mesh,struct comm *c,GenmapScalar tol,int verbose){
-  int nDim=mesh->nDim,nVertex=mesh->nVertex;
-  GenmapScalar tolSquared=tol*tol;
+int findSegments(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose) {
+  int nDim = mesh->nDim;
+  int nVertex = mesh->nVertex;
+  GenmapScalar tolSquared = tol*tol;
 
-  parallel_sort(struct Point_private,&mesh->elements,x[0],
-    genmap_gs_scalar,bin_sort,0,c);
+  parallel_sort(struct Point_private, &mesh->elements, x[0], genmap_gs_scalar, bin_sort, 0, c);
 
-  uint nPoints=mesh->elements.n;
-  Point points=mesh->elements.ptr;
+  uint nPoints = mesh->elements.n;
+  Point points = mesh->elements.ptr;
 
-  buffer buf; buffer_init(&buf,1024);
-  if(nDim==3)
+  buffer buf;
+  buffer_init(&buf, 1024);
+
+  if (nDim == 3)
     sarray_sort_2(struct Point_private,points,nPoints,x[1],3,x[2],3,&buf);
   else
-    sarray_sort  (struct Point_private,points,nPoints,x[1],3,&buf);
+    sarray_sort(struct Point_private,points,nPoints,x[1],3,&buf);
+
   buffer_free(&buf);
 
   //TODO: load balance
 
-  sint bin=1;
-  if(nPoints==0)
-    bin=0;
+  sint bin = 1;
+  if (nPoints == 0)
+    bin = 0;
 
-  sint rank=c->id,size=c->np; comm_ext old=c->c;
+  sint rank = c->id;
+  sint size = c->np;
+  comm_ext old = c->c;
   struct comm nonZeroRanks;
 #ifdef MPI
   MPI_Comm new; MPI_Comm_split(old,bin,rank,&new);
@@ -81,31 +87,35 @@ int findSegments(Mesh mesh,struct comm *c,GenmapScalar tol,int verbose){
   comm_init(&nonZeroRanks,1);
 #endif
 
-  rank=nonZeroRanks.id; size=nonZeroRanks.np;
+  rank = nonZeroRanks.id;
+  size = nonZeroRanks.np;
 
-  if(bin>0){
+  if (bin > 0) {
     slong out[2][1],buff[2][1],in[1];
     in[0]=nPoints;
     comm_scan(out,&nonZeroRanks,gs_long,gs_add,in,1,buff);
     slong start=out[0][0];
 
-    if(verbose>1){
-      printf("segments: rank=%d npts=%u start=%lld\n",rank,nPoints,start);
+    if (verbose > 0) {
+      printf("segments: rank=%d npts=%u start=%lld\n", rank, nPoints, start);
       fflush(stdout);
     }
 
-    sint i; for(i=0;i<nPoints;i++)
-      points[i].ifSegment=0,points[i].proc=rank;
+    sint i;
+    for (i = 0; i < nPoints; i++) {
+      points[i].ifSegment = 0;
+      points[i].proc = rank;
+    }
 
     int dim;
-    for(dim=0;dim<nDim;dim++){
-      findLocalSegments(mesh,dim,tolSquared);
-      mergeSegments(mesh,&nonZeroRanks,dim,tolSquared);
+    for (dim = 0; dim < nDim; dim++) {
+      findLocalSegments(mesh, dim, tolSquared);
+      mergeSegments(mesh, &nonZeroRanks, dim, tolSquared);
 
-      if(verbose>0){
-        sint count=0;
-        for(i=0;i<nPoints;i++)
-          if(points[i].ifSegment>0)
+      if (verbose > 0) {
+        sint count = 0;
+        for (i = 0; i < nPoints; i++)
+          if (points[i].ifSegment>0)
             count++;
 
         in[0]=count;
