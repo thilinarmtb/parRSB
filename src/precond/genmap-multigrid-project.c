@@ -52,7 +52,7 @@ int project(genmap_handle h, struct comm *gsc, mgData d, genmap_vector ri,
   while (i < max_iter) {
     metric_tic(gsc, LAPLACIAN);
 #if 0
-    GenmapLaplacianWeighted(h, c, p->data, w->data);
+    GenmapLaplacianWeighted(h, p->data, w->data);
 #else
     GenmapLaplacian(h, p->data, w->data);
 #endif

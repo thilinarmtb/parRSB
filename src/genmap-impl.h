@@ -63,7 +63,6 @@ struct genmap_handle_private {
   int nv;
 
   struct array *elements;
-  struct crystal cr;
 
   /* Weighted Laplacian */
   struct gs_data *gsw;
@@ -106,6 +105,8 @@ typedef enum {
   TQLI,
   LAPLACIANSETUP,
   FINDNBRS,
+  FIRSTHALF,
+  SECONDHALF,
   CSRMATSETUP,
   CSRTOPSETUP,
   PRECONDSETUP,
@@ -129,7 +130,13 @@ uint metric_get_levels();
 void metric_print(struct comm *c);
 void metric_finalize();
 
-/* genCon */
+/* Laplacian and gencon */
+struct unique_id {
+  ulong id;
+  int proc;
+  int shared;
+};
+
 typedef struct {
   GenmapULong sequenceId;
   int nNeighbors;

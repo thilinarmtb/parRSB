@@ -95,6 +95,8 @@ void metric_print(struct comm *c) {
       printf("    LAPLACIANSETUP       : %g/%g/%g\n",
              SUMMARY(i, LAPLACIANSETUP));
       printf("      FINDNBRS           : %g/%g/%g\n", SUMMARY(i, FINDNBRS));
+      printf("        FIRSTHALF        : %g/%g/%g\n", SUMMARY(i, FIRSTHALF));
+      printf("        SECONDHALF       : %g/%g/%g\n", SUMMARY(i, SECONDHALF));
       printf("      CSRMATSETUP        : %g/%g/%g\n", SUMMARY(i, CSRMATSETUP));
       printf("      CSRTOPSETUP        : %g/%g/%g\n", SUMMARY(i, CSRTOPSETUP));
       printf("    PRECONDSETUP         : %g/%g/%g\n", SUMMARY(i, PRECONDSETUP));

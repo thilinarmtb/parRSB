@@ -4,6 +4,7 @@
 
 static void genmap_find_neighbors(struct array *nbrs, genmap_handle h,
                                   struct comm *cc) {
+  metric_tic(cc, FIRSTHALF);
   sint lelt = genmap_get_nel(h);
   sint nv = genmap_get_nvertices(h);
 
@@ -23,7 +24,7 @@ static void genmap_find_neighbors(struct array *nbrs, genmap_handle h,
                     .nNeighbors = 0,
                     .elementId = elem_id,
                     .vertexId = elems[i].vertices[j],
-                    .workProc = elems[i].vertices[j] % cc->np};
+                    .workProc = cc->id};
       array_cat(vertex, &vertices, &vrt, 1);
       sequenceId++;
     }
@@ -31,73 +32,146 @@ static void genmap_find_neighbors(struct array *nbrs, genmap_handle h,
   }
   assert(vertices.n == lelt * nv);
 
+  // Compress vertices and figure out shared ids
+  sarray_sort(vertex, vertices.ptr, vertices.n, vertexId, 1, &h->buf);
+
+  struct array unique;
+  array_init(struct unique_id, &unique, lelt);
+
+  ulong vertex_id = 0; // vertexId > 0
+  vertex *vp = vertices.ptr;
+  for (i = 0; i < vertices.n; i++) {
+    if (vp[i].vertexId > vertex_id) {
+      vertex_id = vp[i].vertexId;
+      struct unique_id id = {
+          .proc = vertex_id % cc->np, .id = vertex_id, .shared = 0};
+      array_cat(struct unique_id, &unique, &id, 1);
+    }
+  }
+
   struct crystal cr;
   crystal_init(&cr, cc);
 
-  sarray_transfer(vertex, &vertices, workProc, 1, &cr);
+  sarray_transfer(struct unique_id, &unique, proc, 1, &cr);
+  sarray_sort(struct unique_id, unique.ptr, unique.n, id, 1, &h->buf);
+
+  struct unique_id *up = unique.ptr;
+  sint s = 0, e;
+  while (s < unique.n) {
+    e = s + 1;
+    while (e < unique.n && up[e].id == up[s].id)
+      e++;
+    if (e > s + 1)
+      while (s < e) {
+        up[s].shared = 1;
+        s++;
+      }
+    s = e;
+  }
+
+  sarray_transfer(struct unique_id, &unique, proc, 1, &cr);
+  sarray_sort(struct unique_id, unique.ptr, unique.n, id, 1, &h->buf);
+
+  struct array shared;
+  array_init(vertex, &shared, lelt);
+  struct array local;
+  array_init(vertex, &local, lelt);
+
+  // Now send only the shared ids to workProc
+  up = unique.ptr;
+  int workProc;
+  s = 0;
+  for (i = 0; i < unique.n; i++) {
+    vertex_id = up[i].id;
+    if (up[i].shared == 1) {
+      workProc = vertex_id % cc->np;
+      while (s < vertices.n && vp[s].vertexId == vertex_id) {
+        vp[s].workProc = workProc;
+        array_cat(vertex, &shared, &vp[s], 1);
+        s++;
+      }
+    } else {
+      workProc = cc->id;
+      while (s < vertices.n && vp[s].vertexId == vertex_id) {
+        vp[s].workProc = workProc;
+        array_cat(vertex, &local, &vp[s], 1);
+        s++;
+      }
+    }
+  }
+  array_free(&unique);
+  array_free(&vertices);
+
+  sarray_transfer(vertex, &shared, workProc, 1, &cr);
+
+  array_init(vertex, &vertices, 2 * lelt);
+  array_cat(vertex, &vertices, local.ptr, local.n);
+  array_cat(vertex, &vertices, shared.ptr, shared.n);
+  array_free(&local);
+  array_free(&shared);
+
+  metric_toc(cc, FIRSTHALF);
+
+  metric_tic(cc, SECONDHALF);
+
+  sarray_sort(vertex, vertices.ptr, vertices.n, vertexId, 1, &h->buf);
   size = vertices.n;
-  vertex *vPtr = vertices.ptr;
+  vp = vertices.ptr;
 
-  sarray_sort(vertex, vPtr, size, vertexId, 1, &h->buf);
-
-  struct array a;
-  array_init(csr_entry, &a, 10);
+  struct array csr;
+  array_init(csr_entry, &csr, 10);
 
   // FIXME: Assumes quads or hexes
-  sint s = 0, e;
+  s = 0;
   csr_entry t;
   while (s < size) {
     e = s + 1;
-    while (e < size && vPtr[s].vertexId == vPtr[e].vertexId)
+    while (e < size && vp[s].vertexId == vp[e].vertexId)
       e++;
     int n_neighbors = min(e, size) - s;
 
     for (i = s; i < min(e, size); i++) {
-      t.r = vPtr[i].elementId;
-      t.proc = vPtr[i].workProc;
+      t.r = vp[i].elementId;
+      t.proc = vp[i].workProc;
       for (j = 0; j < n_neighbors; j++) {
-        t.c = vPtr[s + j].elementId;
-        array_cat(csr_entry, &a, &t, 1);
+        t.c = vp[s + j].elementId;
+        array_cat(csr_entry, &csr, &t, 1);
       }
     }
     s = e;
   }
+  array_free(&vertices);
 
-  sarray_transfer(csr_entry, &a, proc, 1, &cr);
-  // TODO: Check if the last line is redundant
-  sarray_sort_2(csr_entry, a.ptr, a.n, r, 1, c, 1, &h->buf);
-  // sarray_sort(csr_entry, a.ptr, a.n, r, 1, &h->buf);
+  sarray_transfer(csr_entry, &csr, proc, 1, &cr);
+  sarray_sort_2(csr_entry, csr.ptr, csr.n, r, 1, c, 1, &h->buf);
+
+  metric_toc(cc, SECONDHALF);
 
   array_init(entry, nbrs, lelt);
 
-  if (a.n == 0) {
-    crystal_free(&cr);
-    array_free(&vertices);
-    array_free(&a);
-  }
+  if (csr.n > 0) {
 
-  csr_entry *aptr = a.ptr;
-  entry *nptr = nbrs->ptr;
+    entry ee = {0, 0, 0, 0, 0, 0.0}, ep = {0, 0, 0, 0, 0.0};
+    csr_entry *ap = csr.ptr;
+    ep.r = ap[0].r;
+    ep.c = ap[0].c;
 
-  entry ee = {0, 0, 0, 0, 0, 0.0}, ep = {0, 0, 0, 0, 0.0};
-  ep.r = aptr[0].r;
-  ep.c = aptr[0].c;
-  array_cat(entry, nbrs, &ep, 1);
+    array_cat(entry, nbrs, &ep, 1);
 
-  for (i = 1; i < a.n; i++) {
-    ee.r = aptr[i].r;
-    ee.c = aptr[i].c;
-    if (ee.r != ep.r || ee.c != ep.c) {
-      array_cat(entry, nbrs, &ee, 1);
-      ep = ee;
+    for (i = 1; i < csr.n; i++) {
+      ee.r = ap[i].r;
+      ee.c = ap[i].c;
+      if (ee.r != ep.r || ee.c != ep.c) {
+        array_cat(entry, nbrs, &ee, 1);
+        ep = ee;
+      }
     }
+
+    sarray_sort_2(entry, nbrs->ptr, nbrs->n, r, 1, c, 1, &h->buf);
   }
 
-  sarray_sort_2(entry, nbrs->ptr, nbrs->n, r, 1, c, 1, &h->buf);
-
+  array_free(&csr);
   crystal_free(&cr);
-  array_free(&vertices);
-  array_free(&a);
 }
 
 int GenmapInitLaplacian(genmap_handle h, struct comm *c) {
@@ -113,13 +187,13 @@ int GenmapInitLaplacian(genmap_handle h, struct comm *c) {
 
   array_free(&entries);
 
-  metric_toc(c, CSRTOPSETUP);
+  metric_tic(c, CSRTOPSETUP);
   h->gsh = get_csr_top(h->M, c);
   metric_toc(c, CSRTOPSETUP);
 
   GenmapRealloc(h->M->row_off[h->M->rn], &h->b);
 
-#if defined(GENMAP_DEBUG)
+#if 0
   int nnz = h->M->row_off[h->M->rn];
   double fro[2] = {0.0, 0.0}, buf[2];
   for (int i = 0; i < nnz; i++) {
@@ -127,7 +201,7 @@ int GenmapInitLaplacian(genmap_handle h, struct comm *c) {
     fro[1] += h->M->v[i] * h->M->v[i];
   }
   comm_allreduce(c, gs_double, gs_add, &fro, 2, &buf);
-  if (c->gsc.id == 0)
+  if (c->id == 0)
     printf("nrom(G,'1')=%g\nnorm(G,'fro')=%g\n", fro[0], fro[1]);
 #endif
 
