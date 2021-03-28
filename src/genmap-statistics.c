@@ -100,6 +100,8 @@ void metric_print(struct comm *c) {
       printf("      CSRMATSETUP        : %g/%g/%g\n", SUMMARY(i, CSRMATSETUP));
       printf("      CSRTOPSETUP        : %g/%g/%g\n", SUMMARY(i, CSRTOPSETUP));
       printf("    PRECONDSETUP         : %g/%g/%g\n", SUMMARY(i, PRECONDSETUP));
+      printf("    LAPLACIANGSSETUP     : %g/%g/%g\n",
+             SUMMARY(i, LAPLACIANGSSETUP));
       printf("    RQI                  : %g/%g/%g\n", SUMMARY(i, RQI));
       printf("    NRQI                 : %g/%g/%g\n", SUMMARY(i, NRQI));
       for (j = 0; j < min[i * MAXMETS + NRQI]; j++)

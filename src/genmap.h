@@ -60,6 +60,9 @@ int GenmapLaplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
 int GenmapInitLaplacianWeighted(genmap_handle h, struct comm *c);
 int GenmapLaplacianWeighted(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
 
+void genmap_init_gs_laplacian(genmap_handle h, struct comm *c);
+void genmap_gs_laplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
+
 /* Eigen */
 int GenmapTQLI(genmap_handle h, genmap_vector diag, genmap_vector upper,
                genmap_vector **eVec, genmap_vector *eVal);

@@ -6,14 +6,6 @@
 #include <genmap-impl.h>
 #include <sort.h>
 
-int faces3D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{1, 5, 7, 3}, {2, 4, 8, 6},
-                                                   {1, 2, 6, 5}, {3, 7, 8, 4},
-                                                   {1, 3, 4, 2}, {5, 6, 8, 7}};
-
-int faces2D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{3, 1, 0, 0}, {2, 4, 0, 0},
-                                                   {1, 2, 0, 0}, {4, 3, 0, 0},
-                                                   {0, 0, 0, 0}, {0, 0, 0, 0}};
-
 struct minPair_private {
   uint proc;
   ulong orig;
@@ -164,8 +156,8 @@ int findConnectedPeriodicPairs(Mesh mesh, BoundaryFace f_, BoundaryFace g_,
     GenmapScalar meanF = 0.0, meanG = 0.0;
 
     for (j = 0; j < nvf; j++) {
-      fMax = max(fMax, fabs(f.face.vertex[j].x[i]));
-      gMax = max(gMax, fabs(g.face.vertex[j].x[i]));
+      fMax = GENMAP_MAX(fMax, fabs(f.face.vertex[j].x[i]));
+      gMax = GENMAP_MAX(gMax, fabs(g.face.vertex[j].x[i]));
       meanF += f.face.vertex[j].x[i];
       meanG += g.face.vertex[j].x[i];
     }
@@ -195,7 +187,7 @@ int findConnectedPeriodicPairs(Mesh mesh, BoundaryFace f_, BoundaryFace g_,
   }
   d2Min = sqrt(d2Min);
 
-  GenmapScalar fgMax = max(fMax, gMax);
+  GenmapScalar fgMax = GENMAP_MAX(fMax, gMax);
   GenmapScalar tol = (1e-3) * fgMax;
   if (d2Min > tol) {
     fprintf(stderr,
@@ -214,8 +206,8 @@ int findConnectedPeriodicPairs(Mesh mesh, BoundaryFace f_, BoundaryFace g_,
   for (i = 0; i < nvf; i++) {
     k = (i + shift) % nvf;
     k = nvf - 1 - k;
-    m.min = min(f.face.vertex[i].globalId, g.face.vertex[k].globalId);
-    m.orig = max(f.face.vertex[i].globalId, g.face.vertex[k].globalId);
+    m.min = GENMAP_MIN(f.face.vertex[i].globalId, g.face.vertex[k].globalId);
+    m.orig = GENMAP_MAX(f.face.vertex[i].globalId, g.face.vertex[k].globalId);
     array_cat(struct minPair_private, matched, &m, 1);
   }
 }
@@ -246,7 +238,7 @@ int gatherMatchingPeriodicFaces(Mesh mesh, struct comm *c) {
   sint i;
   slong eid;
   for (i = 0; i < nFaces; i++) {
-    eid = max(bPtr[i].bc[0], bPtr[i].elementId);
+    eid = GENMAP_MAX(bPtr[i].bc[0], bPtr[i].elementId);
 #if defined(GENMAP_DEBUG)
     printf("Send matching (%lld,%lld) to (%ld,%ld).\n", bPtr[i].elementId,
            bPtr[i].faceId, bPtr[i].bc[0], bPtr[i].bc[1]);

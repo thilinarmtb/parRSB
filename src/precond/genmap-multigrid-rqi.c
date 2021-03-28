@@ -80,7 +80,8 @@ int rqi(genmap_handle h, struct comm *gsc, mgData d, genmap_vector z,
 
         // M=Z(1:k,:)*G*Z(1:k,:);
         for (j = 0; j < N; j++) {
-          GenmapLaplacian(h, &Z[j * lelt], GZ);
+          // GenmapLaplacian(h, &Z[j * lelt], GZ);
+          genmap_gs_laplacian(h, &Z[j * lelt], GZ);
           for (k = 0; k < N; k++) {
             M[k * N + j] = 0.0;
             for (l = 0; l < lelt; l++)

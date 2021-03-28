@@ -6,9 +6,6 @@
 #error "sort.h not included"
 #endif
 
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#define max(a, b) ((a) > (b) ? (a) : (b))
-
 double get_scalar(struct array *a, uint i, uint off, uint usize, gs_dom type);
 void get_extrema(void *extrema, struct sort *s, uint field, struct comm *c);
 int set_dest(uint *proc, uint np, ulong start, uint size, ulong nelem);

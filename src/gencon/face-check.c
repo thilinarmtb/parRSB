@@ -104,7 +104,7 @@ VToEMap *getVToEMap(Mesh m, struct comm *c) {
     }
 
     ProcID *pPtr = procs.ptr;
-    e = min(e, vtcsCmpct.n);
+    e = GENMAP_MIN(e, vtcsCmpct.n);
     for (i = 0; i < procs.n; i++) {
       t.workProc = pPtr[i].procId;
       for (j = s; j < e; j++) {

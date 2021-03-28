@@ -22,7 +22,7 @@ int findMinNeighborDistance(Mesh mesh) {
           d = distance3D(p[i + j], p[i + neighbor]);
         else
           d = distance2D(p[i + j], p[i + neighbor]);
-        p[i + j].dx = min(p[i + j].dx, d);
+        p[i + j].dx = GENMAP_MIN(p[i + j].dx, d);
       }
     }
   }

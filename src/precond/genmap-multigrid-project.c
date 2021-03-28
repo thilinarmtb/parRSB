@@ -54,7 +54,8 @@ int project(genmap_handle h, struct comm *gsc, mgData d, genmap_vector ri,
 #if 0
     GenmapLaplacianWeighted(h, p->data, w->data);
 #else
-    GenmapLaplacian(h, p->data, w->data);
+    // GenmapLaplacian(h, p->data, w->data);
+    genmap_gs_laplacian(h, p->data, w->data);
 #endif
     metric_toc(gsc, LAPLACIAN);
 
@@ -186,7 +187,7 @@ int project_lvl(genmap_handle h, genmap_comm c, mgData d, GenmapScalar *ri,
   i = 0;
   while (i < max_iter) {
     // metric_tic(&c->gsc,LAPLACIAN);
-    // GenmapLaplacian(h,c,p->data,w->data);
+    // GenmapLaplacian(h,p->data,w->data);
     // metric_toc(&c->gsc,LAPLACIAN);
     csr_mat_gather(M, M->gsh, p->data, d->buf, &buf);
     csr_mat_apply(w->data, M, d->buf);

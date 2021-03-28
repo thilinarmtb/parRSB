@@ -80,7 +80,7 @@ static int findLocalSegments(Mesh mesh, struct comm *c, int i,
   for (j = 1; j < npts; j++) {
     GenmapScalar d = sqrDiff(pts[j].x[i], pts[j - 1].x[i]);
 
-    GenmapScalar dx = min(pts[j].dx, pts[j - 1].dx) * tolSquared;
+    GenmapScalar dx = GENMAP_MIN(pts[j].dx, pts[j - 1].dx) * tolSquared;
 
     if (d > dx)
       pts[j].ifSegment = 1;
@@ -107,7 +107,7 @@ static int findLocalSegments(Mesh mesh, struct comm *c, int i,
 
   if (rank > 0) {
     GenmapScalar d = sqrDiff(lastp.x[i], pts->x[i]);
-    GenmapScalar dx = min(lastp.dx, pts->dx) * tolSquared;
+    GenmapScalar dx = GENMAP_MIN(lastp.dx, pts->dx) * tolSquared;
     if (d > dx)
       pts->ifSegment = 1;
   }

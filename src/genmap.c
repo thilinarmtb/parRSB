@@ -3,6 +3,20 @@
 
 #include <genmap-impl.h>
 
+/* 1 - indexed */
+int faces3D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{1, 5, 7, 3}, {2, 4, 8, 6},
+                                                   {1, 2, 6, 5}, {3, 7, 8, 4},
+                                                   {1, 3, 4, 2}, {5, 6, 8, 7}};
+
+int faces2D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{3, 1, 0, 0}, {2, 4, 0, 0},
+                                                   {1, 2, 0, 0}, {4, 3, 0, 0},
+                                                   {0, 0, 0, 0}, {0, 0, 0, 0}};
+
+/* 0 - indexed */
+int edges3D[GC_MAX_EDGES][GC_MAX_EDGE_VERTICES] = {
+    {0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 4}, {2, 6},
+    {3, 7}, {1, 5}, {0, 2}, {1, 3}, {4, 6}, {5, 7}};
+
 int genmap_init(genmap_handle *h_, comm_ext ce, parRSB_options *options) {
   GenmapMalloc(1, h_);
   genmap_handle h = *h_;
@@ -19,6 +33,9 @@ int genmap_init(genmap_handle *h_, comm_ext ce, parRSB_options *options) {
   buffer_init(&h->buf, 1024);
 
   /* Un-weighted Laplacian */
+  h->gs = NULL;
+  h->diagonal = NULL;
+
   h->gsh = NULL;
   h->M = NULL;
   h->b = NULL;
@@ -37,6 +54,11 @@ int genmap_finalize(genmap_handle h) {
   buffer_free(&h->buf);
 
   /* Un-weighted Laplacian */
+  if (h->diagonal != NULL)
+    GenmapFree(h->diagonal);
+  if (h->gs)
+    gs_free(h->gs);
+
   if (h->gsh)
     gs_free(h->gsh);
   if (h->M)

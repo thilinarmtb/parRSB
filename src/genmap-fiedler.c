@@ -37,6 +37,10 @@ int GenmapFiedlerRQI(genmap_handle h, struct comm *gsc, int max_iter,
   GenmapInitLaplacian(h, gsc);
   metric_toc(gsc, LAPLACIANSETUP);
 
+  metric_tic(gsc, LAPLACIANGSSETUP);
+  genmap_init_gs_laplacian(h, gsc);
+  metric_toc(gsc, LAPLACIANGSSETUP);
+
   metric_tic(gsc, PRECONDSETUP);
   mgData d;
   mgSetup(h, gsc, h->M, &d);

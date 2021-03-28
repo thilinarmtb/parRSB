@@ -26,9 +26,9 @@ int set_dest(uint *proc, uint np, ulong start, uint size, ulong nelem) {
 
   i = 0;
   while (id1 <= id2 && i < size) {
-    ulong s = id1 * psize + min(id1, nrem);
-    ulong e = (id1 + 1) * psize + min(id1 + 1, nrem);
-    e = min(e, nelem);
+    ulong s = id1 * psize + GENMAP_MIN(id1, nrem);
+    ulong e = (id1 + 1) * psize + GENMAP_MIN(id1 + 1, nrem);
+    e = GENMAP_MIN(e, nelem);
     while (s <= start + i && start + i < e && i < size)
       proc[i++] = id1;
     id1++;

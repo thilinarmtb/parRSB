@@ -1,7 +1,5 @@
 #include <genmap-impl.h>
 
-#define min(a, b) ((b) < (a) ? (b) : (a))
-
 static void genmap_find_neighbors(struct array *nbrs, genmap_handle h,
                                   struct comm *cc) {
   metric_tic(cc, FIRSTHALF);
@@ -128,9 +126,9 @@ static void genmap_find_neighbors(struct array *nbrs, genmap_handle h,
     e = s + 1;
     while (e < size && vp[s].vertexId == vp[e].vertexId)
       e++;
-    int n_neighbors = min(e, size) - s;
+    int n_neighbors = GENMAP_MIN(e, size) - s;
 
-    for (i = s; i < min(e, size); i++) {
+    for (i = s; i < GENMAP_MIN(e, size); i++) {
       t.r = vp[i].elementId;
       t.proc = vp[i].workProc;
       for (j = 0; j < n_neighbors; j++) {
@@ -215,4 +213,5 @@ int GenmapLaplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v) {
   return 0;
 }
 
-#undef min
+#undef SWAP
+#undef SORT3
