@@ -23,21 +23,15 @@
       SWAP(v, 2, 3);                                                           \
   } while (0)
 
-// FIXME: Only works for 3D as of now
-void genmap_init_gs_laplacian(genmap_handle h, struct comm *c) {
+void genmap_number_faces_and_edges(genmap_handle h, struct comm *c) {
   int nv = genmap_get_nvertices(h);
   int ndim = (nv == 8) ? 3 : 2;
   int nf = 2 * ndim;                      // number of faces
   int nfv = 2 * (ndim - 1);               // number of face vertices
   int ne = (ndim == 3) ? nv + nf - 2 : 0; // number of edges
-  uint nlocal = nv + nf + ne;
 
   sint lelt = genmap_get_nel(h);
-  uint size = lelt * nlocal;
-
-  // Store vertices, edges and faces
-  GenmapLong *vef;
-  GenmapMalloc(size, &vef);
+  uint nlocal = nv + nf + ne;
 
   struct rsb_element *elements = genmap_get_elements(h);
 
@@ -45,12 +39,9 @@ void genmap_init_gs_laplacian(genmap_handle h, struct comm *c) {
   slong max_id = 0, buf;
   sint e, i;
   for (e = 0; e < lelt; e++) {
-    for (i = 0; i < nv; i++) {
-      vef[e * nlocal + i] = elements[e].vertices[i];
-
-      if (vef[e * nlocal + i] > max_id)
-        max_id = vef[e * nlocal + i];
-    }
+    for (i = 0; i < nv; i++)
+      if (elements[e].vertices[i] > max_id)
+        max_id = elements[e].vertices[i];
   }
 
   comm_allreduce(c, gs_long, gs_max, &max_id, 1, &buf);
@@ -65,22 +56,44 @@ void genmap_init_gs_laplacian(genmap_handle h, struct comm *c) {
       // max_id + v_min + (v_max - 1) * max_id
       v[0] = elements[e].vertices[edges3D[i][0]];
       v[1] = elements[e].vertices[edges3D[i][1]];
-      vef[e * nlocal + nv + i] = max_id + GENMAP_MIN(v[0], v[1]) +
-                                 (GENMAP_MAX(v[0], v[1]) - 1) * max_id;
+      elements[e].vertices[nv + i] = max_id + GENMAP_MIN(v[0], v[1]) +
+                                     (GENMAP_MAX(v[0], v[1]) - 1) * max_id;
     }
 
     for (i = 0; i < nf; i++) {
-      for (j = 0; j < nfv; j++) {
-        int kk = faces3D[i][j] - 1;
-        v[j] = elements[e].vertices[kk];
-      }
+      for (j = 0; j < nfv; j++)
+        v[j] = elements[e].vertices[faces3D[i][j] - 1];
+
       SORT4(v);
 
       // Two edges or three vertices uniquely define a face
-      vef[e * nlocal + nv + ne + i] = max_id + max_id * max_id + v[0] +
-                                      max_id * (v[1] - 1) +
-                                      max_id * max_id * (v[2] - 1);
+      elements[e].vertices[nv + ne + i] = max_id + max_id * max_id + v[0] +
+                                          max_id * (v[1] - 1) +
+                                          max_id * max_id * (v[2] - 1);
     }
+  }
+}
+
+// FIXME: Only works for 3D as of now
+void genmap_init_gs_laplacian(genmap_handle h, struct comm *c) {
+  int nv = genmap_get_nvertices(h);
+  int ndim = (nv == 8) ? 3 : 2;
+  int nf = 2 * ndim;                      // number of faces
+  int ne = (ndim == 3) ? nv + nf - 2 : 0; // number of edges
+
+  sint lelt = genmap_get_nel(h);
+  uint nlocal = nv + nf + ne;
+  uint size = lelt * nlocal;
+
+  // Store vertices, edges and faces
+  GenmapLong *vef;
+  GenmapMalloc(size, &vef);
+
+  struct rsb_element *elements = genmap_get_elements(h);
+  int e, i;
+  for (e = 0; e < lelt; e++) {
+    for (i = 0; i < nlocal; i++)
+      vef[e * nlocal + i] = elements[e].vertices[i];
   }
 
   if (h->gs != NULL)
@@ -96,14 +109,14 @@ void genmap_init_gs_laplacian(genmap_handle h, struct comm *c) {
   gs(u, gs_double, gs_add, 0, h->gs, &h->buf);
 
   GenmapRealloc(lelt, &h->diagonal);
-  for (i = 0; i < lelt; i++) {
-    h->diagonal[i] = 0.0;
-    for (j = 0; j < nv; j++)
-      h->diagonal[i] += u[i * nlocal + j];
-    for (j = 0; j < ne; j++)
-      h->diagonal[i] -= u[i * nlocal + nv + j];
-    for (j = 0; j < nf; j++)
-      h->diagonal[i] += u[i * nlocal + nv + ne + j];
+  for (e = 0; e < lelt; e++) {
+    h->diagonal[e] = 0.0;
+    for (i = 0; i < nv; i++)
+      h->diagonal[e] += u[e * nlocal + i];
+    for (i = 0; i < ne; i++)
+      h->diagonal[e] -= u[e * nlocal + nv + i];
+    for (i = 0; i < nf; i++)
+      h->diagonal[e] += u[e * nlocal + nv + ne + i];
   }
 
   GenmapFree(u);

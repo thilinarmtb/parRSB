@@ -55,7 +55,8 @@ int genmap_rsb(genmap_handle h) {
   struct comm *lc = h->local;
   struct comm *gc = h->global;
 
-  genmap_comm_scan(h, lc);
+  genmap_number_faces_and_edges(h, gc);
+  genmap_comm_scan(h, gc);
 
   uint nelt = genmap_get_nel(h);
   struct rsb_element *e = genmap_get_elements(h);

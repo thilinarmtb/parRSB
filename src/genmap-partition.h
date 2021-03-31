@@ -16,6 +16,8 @@ int genmap_inverse_power(double *y, int N, double *A, int verbose);
 int genmap_power(double *y, int N, double *A, int verbose);
 
 /* Laplacian */
+void genmap_number_faces_and_edges(genmap_handle h, struct comm *c);
+
 int GenmapInitLaplacian(genmap_handle h, struct comm *c);
 
 int GenmapLaplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
