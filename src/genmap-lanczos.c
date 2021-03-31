@@ -95,9 +95,9 @@ int GenmapLanczosLegendary(genmap_handle h, struct comm *gsc, genmap_vector f,
     }
   }
 
-  GenmapDestroyVector(p);
-  GenmapDestroyVector(w);
-  GenmapDestroyVector(r);
+  genmap_destroy_vector(p);
+  genmap_destroy_vector(w);
+  genmap_destroy_vector(r);
 
   return iter;
 }
@@ -177,9 +177,9 @@ int GenmapLanczos(genmap_handle h, struct comm *gsc, genmap_vector init,
     }
   }
 
-  GenmapDestroyVector(q0);
-  GenmapDestroyVector(q1);
-  GenmapDestroyVector(u);
+  genmap_destroy_vector(q0);
+  genmap_destroy_vector(q1);
+  genmap_destroy_vector(u);
 
   return k;
 }

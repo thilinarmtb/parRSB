@@ -139,7 +139,7 @@ int rqi(genmap_handle h, struct comm *gsc, mgData d, genmap_vector z,
   GenmapFree(v);
   GenmapFree(buf);
 
-  GenmapDestroyVector(err);
+  genmap_destroy_vector(err);
 
   return i + 1;
 }

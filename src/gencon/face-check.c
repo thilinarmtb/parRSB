@@ -18,6 +18,13 @@ typedef struct {
   ulong procId;
 } ProcID;
 
+typedef struct {
+  GenmapULong sequenceId;
+  GenmapULong elementId;
+  GenmapULong vertexId;
+  uint workProc;
+} vertex;
+
 VToEMap *getVToEMap(Mesh m, struct comm *c) {
   sint nelt = m->nelt;
   sint nv = m->nVertex;

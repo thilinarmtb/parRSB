@@ -177,9 +177,9 @@ int main(int argc, char *argv[]) {
     assert(fabs(e) < 1e-10);
   }
 
-  GenmapDestroyVector(r);
-  GenmapDestroyVector(x);
-  GenmapDestroyVector(x0);
+  genmap_destroy_vector(r);
+  genmap_destroy_vector(x);
+  genmap_destroy_vector(x0);
 
   mgFree(d);
 

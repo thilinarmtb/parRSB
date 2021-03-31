@@ -173,8 +173,8 @@ int main(int argc, char *argv[]) {
 
   mgFree(d);
 
-  GenmapDestroyVector(x);
-  GenmapDestroyVector(r);
+  genmap_destroy_vector(x);
+  genmap_destroy_vector(r);
 
   genmap_finalize(gh);
   mesh_free(mesh);

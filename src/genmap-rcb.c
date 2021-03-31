@@ -1,6 +1,9 @@
-#include <float.h>
 #include <genmap-impl.h>
 #include <sort.h>
+
+#include <float.h>
+
+#define MAXDIM 3
 
 void get_rcb_axis_local(double *min, double *max, struct rcb_element *elems,
                         uint nel, int ndim) {
@@ -220,3 +223,5 @@ int genmap_rcb(genmap_handle h) {
 
   return 0;
 }
+
+#undef MAXDIM

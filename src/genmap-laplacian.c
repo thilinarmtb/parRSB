@@ -1,5 +1,19 @@
 #include <genmap-impl.h>
 
+struct unique_id {
+  ulong id;
+  int proc;
+  int shared;
+};
+
+typedef struct {
+  GenmapULong sequenceId;
+  int nNeighbors;
+  GenmapULong elementId;
+  GenmapULong vertexId;
+  uint workProc;
+} vertex;
+
 static void genmap_find_neighbors(struct array *nbrs, genmap_handle h,
                                   struct comm *cc) {
   metric_tic(cc, FIRSTHALF);

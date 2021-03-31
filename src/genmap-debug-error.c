@@ -10,7 +10,7 @@
 #include <execinfo.h>
 
 /* Obtain a backtrace and print it to stdout. */
-void GenmapPrintStack(void) {
+void genmap_print_stack(void) {
   void *bt[50];
   int i;
   int bt_size = backtrace(bt, 50);
@@ -22,10 +22,10 @@ void GenmapPrintStack(void) {
   free(symbols);
 }
 #else
-void GenmapPrintStack(){};
+void genmap_print_stack(){};
 #endif // defined __GLIBC__
 
-double GenmapGetMaxRss() {
+double genmap_get_max_rss() {
   struct rusage r_usage;
 
   getrusage(RUSAGE_SELF, &r_usage);

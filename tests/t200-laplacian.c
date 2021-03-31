@@ -50,9 +50,9 @@ int main(int argc, char *argv[]) {
   for (i = 0; i < mesh->nelt; i++)
     assert(fabs(v->data[i]) < GENMAP_TOL);
 
-  GenmapDestroyVector(weights);
-  GenmapDestroyVector(v);
-  GenmapDestroyVector(u);
+  genmap_destroy_vector(weights);
+  genmap_destroy_vector(v);
+  genmap_destroy_vector(u);
 
   mesh_free(mesh);
   genmap_finalize(gh);
