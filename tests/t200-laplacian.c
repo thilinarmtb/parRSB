@@ -4,7 +4,7 @@
 
 #include <gencon-impl.h>
 #include <genmap-impl.h>
-#include <genmap-multigrid-precon.h>
+#include <genmap-multigrid.h>
 
 int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);

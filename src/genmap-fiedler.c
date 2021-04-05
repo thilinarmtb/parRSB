@@ -41,20 +41,13 @@ int GenmapFiedlerRQI(genmap_handle h, struct comm *gsc, int max_iter,
   genmap_init_gs_laplacian(h, gsc);
   metric_toc(gsc, LAPLACIANGSSETUP);
 
-  metric_tic(gsc, PRECONDSETUP);
-  mgData d;
-  mgSetup(h, gsc, h->M, &d);
-  metric_toc(gsc, PRECONDSETUP);
-
   genmap_vector y;
   genmap_vector_create_zeros(&y, lelt);
 
   metric_tic(gsc, RQI);
-  int iter = rqi(h, gsc, d, initVec, max_iter, y);
+  int iter = rqi(h, gsc, initVec, max_iter, y);
   metric_toc(gsc, RQI);
   metric_acc(NRQI, iter);
-
-  mgFree(d);
 
   norm = 0;
   for (i = 0; i < lelt; i++)

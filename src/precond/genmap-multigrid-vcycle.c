@@ -1,7 +1,9 @@
 #include <genmap-impl.h>
-#include <genmap-multigrid-precon.h>
+#include <genmap-multigrid.h>
 
-void mg_vcycle(GenmapScalar *u1, GenmapScalar *rhs, mgData d) {
+void mg_vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *dd) {
+  struct mg_data_csr *d = dd->data;
+
   GenmapScalar *s = d->x;
   GenmapScalar *Gs = d->y;
   GenmapScalar *r = d->b;

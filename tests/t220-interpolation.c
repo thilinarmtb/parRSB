@@ -3,7 +3,7 @@
 
 #include <gencon-impl.h>
 #include <genmap-impl.h>
-#include <genmap-multigrid-precon.h>
+#include <genmap-multigrid.h>
 
 int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);
@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
 
   /* Setup MG levels */
   mgData d;
-  mgSetup(c, M, &d);
+  mg_setup(c, M, &d);
 
   uint nlevels = d->nlevels;
   mgLevel *l = d->levels;
@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
 
   buffer_free(&buf);
 
-  mgFree(d);
+  mg_free(d);
   genmap_finalize(gh);
   mesh_free(mesh);
 

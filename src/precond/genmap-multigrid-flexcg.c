@@ -2,10 +2,10 @@
 #include <stdio.h>
 
 #include <genmap-impl.h>
-#include <genmap-multigrid-precon.h>
+#include <genmap-multigrid.h>
 
-int flex_cg(genmap_handle h, struct comm *gsc, mgData d, genmap_vector ri,
-            int maxIter, genmap_vector x) {
+int flex_cg(genmap_handle h, struct comm *gsc, struct mg_data *d,
+            genmap_vector ri, int max_iter, genmap_vector x) {
   assert(x->size == ri->size);
   assert(x->size == genmap_get_nel(h));
 
@@ -42,7 +42,7 @@ int flex_cg(genmap_handle h, struct comm *gsc, mgData d, genmap_vector ri,
   genmap_vector_copy(p, z);
 
   i = 0;
-  while (i < maxIter && sqrt(rz1) > GENMAP_TOL) {
+  while (i < max_iter && sqrt(rz1) > GENMAP_TOL) {
     GenmapLaplacian(h, p->data, w->data);
 
     den = genmap_vector_dot(p, w);
@@ -55,7 +55,7 @@ int flex_cg(genmap_handle h, struct comm *gsc, mgData d, genmap_vector ri,
 
     genmap_vector_copy(z0, z);
 #if PREC
-    mg_vcycle(z->data, r->data, d);
+    mg_vcycle(z->data, r->data, &d);
 #else
     genmap_vector_copy(z, r);
 #endif

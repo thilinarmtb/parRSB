@@ -2,12 +2,12 @@
 #include <stdio.h>
 
 #include <genmap-impl.h>
-#include <genmap-multigrid-precon.h>
+#include <genmap-multigrid.h>
 
 #define MM 505
 
-int project(genmap_handle h, struct comm *gsc, mgData d, genmap_vector ri,
-            int max_iter, genmap_vector x) {
+int project(genmap_handle h, struct comm *gsc, struct mg_data *d,
+            genmap_vector ri, int max_iter, genmap_vector x) {
   assert(x->size == ri->size);
   assert(x->size == genmap_get_nel(h));
 

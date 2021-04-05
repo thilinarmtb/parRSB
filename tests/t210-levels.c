@@ -4,7 +4,7 @@
 
 #include <gencon-impl.h>
 #include <genmap-impl.h>
-#include <genmap-multigrid-precon.h>
+#include <genmap-multigrid.h>
 
 int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);
@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
 
   /* Setup MG levels */
   mgData d;
-  mgSetup(c, M, &d);
+  mg_setup(c, M, &d);
   uint nlevels = d->nlevels;
 
   GenmapScalar *x = d->x, *y = d->y, *buf = d->buf;
@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
   for (j = 0; j < d->level_off[nlevels]; j++)
     assert(fabs(y[j]) < GENMAP_TOL);
 
-  mgFree(d);
+  mg_free(d);
 
   genmap_finalize(gh);
   mesh_free(mesh);

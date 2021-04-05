@@ -4,7 +4,7 @@
 
 #include <gencon-impl.h>
 #include <genmap-impl.h>
-#include <genmap-multigrid-precon.h>
+#include <genmap-multigrid.h>
 
 int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);
@@ -166,12 +166,12 @@ int main(int argc, char *argv[]) {
   GenmapGop(c, &norm, 1, GENMAP_SCALAR, GENMAP_SUM);
 
   mgData d;
-  mgSetup(c, c->M, &d);
+  mg_setup(c, c->M, &d);
   d->h = gh;
 
   rqi(gh, c, d, x, 30, 1, r);
 
-  mgFree(d);
+  mg_free(d);
 
   genmap_destroy_vector(x);
   genmap_destroy_vector(r);

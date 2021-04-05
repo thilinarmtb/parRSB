@@ -1,167 +1,274 @@
 #include <genmap-impl.h>
-#include <genmap-multigrid-precon.h>
+#include <genmap-multigrid.h>
 
-#define ABS(i) ((i < 0) ? -i : i)
+#define GETPTR(p, i, off) ((char *)(p) + (off) + (i) * sizeof(entry))
 
-void csr_mat_setup(struct array *entries, struct comm *c, csr_mat *M_) {
-  entry *ptr = entries->ptr;
+static void set_owner(char *ptr, sint n, size_t inOffset, size_t outOffset,
+                      slong lelg, sint np) {
+  sint lelt = lelg / np;
+  sint nrem = lelg % np;
 
-  buffer buf;
-  buffer_init(&buf, 1024);
-  sarray_sort_2(entry, ptr, entries->n, r, 1, c, 1, &buf);
-  buffer_free(&buf);
-
-  uint st = 0, e = 0;
-  sint diag;
-  while (st < entries->n) {
-    diag = -1;
-    e = st;
-    while (e < entries->n && ptr[st].r == ptr[e].r) {
-      if (ptr[e].r == ptr[e].c)
-        diag = e;
-      else
-        ptr[e].v = -1.0;
-      e++;
-    }
-    assert(diag >= 0);
-    ptr[diag].v = e - st - 1;
-    st = e;
+  ulong *inPtr;
+  sint *outPtr;
+  sint i;
+  slong row;
+  for (i = 0; i < n; i++) {
+    inPtr = (ulong *)GETPTR(ptr, i, inOffset);
+    outPtr = (sint *)GETPTR(ptr, i, outOffset);
+    row = *inPtr - 1;
+    // FIXME: Assumes the 'reverse-Nek' element distribution
+#if 0
+    if(row<lelt*(np-nrem)) *outPtr=(sint) row/lelt;
+    else *outPtr=np-nrem+(sint) (row-lelt*(np-nrem))/(lelt+1);
+#else
+    if (nrem == 0)
+      *outPtr = (sint)row / lelt;
+    else if (row < (lelt + 1) * nrem)
+      *outPtr = (sint)row / (lelt + 1);
+    else
+      *outPtr = nrem + (sint)(row - (lelt + 1) * nrem) / lelt;
+#endif
   }
-
-  uint i = 0, j, n = 0;
-  while (i < entries->n) {
-    j = i + 1;
-    while (j < entries->n && ptr[i].r == ptr[j].r)
-      j++;
-    i = j, n++;
-  }
-
-  GenmapMalloc(1, M_);
-  csr_mat M = *M_;
-  M->rn = n;
-
-  slong out[2][1], bf[2][1], in = M->rn;
-  comm_scan(out, c, gs_long, gs_add, &in, 1, bf);
-  M->row_start = out[0][0] + 1;
-
-  GenmapMalloc(M->rn + 1, &M->row_off);
-
-  if (n == 0)
-    M->col = NULL, M->v = NULL, M->diag = NULL;
-  else {
-    GenmapMalloc(entries->n, &M->col), GenmapMalloc(entries->n, &M->v);
-    GenmapMalloc(M->rn, &M->diag);
-  }
-
-  ptr = entries->ptr;
-  uint rn = 0;
-  for (i = 0; i < entries->n; i++) {
-    M->col[i] = ptr[i].c, M->v[i] = ptr[i].v;
-    if (ptr[i].r == ptr[i].c)
-      M->diag[rn++] = ptr[i].v;
-  }
-  assert(rn == M->rn);
-
-  M->row_off[0] = 0, i = 0;
-  uint nn = 0;
-  while (i < entries->n) {
-    j = i + 1;
-    while (j < entries->n && ptr[i].r == ptr[j].r)
-      j++;
-    i = M->row_off[++nn] = j;
-  }
-  assert(n == nn);
-  assert(M->row_off[n] == entries->n);
-
-  M->gsh = get_csr_top(M, c);
 }
 
-struct gs_data *get_csr_top(csr_mat M, struct comm *c) {
-  const uint rn = M->rn;
-  const uint n = M->row_off[rn];
-
-  slong *ids;
-  if (n > 0)
-    GenmapMalloc(n, &ids);
-
-  uint i, j;
-  for (i = 0; i < rn; i++)
-    for (j = M->row_off[i]; j < M->row_off[i + 1]; j++)
-      if (M->row_start + i == M->col[j])
-        ids[j] = M->col[j];
-      else
-        ids[j] = -M->col[j];
-
-  struct gs_data *gsh = gs_setup(ids, n, c, 0, gs_pairwise, 0);
-
-  if (n > 0)
-    GenmapFree(ids);
-
-  return gsh;
-}
-
-void csr_mat_gather(csr_mat M, struct gs_data *gsh, GenmapScalar *x,
-                    GenmapScalar *buf, buffer *bfr) {
-  ulong s = M->row_start;
+// Following two functions can be combined
+static void compress_col(struct array *entries) {
+  GenmapScalar v;
   sint i, j;
-  for (i = 0; i < M->rn; i++)
-    for (j = M->row_off[i]; j < M->row_off[i + 1]; j++)
-      if (M->col[j] == s + i)
-        buf[j] = x[i];
-      else
-        buf[j] = 0.0;
 
-  gs(buf, gs_scalar, gs_add, 0, gsh, bfr);
+  i = 0;
+  entry *ptr = entries->ptr;
+  while (i < entries->n) {
+    v = ptr[i].v, j = i + 1;
+    while (j < entries->n && ptr[j].r == ptr[i].r && ptr[j].cn == ptr[i].cn)
+      v += ptr[j].v, ptr[j].c = 0, j++;
+    ptr[i].v = v;
+    i = j;
+  }
 }
 
-void csr_mat_apply(GenmapScalar *y, csr_mat M, GenmapScalar *x) {
-  const uint rn = M->rn;
-  if (rn == 0)
+static void mg_level_setup(struct mg_data_csr *d, uint lvl) {
+  assert(lvl > 0);
+  csr_mat M0 = d->levels[lvl - 1]->M;
+  uint rn0 = M0->rn, nnz0 = M0->row_off[rn0];
+
+  struct array entries = null_array;
+  array_init(entry, &entries, nnz0);
+  entries.n = nnz0;
+
+  uint i, j, nn = 0;
+  entry *ptr = entries.ptr;
+  for (i = 0; i < rn0; i++)
+    for (j = M0->row_off[i]; j < M0->row_off[i + 1]; j++) {
+      ptr[nn].r = M0->row_start + i;
+      ptr[nn].c = M0->col[j];
+      ptr[nn].rn = (ptr[nn].r + 1) / 2;
+      ptr[nn].cn = (ptr[nn].c + 1) / 2; // Let's collapse columns first
+      ptr[nn].v = M0->v[j];
+      nn++;
+    }
+  assert(nn == nnz0);
+
+  slong out[2][1], bf[2][1], in = rn0;
+  comm_scan(out, &d->c, gs_long, gs_add, &in, 1, bf);
+  slong ng = out[1][0];
+
+  ulong ngc = ng / 2;
+  if (ngc == 0)
     return;
 
-  const uint *offsets = M->row_off;
-  const GenmapScalar *v = M->v;
-
-  uint i, j, je;
-  for (i = 0; i < rn; i++) {
-    for (y[i] = 0.0, j = offsets[i], je = offsets[i + 1]; j < je; j++)
-      y[i] += (*v++) * (*x++);
-  }
-}
-
-void csr_mat_print(csr_mat M, struct comm *c) {
-  const sint rn = M->rn;
-  const uint *offsets = M->row_off;
-  const GenmapScalar *v = M->v;
-  const ulong *col = M->col;
-
-  uint i, j, k;
-
-  for (k = 0; k < c->np; k++) {
-    comm_barrier(c);
-    if (c->id == k) {
-      for (i = 0; i < rn; i++) {
-        for (j = offsets[i]; j < offsets[i + 1]; j++)
-          fprintf(stderr, "(%lld,%lld) -> %.10lf\n", M->row_start + i, col[j],
-                  v[j]);
-      }
+  if (ng > 1 && ng % 2 == 1)
+    for (j = 0; j < M0->row_off[rn0]; j++) {
+      if (ptr[j].c == ng)
+        ptr[j].cn -= 1;
+      if (ptr[j].r == ng)
+        ptr[j].rn -= 1;
     }
-    fflush(stderr);
+
+  uint npc = d->c.np;
+  if (ngc < npc)
+    npc = ngc;
+
+  /* setup gs ids for fine level (rhs interpolation) */
+  ptr = entries.ptr;
+  slong *ids;
+  GenmapMalloc(rn0, &ids);
+  for (i = j = 0; i < nnz0; i++)
+    if (ptr[i].r == ptr[i].c)
+      ids[j++] = -ptr[i].cn;
+  assert(j == rn0);
+
+  /* coarsen the cols */
+  buffer buf;
+  buffer_init(&buf, 1024);
+  if (entries.n) {
+    sarray_sort_2(entry, entries.ptr, entries.n, r, 1, cn, 1, &buf);
+    compress_col(&entries);
   }
+
+  struct crystal cr;
+  crystal_init(&cr, &d->c);
+
+  set_owner(entries.ptr, nnz0, offsetof(entry, rn), offsetof(entry, p), ngc,
+            npc);
+  sarray_transfer(entry, &entries, p, 1, &cr);
+
+  // sort by rn and cn
+  sarray_sort_2(entry, entries.ptr, entries.n, rn, 1, cn, 1, &buf);
+
+  i = j = nn = 0;
+  ptr = entries.ptr;
+  while (i < entries.n) {
+    while (j < entries.n && ptr[j].rn == ptr[i].rn)
+      j++;
+    i = j, nn++;
+  }
+
+  /* create the matrix */
+  GenmapMalloc(1, &d->levels[lvl]);
+  mgLevel l = d->levels[lvl];
+  l->data = d;
+
+  GenmapMalloc(1, &l->M);
+  csr_mat M1 = l->M;
+  M1->rn = nn;
+  GenmapMalloc(M1->rn + 1, &M1->row_off);
+
+  slong cn = nn;
+  comm_scan(out, &d->c, gs_long, gs_add, &cn, 1, bf);
+  M1->row_start = out[0][0] + 1;
+
+  uint nnz1 = 0;
+  i = j = 0;
+  ptr = entries.ptr;
+  while (i < entries.n) {
+    while (j < entries.n && ptr[j].rn == ptr[i].rn && ptr[j].cn == ptr[i].cn)
+      j++;
+    i = j, nnz1++;
+  }
+
+  if (nnz1 == 0)
+    M1->col = NULL, M1->v = NULL, M1->diag = NULL;
+  else {
+    GenmapMalloc(nnz1, &M1->col), GenmapMalloc(nnz1, &M1->v);
+    GenmapMalloc(M1->rn, &M1->diag);
+  }
+
+  uint rn1;
+  GenmapScalar v;
+  M1->row_off[0] = i = j = nn = rn1 = 0;
+  ptr = entries.ptr;
+  while (i < entries.n) {
+    v = 0.0;
+    while (j < entries.n && ptr[j].rn == ptr[i].rn && ptr[j].cn == ptr[i].cn) {
+      if (ptr[j].c > 0)
+        v += ptr[j].v;
+      j++;
+    }
+    M1->col[nn] = ptr[i].cn, M1->v[nn] = v, nn++;
+
+    if ((j < entries.n && ptr[j].rn != ptr[i].rn) || j >= entries.n)
+      M1->row_off[++rn1] = nn;
+    i = j;
+  }
+  assert(nn == nnz1);    // sanity check
+  assert(rn1 == M1->rn); // sanity check
+
+  /* setup gs ids for coarse level (rhs interpolation ) */
+  GenmapRealloc(rn0 + rn1, &ids);
+  for (i = nn = 0; i < rn1; i++)
+    for (j = M1->row_off[i]; j < M1->row_off[i + 1]; j++)
+      if (M1->row_start + i == M1->col[j]) {
+        ids[rn0 + nn] = M1->col[j];
+        M1->diag[i] = M1->v[j];
+        nn++;
+      }
+  assert(nn == M1->rn);
+
+  d->levels[lvl - 1]->J =
+      gs_setup(ids, rn0 + M1->rn, &d->c, 0, gs_crystal_router, 0);
+
+  /* setup gs handle for the mat-vec */
+  GenmapRealloc(nnz1, &ids);
+  for (i = 0; i < M1->rn; i++)
+    for (j = M1->row_off[i]; j < M1->row_off[i + 1]; j++)
+      if (M1->row_start + i == M1->col[j])
+        ids[j] = M1->col[j];
+      else
+        ids[j] = -M1->col[j];
+
+  M1->gsh = gs_setup(ids, nnz1, &d->c, 0, gs_crystal_router, 0);
+
+  GenmapFree(ids);
+  buffer_free(&buf);
+  crystal_free(&cr);
+  array_free(&entries);
 }
 
-int csr_mat_free(csr_mat M) {
-  if (M->col)
-    GenmapFree(M->col);
-  if (M->v)
-    GenmapFree(M->v);
-  if (M->diag)
-    GenmapFree(M->diag);
-  if (M->row_off)
-    GenmapFree(M->row_off);
-  if (M->gsh)
-    gs_free(M->gsh);
-  GenmapFree(M);
+void mg_setup_csr(genmap_handle h, struct comm *gsc, struct mg_data_csr *d) {
+  d->h = h;
 
-  return 0;
+  comm_dup(&d->c, gsc);
+  uint np = gsc->np;
+
+  csr_mat M = h->M;
+  uint rn = M->rn;
+
+  slong out[2][1], bf[2][1], in = rn;
+  comm_scan(out, &d->c, gs_long, gs_add, &in, 1, bf);
+  slong rg = out[1][0];
+
+  d->nlevels = log2i(rg) + 1;
+  GenmapMalloc(d->nlevels, &d->levels);
+  GenmapMalloc(d->nlevels + 1, &d->level_off);
+
+  GenmapMalloc(1, &d->levels[0]);
+  d->levels[0]->M = M;
+  d->level_off[0] = 0;
+  d->level_off[1] = M->rn;
+  d->levels[0]->nsmooth = 2, d->levels[0]->sigma = 0.6;
+
+  uint i;
+  uint nnz = M->row_off[M->rn];
+  for (i = 1; i < d->nlevels; i++) {
+    mg_level_setup(d, i);
+    csr_mat Mi = d->levels[i]->M;
+    if (Mi->row_off[Mi->rn] > nnz)
+      nnz = Mi->row_off[Mi->rn];
+    d->level_off[i + 1] = d->level_off[i] + Mi->rn;
+    d->levels[i]->nsmooth = 2;
+    d->levels[i]->sigma = 0.6;
+  }
+
+  GenmapMalloc(d->level_off[d->nlevels], &d->x);
+  GenmapMalloc(d->level_off[d->nlevels], &d->y);
+  GenmapMalloc(d->level_off[d->nlevels], &d->b);
+  GenmapMalloc(d->level_off[d->nlevels], &d->u);
+  GenmapMalloc(d->level_off[d->nlevels], &d->rhs);
+  GenmapMalloc(nnz, &d->buf);
 }
+
+void mg_free_csr(struct mg_data_csr *d) {
+  mgLevel *l = d->levels;
+  uint i;
+  for (i = 0; i < d->nlevels; i++) {
+    if (i > 0)
+      csr_mat_free(l[i]->M);
+    if (i < d->nlevels - 1)
+      gs_free(l[i]->J);
+    GenmapFree(l[i]);
+  }
+
+  comm_free(&d->c);
+
+  GenmapFree(l);
+  GenmapFree(d->level_off);
+  GenmapFree(d->y);
+  GenmapFree(d->x);
+  GenmapFree(d->b);
+  GenmapFree(d->buf);
+  GenmapFree(d->rhs);
+  GenmapFree(d->u);
+}
+
+#undef GETPTR
