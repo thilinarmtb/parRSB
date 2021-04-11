@@ -11,7 +11,7 @@
 
 #include <genmap-elements.h>
 #include <genmap-metrics.h>
-#include <genmap-multigrid.h>
+#include <genmap-multigrid-csr-mat.h>
 #include <genmap-partition.h>
 
 struct genmap_handle_private {

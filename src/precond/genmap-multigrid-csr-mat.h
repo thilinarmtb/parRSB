@@ -3,7 +3,16 @@
 
 #include <genmap.h>
 
-typedef struct csr_mat_ *csr_mat;
+typedef struct {
+  ulong r, c;
+  uint proc;
+} csr_entry;
+
+typedef struct {
+  ulong r, c, rn, cn;
+  uint p;
+  GenmapScalar v;
+} entry;
 
 struct csr_mat_ {
   uint rn;
@@ -15,6 +24,8 @@ struct csr_mat_ {
 
   struct gs_data *gsh;
 };
+
+typedef struct csr_mat_ *csr_mat;
 
 void csr_mat_setup(struct array *entries, struct comm *c, csr_mat *M);
 void csr_mat_apply(GenmapScalar *y, csr_mat M, GenmapScalar *x);

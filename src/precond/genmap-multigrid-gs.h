@@ -1,6 +1,7 @@
 #ifndef _GENMAP_MULTIGRID_GS_H_
 #define _GENMAP_MULTIGRID_GS_H_
 
+#include <genmap-multigrid.h>
 #include <genmap.h>
 
 struct mg_level_gs {
@@ -12,14 +13,13 @@ struct mg_level_gs {
 
 struct mg_data_gs {
   struct comm c;
-  genmap_handle h;
   int nlevels;
   struct mg_level_gs *levels;
   uint *level_off;
 };
 
-void mg_setup_gs(genmap_handle h, struct comm *c, struct mg_data_gs *d);
+void mg_setup_gs(genmap_handle h, struct comm *c, struct mg_data *d);
 
-void mg_free_gs(struct mg_data_gs *d);
+void mg_free_gs(struct mg_data *d);
 
 #endif

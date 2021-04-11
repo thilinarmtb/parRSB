@@ -55,7 +55,7 @@ int flex_cg(genmap_handle h, struct comm *gsc, struct mg_data *d,
 
     genmap_vector_copy(z0, z);
 #if PREC
-    mg_vcycle(z->data, r->data, &d);
+    vcycle(z->data, r->data, d, &h->buf);
 #else
     genmap_vector_copy(z, r);
 #endif

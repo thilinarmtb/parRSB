@@ -84,7 +84,7 @@ int project(genmap_handle h, struct comm *gsc, struct mg_data *d,
     genmap_vector_copy(z0, z);
 
     metric_tic(gsc, VCYCLE);
-    mg_vcycle(z->data, r->data, d);
+    vcycle(z->data, r->data, d, &h->buf);
     metric_toc(gsc, VCYCLE);
 
     GenmapScalar norm1 = genmap_vector_dot(z, z);

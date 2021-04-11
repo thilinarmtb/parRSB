@@ -2,6 +2,7 @@
 #include <math.h>
 
 #include <genmap-impl.h>
+#include <genmap-multigrid.h>
 //
 // TODO: use a separate function to generate init vector
 //

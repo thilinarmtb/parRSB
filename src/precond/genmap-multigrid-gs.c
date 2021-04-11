@@ -1,5 +1,5 @@
 #include <genmap-impl.h>
-#include <genmap-multigrid.h>
+#include <genmap-multigrid-gs.h>
 
 /* Levels internal to processor */
 static int setup_internal_levels(genmap_handle h, struct comm *c,
@@ -124,11 +124,10 @@ static int setup_internal_levels(genmap_handle h, struct comm *c,
   return nlevels;
 }
 
-void mg_setup_gs(genmap_handle h, struct comm *c, struct mg_data_gs *d) {
-  d->h = h;
+void mg_setup_gs(genmap_handle h, struct comm *c, struct mg_data *dd) {
+  struct mg_data_gs *d = dd->data;
 
   comm_dup(&d->c, c);
-  uint np = c->np;
 
   slong in = genmap_get_nel(h);
   slong out[2][1], bf[2][1];
@@ -140,7 +139,9 @@ void mg_setup_gs(genmap_handle h, struct comm *c, struct mg_data_gs *d) {
   GenmapMalloc(d->nlevels + 1, &d->level_off);
 }
 
-void mg_free_gs(struct mg_data_gs *d) {
+void mg_free_gs(struct mg_data *dd) {
+  struct mg_data_gs *d = dd->data;
+
   int i;
   struct mg_level_gs *l = d->levels;
   for (i = 0; i < d->nlevels; i++) {

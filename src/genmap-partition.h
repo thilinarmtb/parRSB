@@ -1,6 +1,7 @@
 #ifndef _GENMAP_PARTITION_H_
 #define _GENMAP_PARTITION_H_
 
+#include <genmap-elements.h>
 #include <genmap.h>
 
 /* RCB/RIB */

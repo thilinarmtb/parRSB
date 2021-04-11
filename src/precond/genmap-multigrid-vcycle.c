@@ -1,24 +1,23 @@
 #include <genmap-impl.h>
 #include <genmap-multigrid.h>
+// TODO: Get rid of the following
+#include <genmap-multigrid-csr.h>
+#include <genmap-multigrid-gs.h>
 
-void mg_vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *dd) {
+void vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *dd,
+            buffer *buf) {
   struct mg_data_csr *d = dd->data;
 
+  // TODO: Allocate from buffer space?
   GenmapScalar *s = d->x;
   GenmapScalar *Gs = d->y;
   GenmapScalar *r = d->b;
   GenmapScalar *u = d->u;
 
+  int nlevels = mg_get_nlevels(dd);
+  uint *lvl_off = mg_get_level_off(dd);
   mgLevel *lvls = d->levels;
-  uint *lvl_off = d->level_off;
-  mgLevel l;
-  csr_mat M;
 
-  buffer buf;
-  buffer_init(&buf, 1024);
-
-  int nsmooth, nlevels = d->nlevels, lvl;
-  GenmapScalar *diag, sigma;
   uint off, n, i, j;
 
   for (i = 0; i < lvl_off[nlevels]; i++)
@@ -26,7 +25,10 @@ void mg_vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *dd) {
   for (i = 0; i < lvl_off[1]; i++)
     r[i] = rhs[i];
 
-  genmap_handle h = d->h;
+  int nsmooth, lvl;
+  GenmapScalar *diag, sigma;
+  mgLevel l;
+  csr_mat M;
 
   for (lvl = 0; lvl < nlevels - 1; lvl++) {
     off = lvl_off[lvl];
@@ -43,7 +45,7 @@ void mg_vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *dd) {
       u[off + j] = sigma * r[off + j] / diag[j];
 
     // G*u
-    csr_mat_gather(M, M->gsh, u + off, d->buf, &buf);
+    csr_mat_gather(M, M->gsh, u + off, d->buf, buf);
     csr_mat_apply(Gs + off, M, d->buf);
 
     // r=rhs-Gu
@@ -59,7 +61,7 @@ void mg_vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *dd) {
       }
 
       // G*s
-      csr_mat_gather(M, M->gsh, s + off, d->buf, &buf);
+      csr_mat_gather(M, M->gsh, s + off, d->buf, buf);
       csr_mat_apply(Gs + off, M, d->buf);
 
       // r=r-Gs
@@ -68,7 +70,7 @@ void mg_vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *dd) {
     }
 
     // interpolate to coarser level
-    gs(r + off, gs_double, gs_add, 1, l->J, &buf);
+    gs(r + off, gs_double, gs_add, 1, l->J, buf);
   }
 
   // coarsest level
@@ -91,7 +93,7 @@ void mg_vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *dd) {
     l = lvls[lvl];
     off = lvl_off[lvl];
     // J*e
-    gs(r + off, gs_double, gs_add, 0, l->J, &buf);
+    gs(r + off, gs_double, gs_add, 0, l->J, buf);
 
     // u=u+over*J*e
     n = lvl_off[lvl + 1] - off;
@@ -102,6 +104,4 @@ void mg_vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *dd) {
   // avoid this
   for (i = 0; i < lvl_off[1]; i++)
     u1[i] = r[i];
-
-  buffer_free(&buf);
 }
