@@ -3,37 +3,45 @@
 
 #include <genmap.h>
 
-/* mg_level */
-struct mg_level {
-  int (*get_nsmooth)(struct mg_level *lvl);
-  GenmapScalar (*get_sigma)(struct mg_level *lvl);
-  void (*G)(struct mg_level *lvl, GenmapScalar *v, GenmapScalar *u);
-  void (*rstrct)(struct mg_level *lvl, GenmapScalar *v, GenmapScalar *u);
-  void (*interp)(struct mg_level *lvl, GenmapScalar *v, GenmapScalar *u);
-  void *data;
-};
-
-int mg_level_get_nsmooth(struct mg_level *lvl);
-
-GenmapScalar mg_level_get_sigma(struct mg_level *lvl);
+int log2i(sint i);
 
 /* mg_data */
 struct mg_data {
   int (*get_nlevels)(struct mg_data *data);
   uint *(*get_level_off)(struct mg_data *data);
-  struct mg_level *(*get_levels)(struct mg_data *data);
-  void (*setup)(genmap_handle h, struct comm *c, struct mg_data *d);
   void (*free)(struct mg_data *d);
+
+  int (*get_nsmooth)(struct mg_data *data, int lvl);
+  GenmapScalar (*get_sigma)(struct mg_data *data, int lvl);
+  GenmapScalar *(*get_diagonal)(struct mg_data *data, int lvl);
+  void (*G)(struct mg_data *data, int lvl, GenmapScalar *v, GenmapScalar *u,
+            buffer *buf);
+  void (*rstrct)(struct mg_data *data, int lvl, GenmapScalar *v, buffer *buf);
+  void (*intrp)(struct mg_data *data, int lvl, GenmapScalar *v, buffer *buf);
+
   void *data;
 };
 
-int log2i(sint i);
-
+void mg_setup_gs(genmap_handle h, struct comm *c, struct mg_data *d);
+void mg_setup_csr(genmap_handle h, struct comm *c, struct mg_data *d);
 void mg_setup(genmap_handle h, struct comm *c, struct mg_data *d);
 
 int mg_get_nlevels(struct mg_data *d);
 
 uint *mg_get_level_off(struct mg_data *d);
+
+int mg_get_nsmooth(struct mg_data *d, int level);
+
+GenmapScalar mg_get_sigma(struct mg_data *d, int level);
+
+GenmapScalar *mg_get_diagonal(struct mg_data *d, int level);
+
+void mg_operator(GenmapScalar *v, GenmapScalar *u, int level, struct mg_data *d,
+                 buffer *buf);
+
+void mg_restrict(GenmapScalar *v, int level, struct mg_data *d, buffer *buf);
+
+void mg_interpolate(GenmapScalar *v, int level, struct mg_data *d, buffer *buf);
 
 void mg_free(struct mg_data *d);
 

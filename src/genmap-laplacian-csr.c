@@ -194,7 +194,7 @@ int GenmapInitLaplacian(genmap_handle h, struct comm *c) {
   metric_toc(c, FINDNBRS);
 
   metric_tic(c, CSRMATSETUP);
-  csr_mat_setup(&entries, c, &h->M);
+  csr_mat_setup(&h->M, &entries, c, &h->buf);
   metric_toc(c, CSRMATSETUP);
 
   array_free(&entries);

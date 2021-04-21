@@ -1,159 +1,128 @@
+// FIXME: genmap-impl.h is only for GenmapFree
 #include <genmap-impl.h>
 #include <genmap-multigrid-gs.h>
 
-/* Levels internal to processor */
-static int setup_internal_levels(genmap_handle h, struct comm *c,
-                                 struct mg_data_gs *d) {
-  sint nelt = genmap_get_nel(h);
-  int ninternal = log2i(nelt) + 1;
-  // Global reduction to find maximum internal levels
-  slong buf[2][2];
-  comm_allreduce(c, gs_int, gs_max, &ninternal, 1, buf);
+static int mg_get_nlevels_gs(struct mg_data *dd) {
+  struct mg_data_gs *d = dd->data;
+  return d->nlevels;
+}
 
-  int nexternal = log2i(c->np) + 1;
-  d->nlevels = ninternal + nexternal;
+static uint *mg_get_level_off_gs(struct mg_data *dd) {
+  struct mg_data_gs *d = dd->data;
+  return d->level_off;
+}
 
-  // Allocate data structures
-  GenmapMalloc(d->nlevels + 1, &d->level_off);
-  GenmapMalloc(d->nlevels, &d->levels);
+static int mg_get_nsmooth_gs(struct mg_data *d, int lvl) {
+  struct mg_data_gs *dd = d->data;
+  assert(lvl < dd->nlevels);
 
-  sint off_size = nelt;
-  d->level_off[0] = 0;
-  int i;
-  for (i = 1; i < ninternal + 1; i++) {
-    d->level_off[i] = d->level_off[i - 1] + off_size;
-    off_size /= 2;
+  return dd->nsmooth[lvl];
+}
+
+static GenmapScalar mg_get_sigma_gs(struct mg_data *d, int lvl) {
+  struct mg_data_gs *dd = d->data;
+  assert(lvl < dd->nlevels);
+
+  return dd->sigma[lvl];
+}
+
+static GenmapScalar *mg_get_diagonal_gs(struct mg_data *d, int lvl) {
+  struct mg_data_gs *dd = d->data;
+  assert(lvl < dd->nlevels);
+
+  return NULL;
+}
+
+static void mg_restrict_gs(struct mg_data *d, int lvl, GenmapScalar *v,
+                           buffer *buf) {
+  struct mg_data_gs *dd = d->data;
+  assert(lvl < dd->nlevels);
+
+  gs(v, gs_double, gs_add, 1, dd->J[lvl], buf);
+}
+
+static void mg_interpolate_gs(struct mg_data *d, int lvl, GenmapScalar *v,
+                              buffer *buf) {
+  struct mg_data_gs *dd = d->data;
+  assert(lvl < dd->nlevels);
+
+  gs(v, gs_double, gs_add, 0, dd->J[lvl], buf);
+}
+
+static void mg_operator_gs(struct mg_data *d, int lvl, GenmapScalar *v,
+                           GenmapScalar *u, buffer *buf) {
+  if (lvl > 0) {
+    // Interpolate
   }
 
-  sint k = 1;
-  for (i = ninternal + 1; i < d->nlevels + 1; i++) {
-    if ((c->id + 1) % k == 0)
-      d->level_off[i] = d->level_off[i - 1] + 1;
-    else
-      d->level_off[i] = d->level_off[i - 1];
-    k *= 2;
+  //gs(....);
+
+  if (lvl > 0) {
+    // Restrict
   }
+}
 
-  slong *wrk;
-  size_t wrk_size = 2 * nelt + c->np;
-  GenmapMalloc(wrk_size, &wrk);
+static void mg_free_gs(struct mg_data *dd) {
+  struct mg_data_gs *d = dd->data;
 
-  slong in[2];
-  slong out[2][2];
-  uint j, cur_size, next_size;
-  int nlevels = d->nlevels;
+  comm_free(&d->c);
 
-  // Setup R, last internal level is the first external level.
-  // It would be taken care at external R setup
-  for (i = ninternal - 2; i >= 0; i--) {
-    // Setup global ids for gs_setup
-    cur_size = d->level_off[i + 1] - d->level_off[i];
-    next_size = d->level_off[i + 2] - d->level_off[i + 1];
+  GenmapFree(d->nsmooth);
+  GenmapFree(d->sigma);
+  GenmapFree(d->J);
 
-    in[0] = next_size;
-    comm_scan(out, &d->c, gs_long, gs_add, in, 1, buf);
-    slong eid = out[0][0];
+  GenmapFree(d->level_off);
+  GenmapFree(d->buf);
 
-    for (j = 0; j < cur_size; j++)
-      wrk[j] = -(eid + j / 2 + 1);
-    if (j > 2 && j % 2 == 0)
-      wrk[j] += 1;
-
-    for (j = 0; j < next_size; j++)
-      wrk[cur_size + j] = eid + j + 1;
-
-    // TODO: See if I can call gs_setup without c and get rid of eid
-    d->levels[i].R =
-        gs_setup(wrk, next_size + cur_size, c, 0, gs_crystal_router, 0);
-  }
-
-  // External R setup. Last external level doesn't need R
-  for (i = nlevels - 2; i >= ninternal - 1; i--) {
-    // Both next_size and cur_size are equal to 1 or  0
-    cur_size = d->level_off[i + 1] - d->level_off[i];
-    next_size = d->level_off[i + 2] - d->level_off[i + 1];
-
-    in[0] = cur_size;
-    in[1] = next_size;
-    comm_scan(out, &d->c, gs_long, gs_add, in, 2, buf);
-    slong cur_id = out[0][0];
-    slong next_id = out[0][1];
-
-    if (cur_size == 1) {
-      wrk[0] = -(cur_id / 2 + 1);
-      if (cur_id + 1 == out[1][0] && cur_id % 2 == 0)
-        wrk[0] += 1;
-    }
-
-    if (next_size == 1) // next_size == 1 iff cur_size == 1
-      wrk[1] = next_id + 1;
-
-    d->levels[i].R =
-        gs_setup(wrk, next_size + cur_size, c, 0, gs_crystal_router, 0);
-  }
-
-  // Setup R0, last level and zeroth level doesn't need R0
-  for (i = nlevels - 2; i > 0; i--) {
-    cur_size = d->level_off[i + 1] - d->level_off[i];
-
-    in[0] = cur_size;
-    comm_scan(out, &d->c, gs_long, gs_add, in, 1, buf);
-    slong eid = out[0][0];
-
-    uint cur_off = d->level_off[i];
-
-    for (j = 0; j < cur_size; j++)
-      wrk[cur_off + j] = eid + j;
-    // Apply R^T till we get to Level0
-    for (j = i - 1; j >= 0; j--)
-      gs(wrk + d->level_off[j], gs_double, gs_add, 0, d->levels[j].R, &h->buf);
-
-    // Setup R0 now that we know the corresponding ids at level0
-    for (j = 0; j < nelt; j++)
-      wrk[j] *= -1;
-    for (j = 0; j < cur_size; j++)
-      wrk[nelt + j] = wrk[cur_off + j];
-
-    // TODO: See if I can call gs_setup without c and get rid of eid
-    d->levels[i].R0 =
-        gs_setup(wrk, nelt + cur_size, c, 0, gs_crystal_router, 0);
-  }
-
-  GenmapFree(wrk);
-
-  return nlevels;
+  free(d);
 }
 
 void mg_setup_gs(genmap_handle h, struct comm *c, struct mg_data *dd) {
-  struct mg_data_gs *d = dd->data;
+  dd->get_nlevels = mg_get_nlevels_gs;
+  dd->get_level_off = mg_get_level_off_gs;
+  dd->get_nsmooth = mg_get_nsmooth_gs;
+  dd->get_sigma = mg_get_sigma_gs;
+  dd->get_diagonal = mg_get_diagonal_gs;
+  dd->G = mg_operator_gs;
+  dd->rstrct = mg_restrict_gs;
+  dd->intrp = mg_interpolate_gs;
+  dd->free = mg_free_gs;
 
+  struct mg_data_gs *d = dd->data = calloc(1, sizeof(struct mg_data_gs));
+
+  // FIXME: May be this is not necessary
   comm_dup(&d->c, c);
 
-  slong in = genmap_get_nel(h);
+  uint rn = genmap_get_nel(h);
+
+  slong in = rn;
   slong out[2][1], bf[2][1];
   comm_scan(out, &d->c, gs_long, gs_add, &in, 1, bf);
-  slong nelg = out[1][0];
+  slong rg = out[1][0];
 
-  d->nlevels = log2i(nelg) + 1;
-  GenmapMalloc(d->nlevels, &d->levels);
+  d->nlevels = log2i(rg) + 1;
+
+  /* Allocate data structures */
   GenmapMalloc(d->nlevels + 1, &d->level_off);
-}
+  GenmapMalloc(d->nlevels, &d->nsmooth);
+  GenmapMalloc(d->nlevels, &d->sigma);
+  GenmapMalloc(d->nlevels, &d->J);
+  GenmapMalloc(d->nlevels, &d->R0);
 
-void mg_free_gs(struct mg_data *dd) {
-  struct mg_data_gs *d = dd->data;
+  /* Setup Level 0 */
+  d->level_off[0] = 0;
+  d->level_off[1] = rn;
+  d->nsmooth[0] = 2;
+  d->sigma[0] = 0.6;
+  d->J[0] = NULL;
+  d->G = h->gs;
+  d->diagonal = h->diagonal;
 
-  int i;
-  struct mg_level_gs *l = d->levels;
-  for (i = 0; i < d->nlevels; i++) {
-    if (i < d->nlevels - 1)
-      gs_free(l[i].R);
-    GenmapFree(&l[i]);
-    if (i > 0 && i < d->nlevels - 1)
-      gs_free(l[i].R0);
-  }
-  GenmapFree(l);
+  /* Setup other levels */
+  slong *wrk;
+  GenmapMalloc(2 * rn, &wrk);
+  mg_setup_aux_gs(d, wrk, &h->buf);
+  GenmapFree(wrk);
 
-  comm_free(&d->c);
-  GenmapFree(d->level_off);
-  GenmapFree(d);
+  GenmapMalloc(rn, &d->buf);
 }

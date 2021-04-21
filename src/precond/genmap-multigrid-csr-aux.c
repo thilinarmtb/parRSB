@@ -1,3 +1,4 @@
+// FIXME: genmap-impl.h is only for GenmapFree
 #include <genmap-impl.h>
 #include <genmap-multigrid-csr.h>
 
@@ -86,7 +87,7 @@ static void coarsen_col(struct array *coarse, struct array *entries) {
 }
 
 static csr_mat create_matrix_from_array(struct array *coarse, struct comm *c,
-                                          buffer *buf) {
+                                        buffer *buf) {
   uint size = coarse->n;
   sarray_sort_2(entry, coarse->ptr, size, rn, 1, cn, 1, buf);
 
@@ -153,9 +154,10 @@ static csr_mat create_matrix_from_array(struct array *coarse, struct comm *c,
   GenmapCalloc(nnz1, &ids);
   for (i = 0; i < M1->rn; i++)
     for (j = M1->row_off[i]; j < M1->row_off[i + 1]; j++)
-      if (M1->row_start + i == M1->col[j])
+      if (M1->row_start + i == M1->col[j]) {
         ids[j] = M1->col[j];
-      else
+        M1->diag[i] = M1->v[j];
+      } else
         ids[j] = -M1->col[j];
 
   M1->gsh = gs_setup(ids, nnz1, c, 0, gs_pairwise, 0);
@@ -165,14 +167,14 @@ static csr_mat create_matrix_from_array(struct array *coarse, struct comm *c,
   return M1;
 }
 
-void mg_level_setup(struct mg_data_csr *d, slong *wrk, buffer *buf) {
+void mg_setup_aux_csr(struct mg_data_csr *d, slong *wrk, buffer *buf) {
   struct comm *c = &d->c;
 
   struct array coarse, entries;
   slong out[2][1], bf[2][1];
   uint lvl = 1;
   while (lvl < d->nlevels) {
-    csr_mat M0 = d->levels[lvl - 1]->M;
+    csr_mat M0 = d->M[lvl - 1];
     uint rn0 = M0->rn;
 
     slong in = rn0;
@@ -209,25 +211,21 @@ void mg_level_setup(struct mg_data_csr *d, slong *wrk, buffer *buf) {
     csr_mat M1 = create_matrix_from_array(&coarse, c, buf);
 
     /* Setup gs ids for coarse level (rhs interpolation ) */
-    uint nn;
-    for (i = nn = 0; i < M1->rn; i++)
+    uint nn = 0;
+    for (i = 0; i < M1->rn; i++)
       for (j = M1->row_off[i]; j < M1->row_off[i + 1]; j++)
         if (M1->row_start + i == M1->col[j]) {
           wrk[rn0 + nn] = M1->col[j];
-          M1->diag[i] = M1->v[j];
           nn++;
         }
     assert(nn == M1->rn);
 
-    struct gs_data *J = gs_setup(wrk, rn0 + M1->rn, c, 0, gs_crystal_router, 0);
-    d->levels[lvl - 1]->J = J;
+    d->J[lvl - 1] = gs_setup(wrk, rn0 + M1->rn, c, 0, gs_pairwise, 0);
 
-    GenmapMalloc(1, &d->levels[lvl]);
-    mgLevel l = d->levels[lvl];
-    l->M = M1;
-    l->nsmooth = 2;
-    l->sigma = 0.6;
-    l->J = NULL;
+    d->M[lvl] = M1;
+    d->nsmooth[lvl] = 2;
+    d->sigma[lvl] = 0.6;
+    d->J[lvl] = NULL;
 
     d->level_off[lvl + 1] = d->level_off[lvl] + M1->rn;
 

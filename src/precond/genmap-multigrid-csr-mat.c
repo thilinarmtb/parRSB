@@ -3,13 +3,10 @@
 
 #define ABS(i) ((i < 0) ? -i : i)
 
-void csr_mat_setup(struct array *entries, struct comm *c, csr_mat *M_) {
+void csr_mat_setup(csr_mat *M_, struct array *entries, struct comm *c,
+                   buffer *buf) {
   entry *ptr = entries->ptr;
-
-  buffer buf;
-  buffer_init(&buf, 1024);
-  sarray_sort_2(entry, ptr, entries->n, r, 1, c, 1, &buf);
-  buffer_free(&buf);
+  sarray_sort_2(entry, ptr, entries->n, r, 1, c, 1, buf);
 
   uint st = 0, e = 0;
   sint diag;
@@ -46,10 +43,13 @@ void csr_mat_setup(struct array *entries, struct comm *c, csr_mat *M_) {
 
   GenmapMalloc(M->rn + 1, &M->row_off);
 
-  if (n == 0)
-    M->col = NULL, M->v = NULL, M->diag = NULL;
-  else {
-    GenmapMalloc(entries->n, &M->col), GenmapMalloc(entries->n, &M->v);
+  if (n == 0) {
+    M->col = NULL;
+    M->v = NULL;
+    M->diag = NULL;
+  } else {
+    GenmapMalloc(entries->n, &M->col);
+    GenmapMalloc(entries->n, &M->v);
     GenmapMalloc(M->rn, &M->diag);
   }
 
