@@ -5,7 +5,7 @@
 #include <genmap-multigrid.h>
 
 struct mg_data_csr {
-  struct comm c;
+  struct comm *c;
 
   int nlevels;
   uint *level_off;

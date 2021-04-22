@@ -1,11 +1,10 @@
 #ifndef _GENMAP_MULTIGRID_GS_H_
 #define _GENMAP_MULTIGRID_GS_H_
 
-
 #include <genmap-multigrid.h>
 
 struct mg_data_gs {
-  struct comm c;
+  struct comm *c;
 
   int nlevels;
   uint *level_off;
@@ -17,10 +16,11 @@ struct mg_data_gs {
 
   GenmapScalar *buf;
 
-  struct gs_data **R0;
-  struct gs_data *G; // Level 0 operator
+  struct gs_data **J0;
+  struct gs_data *G;      // Level 0 operator
   GenmapScalar *diagonal; // Level 0 diagonal
 
+  int nv;
 };
 
 void mg_setup_aux_gs(struct mg_data_gs *d, slong *wrk, buffer *buf);

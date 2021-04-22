@@ -42,8 +42,10 @@ static void set_owner(struct array *coarse, size_t in_off, size_t out_off,
     out_ptr = (sint *)GETPTR(coarse->ptr, i, out_off);
     row = *in_ptr - 1;
     // FIXME: Assumes the 'reverse-Nek' element distribution
-    // if (row<lelt*(np-nrem)) *out_ptr=(sint) row/lelt;
-    // else *out_ptr=np-nrem+(sint) (row-lelt*(np-nrem))/(lelt+1);
+    // if (row < lelt * (np - nrem))
+    //   *out_ptr = (sint) row / lelt;
+    // else
+    //   *out_ptr = np - nrem + (sint) (row - lelt * (np - nrem)) / (lelt + 1);
     if (nrem == 0)
       *out_ptr = (sint)row / lelt;
     else if (row < (lelt + 1) * nrem)
@@ -168,7 +170,7 @@ static csr_mat create_matrix_from_array(struct array *coarse, struct comm *c,
 }
 
 void mg_setup_aux_csr(struct mg_data_csr *d, slong *wrk, buffer *buf) {
-  struct comm *c = &d->c;
+  struct comm *c = d->c;
 
   struct array coarse, entries;
   slong out[2][1], bf[2][1];

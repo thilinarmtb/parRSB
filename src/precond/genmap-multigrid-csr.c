@@ -26,11 +26,17 @@ static GenmapScalar mg_get_sigma_csr(struct mg_data *d, int lvl) {
   return dd->sigma[lvl];
 }
 
-static GenmapScalar *mg_get_diagonal_csr(struct mg_data *d, int lvl) {
+static void mg_diagonal_scaling_csr(struct mg_data *d, int lvl, GenmapScalar *v,
+                                    GenmapScalar *u, GenmapScalar sigma) {
   struct mg_data_csr *dd = d->data;
   assert(lvl < dd->nlevels);
 
-  return dd->M[lvl]->diag;
+  GenmapScalar *diag = dd->M[lvl]->diag;
+  uint n = dd->level_off[lvl + 1] - dd->level_off[lvl];
+
+  uint i;
+  for (i = 0; i < n; i++)
+    v[i] = sigma * u[i] / diag[i];
 }
 
 static void mg_restrict_csr(struct mg_data *d, int lvl, GenmapScalar *v,
@@ -59,10 +65,24 @@ static void mg_operator_csr(struct mg_data *d, int lvl, GenmapScalar *v,
   csr_mat_apply(v, M, dd->buf);
 }
 
+static void mg_coarse_csr(struct mg_data *d, GenmapScalar *u, GenmapScalar *r) {
+  struct mg_data_csr *dd = d->data;
+
+  int nlevels = dd->nlevels;
+  uint off = dd->level_off[nlevels - 1];
+  uint n = dd->level_off[nlevels] - off;
+
+  if (n == 1) {
+    GenmapScalar *diag = dd->M[nlevels - 1]->diag;
+    if (fabs(diag[0]) > sqrt(GENMAP_TOL))
+      u[off] = r[off] / diag[0];
+    else
+      u[off] = 0.0;
+  }
+}
+
 void mg_free_csr(struct mg_data *dd) {
   struct mg_data_csr *d = dd->data;
-
-  comm_free(&d->c);
 
   sint i;
   for (i = 0; i < d->nlevels; i++) {
@@ -83,27 +103,26 @@ void mg_free_csr(struct mg_data *dd) {
   free(d);
 }
 
-void mg_setup_csr(genmap_handle h, struct comm *gsc, struct mg_data *dd) {
+void mg_setup_csr(genmap_handle h, struct comm *c, struct mg_data *dd) {
   dd->get_nlevels = mg_get_nlevels_csr;
   dd->get_level_off = mg_get_level_off_csr;
   dd->get_nsmooth = mg_get_nsmooth_csr;
   dd->get_sigma = mg_get_sigma_csr;
-  dd->get_diagonal = mg_get_diagonal_csr;
+  dd->diagonal_scaling = mg_diagonal_scaling_csr;
   dd->G = mg_operator_csr;
   dd->rstrct = mg_restrict_csr;
   dd->intrp = mg_interpolate_csr;
+  dd->coarse = mg_coarse_csr;
   dd->free = mg_free_csr;
 
   struct mg_data_csr *d = dd->data = calloc(1, sizeof(struct mg_data_csr));
 
-  // FIXME: May be this is not necessary
-  comm_dup(&d->c, gsc);
-
+  d->c = c;
   uint rn = h->M->rn;
 
   slong in = rn;
   slong out[2][1], bf[2][1];
-  comm_scan(out, &d->c, gs_long, gs_add, &in, 1, bf);
+  comm_scan(out, d->c, gs_long, gs_add, &in, 1, bf);
   slong rg = out[1][0];
 
   d->nlevels = log2i(rg) + 1;

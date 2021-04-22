@@ -13,11 +13,13 @@ struct mg_data {
 
   int (*get_nsmooth)(struct mg_data *data, int lvl);
   GenmapScalar (*get_sigma)(struct mg_data *data, int lvl);
-  GenmapScalar *(*get_diagonal)(struct mg_data *data, int lvl);
+  void (*diagonal_scaling)(struct mg_data *data, int lvl, GenmapScalar *v,
+                           GenmapScalar *u, GenmapScalar sigma);
   void (*G)(struct mg_data *data, int lvl, GenmapScalar *v, GenmapScalar *u,
             buffer *buf);
   void (*rstrct)(struct mg_data *data, int lvl, GenmapScalar *v, buffer *buf);
   void (*intrp)(struct mg_data *data, int lvl, GenmapScalar *v, buffer *buf);
+  void (*coarse)(struct mg_data *data, GenmapScalar *u, GenmapScalar *r);
 
   void *data;
 };
@@ -34,7 +36,8 @@ int mg_get_nsmooth(struct mg_data *d, int level);
 
 GenmapScalar mg_get_sigma(struct mg_data *d, int level);
 
-GenmapScalar *mg_get_diagonal(struct mg_data *d, int level);
+void mg_diagonal_scaling(GenmapScalar *v, GenmapScalar *u, GenmapScalar sigma,
+                         int level, struct mg_data *d);
 
 void mg_operator(GenmapScalar *v, GenmapScalar *u, int level, struct mg_data *d,
                  buffer *buf);
@@ -42,6 +45,8 @@ void mg_operator(GenmapScalar *v, GenmapScalar *u, int level, struct mg_data *d,
 void mg_restrict(GenmapScalar *v, int level, struct mg_data *d, buffer *buf);
 
 void mg_interpolate(GenmapScalar *v, int level, struct mg_data *d, buffer *buf);
+
+void mg_coarse_solve(GenmapScalar *u, GenmapScalar *r, struct mg_data *d);
 
 void mg_free(struct mg_data *d);
 

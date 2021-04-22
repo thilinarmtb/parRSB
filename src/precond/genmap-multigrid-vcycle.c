@@ -9,13 +9,13 @@ void vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *d,
   // TODO: Allocate from buffer space?
   uint off = lvl_off[nlevels];
   GenmapScalar *s;
-  GenmapMalloc(off, &s);
+  GenmapCalloc(off, &s);
   GenmapScalar *Gs;
-  GenmapMalloc(off, &Gs);
+  GenmapCalloc(off, &Gs);
   GenmapScalar *r;
-  GenmapMalloc(off, &r);
+  GenmapCalloc(off, &r);
   GenmapScalar *u;
-  GenmapMalloc(off, &u);
+  GenmapCalloc(off, &u);
 
   uint i;
   for (i = 0; i < off; i++)
@@ -23,7 +23,6 @@ void vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *d,
   for (i = 0; i < lvl_off[1]; i++)
     r[i] = rhs[i];
 
-  GenmapScalar *diag;
   GenmapScalar sigma;
   uint n, j;
   int nsmooth, lvl;
@@ -32,11 +31,11 @@ void vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *d,
     n = lvl_off[lvl + 1] - off;
     nsmooth = mg_get_nsmooth(d, lvl);
     sigma = mg_get_sigma(d, lvl);
-    diag = mg_get_diagonal(d, lvl);
 
     // u = sigma*D*rhs
-    for (j = 0; j < n; j++)
-      u[off + j] = sigma * r[off + j] / diag[j];
+    // for (j = 0; j < n; j++)
+    //   u[off + j] = sigma * r[off + j] / diag[j];
+    mg_diagonal_scaling(u + off, r + off, sigma, lvl, d);
 
     // Gs = G*u
     mg_operator(Gs + off, u + off, lvl, d, buf);
@@ -47,11 +46,13 @@ void vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *d,
 
     for (i = 0; i < nsmooth; i++) {
       sigma = sigma + 0.066666 / nsmooth;
-      // s = sigma*D*r, u = u + s
-      for (j = 0; j < n; j++) {
-        s[off + j] = sigma * r[off + j] / diag[j];
+      // s = sigma*D*r
+      // s[off + j] = sigma * r[off + j] / diag[j];
+      mg_diagonal_scaling(s + off, r + off, sigma, lvl, d);
+
+      // u = u + s
+      for (j = 0; j < n; j++)
         u[off + j] += s[off + j];
-      }
 
       // Gs = G*s
       mg_operator(Gs + off, s + off, lvl, d, buf);
@@ -65,18 +66,11 @@ void vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *d,
     mg_restrict(r + off, lvl, d, buf);
   }
 
-  // Solve at the coarsest level
+  mg_coarse_solve(u, r, d);
   off = lvl_off[nlevels - 1];
   n = lvl_off[nlevels] - off;
-
-  if (n == 1) {
-    diag = mg_get_diagonal(d, nlevels - 1);
-    if (fabs(diag[0]) > sqrt(GENMAP_TOL))
-      u[off] = r[off] / diag[0];
-    else
-      u[off] = 0.0;
+  if (n == 1)
     r[off] = u[off];
-  }
 
   GenmapScalar over = 1.33333;
   for (lvl = nlevels - 2; lvl >= 0; lvl--) {
