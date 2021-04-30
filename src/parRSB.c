@@ -6,7 +6,7 @@
 #include <genmap-impl.h>
 #include <parRSB.h>
 
-parRSB_options parrsb_default_options = {0, -1, 0, 0, 0, 1, 1, 1, 1};
+parRSB_options parrsb_default_options = {0, -1, 0, 0, 0, 1, 1, 1, 1, 1};
 
 void fparRSB_partMesh(int *part, int *seq, long long *vtx, double *coord,
                       int *nel, int *nv, int *options, int *comm, int *err) {
@@ -36,6 +36,10 @@ int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
   if (rank == 0)
     printf("running parRSB ...\n");
   fflush(stdout);
+
+  /* If MG, we need both CSR and gs implementation now */
+  if (options->rsb_algo == 1)
+    options->rsb_laplacian_implementation = 3;
 
   comm_barrier(&c);
   double time0 = comm_time();

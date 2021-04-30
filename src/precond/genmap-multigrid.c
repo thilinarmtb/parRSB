@@ -10,8 +10,8 @@ int log2i(sint i) {
 
 void mg_check(genmap_handle h, struct comm *c) {
   struct mg_data csr, gs;
-  mg_setup_csr(h, c, &csr);
-  mg_setup_gs(h, c, &gs);
+  mg_setup(h, c, 0, &csr);
+  mg_setup(h, c, 1, &gs);
 
   int nlevels = mg_get_nlevels(&csr);
   assert(nlevels == mg_get_nlevels(&gs));
@@ -130,11 +130,12 @@ void mg_check(genmap_handle h, struct comm *c) {
   GenmapFree(gs_r);
 }
 
-void mg_setup(genmap_handle h, struct comm *c, struct mg_data *d) {
-  mg_check(h, c);
-
-  // FIXME: Select between gs and csr
-  mg_setup_csr(h, c, d);
+void mg_setup(genmap_handle h, struct comm *c, int type, struct mg_data *d) {
+  if (type == 0)
+    mg_setup_csr(h, c, d);
+  else if (type == 1)
+    mg_setup_gs(h, c, d);
+  d->h = h;
 }
 
 int mg_get_nlevels(struct mg_data *d) { return d->get_nlevels(d); }

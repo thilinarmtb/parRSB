@@ -21,12 +21,15 @@ struct mg_data {
   void (*intrp)(struct mg_data *data, int lvl, GenmapScalar *v, buffer *buf);
   void (*coarse)(struct mg_data *data, GenmapScalar *u, GenmapScalar *r);
 
+  genmap_handle h;
   void *data;
 };
 
+void mg_check(genmap_handle h, struct comm *c);
+
 void mg_setup_gs(genmap_handle h, struct comm *c, struct mg_data *d);
 void mg_setup_csr(genmap_handle h, struct comm *c, struct mg_data *d);
-void mg_setup(genmap_handle h, struct comm *c, struct mg_data *d);
+void mg_setup(genmap_handle h, struct comm *c, int type, struct mg_data *d);
 
 int mg_get_nlevels(struct mg_data *d);
 
@@ -50,6 +53,7 @@ void mg_coarse_solve(GenmapScalar *u, GenmapScalar *r, struct mg_data *d);
 
 void mg_free(struct mg_data *d);
 
+// TODO: Move this to a separate file
 /* Algorithms */
 void vcycle(GenmapScalar *u, GenmapScalar *rhs, struct mg_data *d, buffer *buf);
 

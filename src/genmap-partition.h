@@ -19,17 +19,14 @@ int genmap_power(double *y, int N, double *A, int verbose);
 /* Laplacian */
 void genmap_number_faces_and_edges(genmap_handle h, struct comm *c);
 
-int GenmapInitLaplacian(genmap_handle h, struct comm *c);
+int genmap_laplacian_csr_init(genmap_handle h, struct comm *c);
+int genmap_laplacian_csr(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
 
-int GenmapLaplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
+int genmap_laplacian_gs_init(genmap_handle h, struct comm *c);
+int genmap_laplacian_gs(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
 
-int GenmapInitLaplacianWeighted(genmap_handle h, struct comm *c);
-
-int GenmapLaplacianWeighted(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
-
-void genmap_init_gs_laplacian(genmap_handle h, struct comm *c);
-
-void genmap_gs_laplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
+int genmap_laplacian_init(genmap_handle h, struct comm *c);
+int genmap_laplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
 
 /* Lanczos */
 int GenmapLanczosLegendary(genmap_handle h, struct comm *c, genmap_vector f,

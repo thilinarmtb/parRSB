@@ -59,9 +59,7 @@ int GenmapLanczosLegendary(genmap_handle h, struct comm *gsc, genmap_vector f,
     genmap_vector_axpby(p, p, beta, r, 1.0);
     genmap_vector_ortho_one(gsc, p, genmap_get_partition_nel(h));
 
-    metric_tic(gsc, WEIGHTEDLAPLACIAN);
-    GenmapLaplacianWeighted(h, p->data, w->data);
-    metric_tic(gsc, WEIGHTEDLAPLACIAN);
+    genmap_laplacian(h, p->data, w->data);
 
     genmap_vector_scale(w, w, -1.0);
 
@@ -149,9 +147,7 @@ int GenmapLanczos(genmap_handle h, struct comm *gsc, genmap_vector init,
     genmap_vector_create(&(*q)[k], lelt);
     genmap_vector_copy((*q)[k], q1);
 
-    metric_tic(gsc, WEIGHTEDLAPLACIAN);
-    GenmapLaplacianWeighted(h, q1->data, u->data);
-    metric_toc(gsc, WEIGHTEDLAPLACIAN);
+    genmap_laplacian(h, q1->data, u->data);
 
     alpha->data[k] = genmap_vector_dot(q1, u);
     comm_allreduce(gsc, gs_double, gs_add, &alpha->data[k], 1, &buf);

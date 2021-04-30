@@ -1,7 +1,7 @@
 #ifndef _GENMAP_MULTIGRID_CSR_H_
 #define _GENMAP_MULTIGRID_CSR_H_
 
-#include <genmap-multigrid-csr-mat.h>
+#include <genmap-csr-mat.h>
 #include <genmap-multigrid.h>
 
 struct mg_data_csr {

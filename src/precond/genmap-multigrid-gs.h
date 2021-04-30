@@ -17,7 +17,6 @@ struct mg_data_gs {
   GenmapScalar *buf;
 
   struct gs_data **J0;
-  struct gs_data *G;      // Level 0 operator
   GenmapScalar *diagonal; // Level 0 diagonal
 
   int nv;

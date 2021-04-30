@@ -43,7 +43,7 @@ int flex_cg(genmap_handle h, struct comm *gsc, struct mg_data *d,
 
   i = 0;
   while (i < max_iter && sqrt(rz1) > GENMAP_TOL) {
-    GenmapLaplacian(h, p->data, w->data);
+    genmap_laplacian(h, p->data, w->data);
 
     den = genmap_vector_dot(p, w);
     comm_allreduce(gsc, gs_double, gs_add, &den, 1, &buf);

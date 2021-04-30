@@ -1,7 +1,7 @@
 #ifndef _PARRSB_H_
 #define _PARRSB_H_
 
-#include <gslib.h>
+#include <mpi.h>
 
 typedef struct {
   /* General options */
@@ -15,7 +15,9 @@ typedef struct {
   int rsb_prepartition;             // 0 - None, 1 - RCB , 2 - RIB (Default: 1)
   int rsb_grammian;                 // 0 or 1 (Default: 1)
   int rsb_paul;                     // 0 or 1 (Default: 1)
-  int rsb_laplacian_implementation; // 0 - CSR, 1 - gather-scatter (Default: 1)
+  int rsb_laplacian_implementation; // 1 - gather-scatter, 2 - CSR, 3 - both
+                                    // (Default: 1)
+  int rsb_laplacian_weighted;       // 0 - unweighted, 1 - weighted (Default: 1)
 } parRSB_options;
 
 extern parRSB_options parrsb_default_options;

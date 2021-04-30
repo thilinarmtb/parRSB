@@ -93,11 +93,6 @@ int genmap_rsb(genmap_handle h) {
                     lc, &h->buf);
     }
 
-    /* Initialize the laplacian */
-    metric_tic(lc, WEIGHTEDLAPLACIANSETUP);
-    GenmapInitLaplacianWeighted(h, lc);
-    metric_toc(lc, WEIGHTEDLAPLACIANSETUP);
-
     /* Run fiedler */
     metric_tic(lc, FIEDLER);
     int ipass = 0, iter;

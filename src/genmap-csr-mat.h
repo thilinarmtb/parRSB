@@ -1,11 +1,12 @@
-#ifndef _GENMAP_MULTIGRID_CSR_MAT_H_
-#define _GENMAP_MULTIGRID_CSR_MAT_H_
+#ifndef _GENMAP_CSR_MAT_H_
+#define _GENMAP_CSR_MAT_H_
 
 #include <genmap.h>
 
 typedef struct {
   ulong r, c;
   uint proc;
+  GenmapScalar v;
 } csr_entry;
 
 typedef struct {
@@ -17,8 +18,8 @@ typedef struct {
 struct csr_mat_ {
   uint rn;
   ulong row_start;
-
   uint *row_off;
+
   ulong *col;
   GenmapScalar *v, *diag;
 

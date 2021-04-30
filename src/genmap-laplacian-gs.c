@@ -1,4 +1,5 @@
 #include <genmap-impl.h>
+#include <genmap-partition.h>
 
 #define SWAP(v, i, j)                                                          \
   do {                                                                         \
@@ -75,7 +76,8 @@ void genmap_number_faces_and_edges(genmap_handle h, struct comm *c) {
 }
 
 // FIXME: Only works for 3D as of now
-void genmap_init_gs_laplacian(genmap_handle h, struct comm *c) {
+static int genmap_unweighted_laplacian_gs_init(genmap_handle h,
+                                               struct comm *c) {
   int nv = genmap_get_nvertices(h);
   int ndim = (nv == 8) ? 3 : 2;
   int nf = 2 * ndim;                      // number of faces
@@ -110,7 +112,7 @@ void genmap_init_gs_laplacian(genmap_handle h, struct comm *c) {
 
   GenmapRealloc(lelt, &h->diagonal);
   for (e = 0; e < lelt; e++) {
-    h->diagonal[e] = 0.0;
+    h->diagonal[e] = -2.0;
     for (i = 0; i < nv; i++)
       h->diagonal[e] += u[e * nlocal + i];
     for (i = 0; i < ne; i++)
@@ -121,9 +123,12 @@ void genmap_init_gs_laplacian(genmap_handle h, struct comm *c) {
 
   GenmapFree(u);
   GenmapFree(vef);
+
+  return 0;
 }
 
-void genmap_gs_laplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v) {
+static int genmap_unweighted_laplacian_gs(genmap_handle h, GenmapScalar *u,
+                                          GenmapScalar *v) {
   int nv = genmap_get_nvertices(h);
   int ndim = (nv == 8) ? 3 : 2;
   int nf = 2 * ndim;                      // number of faces
@@ -145,7 +150,7 @@ void genmap_gs_laplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v) {
   gs(ucv, gs_double, gs_add, 0, h->gs, &h->buf);
 
   for (i = 0; i < lelt; i++) {
-    v[i] = h->diagonal[i] * u[i];
+    v[i] = (h->diagonal[i] + 2.0) * u[i];
     for (j = 0; j < nv; j++)
       v[i] -= ucv[nlocal * i + j];
     for (j = 0; j < ne; j++)
@@ -155,4 +160,91 @@ void genmap_gs_laplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v) {
   }
 
   GenmapFree(ucv);
+
+  return 0;
+}
+
+static int genmap_weighted_laplacian_gs_init(genmap_handle h, struct comm *c) {
+  GenmapInt lelt = genmap_get_nel(h);
+  GenmapInt nv = genmap_get_nvertices(h);
+
+  GenmapRealloc(lelt, &h->diagonal);
+  GenmapUInt numPoints = (GenmapUInt)nv * lelt;
+
+  GenmapLong *vertices;
+  GenmapMalloc(numPoints, &vertices);
+
+  struct rsb_element *elements = genmap_get_elements(h);
+  GenmapInt i, j;
+  for (i = 0; i < lelt; i++) {
+    for (j = 0; j < nv; j++)
+      vertices[i * nv + j] = elements[i].vertices[j];
+  }
+
+  if (h->gs != NULL)
+    gs_free(h->gs);
+
+  h->gs = gs_setup(vertices, numPoints, c, 0, gs_crystal_router, 0);
+
+  GenmapScalar *u;
+  GenmapMalloc(numPoints, &u);
+
+  for (i = 0; i < lelt; i++)
+    for (j = 0; j < nv; j++)
+      u[nv * i + j] = 1.;
+
+  gs(u, gs_double, gs_add, 0, h->gs, &h->buf);
+
+  for (i = 0; i < lelt; i++) {
+    h->diagonal[i] = -nv;
+    for (j = 0; j < nv; j++)
+      h->diagonal[i] += u[nv * i + j];
+  }
+
+  GenmapFree(u);
+  GenmapFree(vertices);
+
+  return 0;
+}
+
+static int genmap_weighted_laplacian_gs(genmap_handle h, GenmapScalar *u,
+                                        GenmapScalar *v) {
+  GenmapInt lelt = genmap_get_nel(h);
+  GenmapInt nv = genmap_get_nvertices(h);
+
+  GenmapScalar *ucv;
+  GenmapMalloc((size_t)(nv * lelt), &ucv);
+
+  GenmapInt i, j;
+  for (i = 0; i < lelt; i++)
+    for (j = 0; j < nv; j++)
+      ucv[nv * i + j] = u[i];
+
+  gs(ucv, gs_double, gs_add, 0, h->gs, &h->buf);
+
+  for (i = 0; i < lelt; i++) {
+    v[i] = (h->diagonal[i] + nv) * u[i];
+    for (j = 0; j < nv; j++)
+      v[i] -= ucv[nv * i + j];
+  }
+
+  GenmapFree(ucv);
+
+  return 0;
+}
+
+int genmap_laplacian_gs_init(genmap_handle h, struct comm *c) {
+  metric_tic(c, LAPLACIANSETUP);
+  if (h->options->rsb_laplacian_weighted == 0)
+    genmap_unweighted_laplacian_gs_init(h, c);
+  else
+    genmap_weighted_laplacian_gs_init(h, c);
+  metric_toc(c, LAPLACIANSETUP);
+}
+
+int genmap_laplacian_gs(genmap_handle h, GenmapScalar *u, GenmapScalar *v) {
+  if (h->options->rsb_laplacian_weighted == 0)
+    genmap_unweighted_laplacian_gs(h, u, v);
+  else
+    genmap_weighted_laplacian_gs(h, u, v);
 }

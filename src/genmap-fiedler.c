@@ -2,7 +2,7 @@
 #include <math.h>
 
 #include <genmap-impl.h>
-#include <genmap-multigrid.h>
+#include <genmap-partition.h>
 //
 // TODO: use a separate function to generate init vector
 //
@@ -34,13 +34,7 @@ int GenmapFiedlerRQI(genmap_handle h, struct comm *gsc, int max_iter,
   normi = 1.0 / sqrt(norm);
   genmap_vector_scale(initVec, initVec, normi);
 
-  metric_tic(gsc, LAPLACIANSETUP);
-  GenmapInitLaplacian(h, gsc);
-  metric_toc(gsc, LAPLACIANSETUP);
-
-  metric_tic(gsc, LAPLACIANGSSETUP);
-  genmap_init_gs_laplacian(h, gsc);
-  metric_toc(gsc, LAPLACIANGSSETUP);
+  genmap_laplacian_init(h, gsc);
 
   genmap_vector y;
   genmap_vector_create_zeros(&y, lelt);
@@ -96,6 +90,8 @@ int GenmapFiedlerLanczos(genmap_handle h, struct comm *gsc, int max_iter,
   comm_allreduce(gsc, gs_double, gs_add, &rtr, 1, &rni);
   rni = 1.0 / sqrt(rtr);
   genmap_vector_scale(initVec, initVec, rni);
+
+  genmap_laplacian_init(h, gsc);
 
   int iter;
   metric_tic(gsc, LANCZOS);

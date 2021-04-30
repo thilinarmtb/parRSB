@@ -9,9 +9,9 @@
 
 #include <genmap.h>
 
+#include <genmap-csr-mat.h>
 #include <genmap-elements.h>
 #include <genmap-metrics.h>
-#include <genmap-multigrid-csr-mat.h>
 #include <genmap-partition.h>
 
 struct genmap_handle_private {
@@ -25,18 +25,16 @@ struct genmap_handle_private {
 
   struct array *elements;
 
-  /* Weighted Laplacian */
-  struct gs_data *gsw;
-  GenmapScalar *weights;
-  buffer buf;
-
-  /* Un-weighted Laplacian */
+  /* ga based Laplacian */
   struct gs_data *gs;
   GenmapScalar *diagonal;
 
+  /* CSR implementation */
   struct gs_data *gsh;
   csr_mat M;
   GenmapScalar *b;
+
+  buffer buf;
 
   parRSB_options *options;
 };

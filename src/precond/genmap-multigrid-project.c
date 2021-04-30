@@ -3,6 +3,7 @@
 
 #include <genmap-impl.h>
 #include <genmap-multigrid.h>
+#include <genmap-partition.h>
 
 #define MM 505
 
@@ -50,14 +51,7 @@ int project(genmap_handle h, struct comm *gsc, struct mg_data *d,
   uint j, k;
   i = 0;
   while (i < max_iter) {
-    metric_tic(gsc, LAPLACIAN);
-#if 0
-    GenmapLaplacianWeighted(h, p->data, w->data);
-#else
-    // GenmapLaplacian(h, p->data, w->data);
-    genmap_gs_laplacian(h, p->data, w->data);
-#endif
-    metric_toc(gsc, LAPLACIAN);
+    genmap_laplacian(h, p->data, w->data);
 
     GenmapScalar den = genmap_vector_dot(p, w);
     comm_allreduce(gsc, gs_double, gs_add, &den, 1, &buf);

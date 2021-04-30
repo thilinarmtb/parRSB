@@ -12,7 +12,8 @@ int rqi(genmap_handle h, struct comm *gsc, genmap_vector z, int max_iter,
 
   metric_tic(gsc, PRECONDSETUP);
   struct mg_data d;
-  mg_setup(h, gsc, &d);
+  mg_check(h, gsc);
+  mg_setup(h, gsc, 0, &d);
   metric_toc(gsc, PRECONDSETUP);
 
   uint lelt = z->size;
@@ -85,8 +86,8 @@ int rqi(genmap_handle h, struct comm *gsc, genmap_vector z, int max_iter,
 
         // M=Z(1:k,:)*G*Z(1:k,:);
         for (j = 0; j < N; j++) {
-          // GenmapLaplacian(h, &Z[j * lelt], GZ);
-          genmap_gs_laplacian(h, &Z[j * lelt], GZ);
+          genmap_laplacian(h, &Z[j * lelt], GZ);
+
           for (k = 0; k < N; k++) {
             M[k * N + j] = 0.0;
             for (l = 0; l < lelt; l++)

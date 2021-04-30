@@ -1,29 +1,10 @@
 #include <genmap-impl.h>
 #include <genmap-multigrid.h>
 
-#define ABS(i) ((i < 0) ? -i : i)
-
 void csr_mat_setup(csr_mat *M_, struct array *entries, struct comm *c,
                    buffer *buf) {
-  entry *ptr = entries->ptr;
-  sarray_sort_2(entry, ptr, entries->n, r, 1, c, 1, buf);
-
-  uint st = 0, e = 0;
-  sint diag;
-  while (st < entries->n) {
-    diag = -1;
-    e = st;
-    while (e < entries->n && ptr[st].r == ptr[e].r) {
-      if (ptr[e].r == ptr[e].c)
-        diag = e;
-      else
-        ptr[e].v = -1.0;
-      e++;
-    }
-    assert(diag >= 0);
-    ptr[diag].v = e - st - 1;
-    st = e;
-  }
+  csr_entry *ptr = entries->ptr;
+  sarray_sort_2(csr_entry, ptr, entries->n, r, 1, c, 1, buf);
 
   uint i = 0, j, n = 0;
   while (i < entries->n) {
@@ -37,7 +18,8 @@ void csr_mat_setup(csr_mat *M_, struct array *entries, struct comm *c,
   csr_mat M = *M_;
   M->rn = n;
 
-  slong out[2][1], bf[2][1], in = M->rn;
+  slong out[2][1], bf[2][1];
+  slong in = M->rn;
   comm_scan(out, c, gs_long, gs_add, &in, 1, bf);
   M->row_start = out[0][0] + 1;
 

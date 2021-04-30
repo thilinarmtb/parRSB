@@ -1,6 +1,7 @@
 // FIXME: genmap-impl.h is only for GenmapFree
 #include <genmap-impl.h>
 #include <genmap-multigrid-gs.h>
+#include <genmap-partition.h>
 
 static int mg_get_nlevels_gs(struct mg_data *dd) {
   struct mg_data_gs *d = dd->data;
@@ -31,14 +32,13 @@ static void mg_diagonal_scaling_gs(struct mg_data *d, int lvl, GenmapScalar *v,
   struct mg_data_gs *dd = d->data;
   assert(lvl < dd->nlevels);
 
+  genmap_handle h = d->h;
+
   uint nelt = dd->level_off[1] - dd->level_off[0];
   uint size = nelt + dd->level_off[lvl + 1] - dd->level_off[lvl];
 
   GenmapScalar *vv;
   GenmapCalloc(size, &vv);
-
-  buffer buf;
-  buffer_init(&buf, 1024);
 
   uint i;
   for (i = nelt; i < size; i++)
@@ -46,29 +46,29 @@ static void mg_diagonal_scaling_gs(struct mg_data *d, int lvl, GenmapScalar *v,
 
   // Interpolate to Level 0
   if (0 < lvl && lvl < dd->nlevels)
-    gs(vv, gs_double, gs_add, 0, dd->J0[lvl], &buf);
+    gs(vv, gs_double, gs_add, 0, dd->J0[lvl], &h->buf);
 
   GenmapScalar *diag = dd->diagonal;
 
+  int nv = genmap_get_nvertices(h);
+
   if (lvl > 0) {
     for (i = 0; i < nelt; i++)
-      vv[i] = sigma * vv[i] / (diag[i] - 2.0);
+      vv[i] = sigma * vv[i] / diag[i];
   } else {
     for (i = nelt; i < size; i++)
-      vv[i] = sigma * vv[i] / (diag[i - nelt] - 2.0);
+      vv[i] = sigma * vv[i] / diag[i - nelt];
   }
 
   // Restrict from Level 0
   if (0 < lvl && lvl < dd->nlevels) {
     for (i = nelt; i < size; i++)
       vv[i] = 0.0;
-    gs(vv, gs_double, gs_add, 1, dd->J0[lvl], &buf);
+    gs(vv, gs_double, gs_add, 1, dd->J0[lvl], &h->buf);
   }
 
   for (i = nelt; i < size; i++)
     v[i - nelt] = vv[i];
-
-  buffer_free(&buf);
 
   GenmapFree(vv);
 }
@@ -87,39 +87,6 @@ static void mg_interpolate_gs(struct mg_data *d, int lvl, GenmapScalar *v,
   assert(lvl < dd->nlevels);
 
   gs(v, gs_double, gs_add, 0, dd->J[lvl], buf);
-}
-
-static void gs_laplacian(GenmapScalar *v, GenmapScalar *u,
-                         GenmapScalar *diagonal, struct gs_data *gsh, int nv,
-                         uint lelt, buffer *buf) {
-  int ndim = (nv == 8) ? 3 : 2;
-  int nf = 2 * ndim;                      // number of faces
-  int nfv = 2 * (ndim - 1);               // number of face vertices
-  int ne = (ndim == 3) ? nv + nf - 2 : 0; // number of edges
-  uint nlocal = nv + nf + ne;
-  uint size = lelt * nlocal;
-
-  GenmapScalar *ucv;
-  GenmapMalloc(size, &ucv);
-
-  sint i, j;
-  for (i = 0; i < lelt; i++)
-    for (j = 0; j < nlocal; j++)
-      ucv[i * nlocal + j] = u[i];
-
-  gs(ucv, gs_double, gs_add, 0, gsh, buf);
-
-  for (i = 0; i < lelt; i++) {
-    v[i] = diagonal[i] * u[i];
-    for (j = 0; j < nv; j++)
-      v[i] -= ucv[nlocal * i + j];
-    for (j = 0; j < ne; j++)
-      v[i] += ucv[nlocal * i + nv + j];
-    for (j = 0; j < nf; j++)
-      v[i] -= ucv[nlocal * i + nv + ne + j];
-  }
-
-  GenmapFree(ucv);
 }
 
 static void mg_operator_gs(struct mg_data *d, int lvl, GenmapScalar *v,
@@ -142,9 +109,9 @@ static void mg_operator_gs(struct mg_data *d, int lvl, GenmapScalar *v,
     gs(vv, gs_double, gs_add, 0, dd->J0[lvl], buf);
 
   if (lvl > 0)
-    gs_laplacian(vv, vv, dd->diagonal, dd->G, dd->nv, nelt, buf);
+    genmap_laplacian_gs(d->h, vv, vv);
   else
-    gs_laplacian(vv + nelt, vv + nelt, dd->diagonal, dd->G, dd->nv, nelt, buf);
+    genmap_laplacian_gs(d->h, vv + nelt, vv + nelt);
 
   // Restrict from Level 0
   if (0 < lvl && lvl < dd->nlevels) {
@@ -242,7 +209,6 @@ void mg_setup_gs(genmap_handle h, struct comm *c, struct mg_data *dd) {
   d->nsmooth[0] = 2;
   d->sigma[0] = 0.6;
   d->J[0] = NULL;
-  d->G = h->gs;
   d->diagonal = h->diagonal;
   d->nv = genmap_get_nvertices(h);
 
