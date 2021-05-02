@@ -4,7 +4,7 @@
 #include <time.h>
 
 #include <genmap-impl.h>
-#include <sort.h>
+#include <genmap-sort.h>
 
 struct unmarked {
   uint index;

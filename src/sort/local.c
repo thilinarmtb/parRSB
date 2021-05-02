@@ -1,4 +1,4 @@
-#include <sort-impl.h>
+#include <genmap-sort-impl.h>
 
 int sort_field(struct array *arr, size_t usize, gs_dom t, uint off, buffer *buf,
                int keep) {

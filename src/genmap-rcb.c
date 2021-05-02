@@ -1,5 +1,5 @@
 #include <genmap-impl.h>
-#include <sort.h>
+#include <genmap-sort.h>
 
 #include <float.h>
 

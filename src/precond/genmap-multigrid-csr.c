@@ -61,8 +61,7 @@ static void mg_operator_csr(struct mg_data *d, int lvl, GenmapScalar *v,
   assert(lvl < dd->nlevels);
 
   csr_mat M = dd->M[lvl];
-  csr_mat_gather(M, M->gsh, u, dd->buf, buf);
-  csr_mat_apply(v, M, dd->buf);
+  csr_mat_apply(v, M, u, buf);
 }
 
 static void mg_coarse_csr(struct mg_data *d, GenmapScalar *u, GenmapScalar *r) {

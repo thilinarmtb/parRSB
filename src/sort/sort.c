@@ -1,6 +1,6 @@
 #include <float.h>
 #include <genmap-impl.h> //FIXME - include genmap-statistics
-#include <sort-impl.h>
+#include <genmap-sort-impl.h>
 
 int set_dest(uint *proc, uint np, ulong start, uint size, ulong nelem) {
   uint psize = nelem / np, i;

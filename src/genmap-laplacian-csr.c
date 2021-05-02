@@ -206,8 +206,6 @@ static int genmap_unweighted_laplacian_csr_init(genmap_handle h,
   array_free(&csr);
   metric_toc(c, CSRMATSETUP);
 
-  GenmapRealloc(h->M->row_off[h->M->rn], &h->b);
-
 #if 0
   int nnz = h->M->row_off[h->M->rn];
   double fro[2] = {0.0, 0.0}, buf[2];
@@ -271,8 +269,6 @@ static int genmap_weighted_laplacian_csr_init(genmap_handle h, struct comm *c) {
   array_free(&csr);
   metric_toc(c, CSRMATSETUP);
 
-  GenmapRealloc(h->M->row_off[h->M->rn], &h->b);
-
   return 0;
 }
 
@@ -286,9 +282,7 @@ int genmap_laplacian_csr_init(genmap_handle h, struct comm *c) {
 }
 
 int genmap_laplacian_csr(genmap_handle h, GenmapScalar *u, GenmapScalar *v) {
-  csr_mat_gather(h->M, h->M->gsh, u, h->b, &h->buf);
-  csr_mat_apply(v, h->M, h->b);
-
+  csr_mat_apply(v, h->M, u, &h->buf);
   return 0;
 }
 

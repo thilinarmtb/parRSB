@@ -173,4 +173,8 @@ void mg_coarse_solve(GenmapScalar *u, GenmapScalar *r, struct mg_data *d) {
   d->coarse(d, u, r);
 }
 
-void mg_free(struct mg_data *d) { d->free(d); }
+int mg_free(struct mg_data *d) {
+  d->free(d);
+  free(d);
+  return 0;
+}

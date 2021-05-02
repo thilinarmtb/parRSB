@@ -1,5 +1,5 @@
-#ifndef _SORT_H_
-#define _SORT_H_
+#ifndef _GENMAP_SORT_H_
+#define _GENMAP_SORT_H_
 
 #include <genmap-impl.h>
 

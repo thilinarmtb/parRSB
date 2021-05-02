@@ -6,7 +6,7 @@
 #include <genmap-impl.h>
 #include <parRSB.h>
 
-parRSB_options parrsb_default_options = {0, -1, 0, 0, 0, 1, 1, 1, 1, 1};
+parRSB_options parrsb_default_options = {0, -1, 0, 0, 0, 1, 1, 1, 2, 1};
 
 void fparRSB_partMesh(int *part, int *seq, long long *vtx, double *coord,
                       int *nel, int *nv, int *options, int *comm, int *err) {
@@ -99,6 +99,9 @@ int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
       break;
     case 2:
       genmap_rib(h);
+      break;
+    case 3:
+      genmap_serial_ilu(h);
       break;
     default:
       break;

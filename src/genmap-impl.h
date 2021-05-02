@@ -30,9 +30,7 @@ struct genmap_handle_private {
   GenmapScalar *diagonal;
 
   /* CSR implementation */
-  struct gs_data *gsh;
   csr_mat M;
-  GenmapScalar *b;
 
   buffer buf;
 

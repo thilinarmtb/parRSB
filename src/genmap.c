@@ -27,12 +27,12 @@ int genmap_init(genmap_handle *h_, comm_ext ce, parRSB_options *options) {
   GenmapMalloc(1, &h->local);
   comm_init(h->local, ce);
 
-  /* gs based Laplacian */
+  /* GS based Laplacian */
   h->gs = NULL;
   h->diagonal = NULL;
 
+  /* CSR based Laplacian */
   h->M = NULL;
-  h->b = NULL;
 
   buffer_init(&h->buf, 1024);
 
@@ -44,16 +44,15 @@ int genmap_init(genmap_handle *h_, comm_ext ce, parRSB_options *options) {
 int genmap_finalize(genmap_handle h) {
   buffer_free(&h->buf);
 
-  /* gs based Laplacian */
+  /* GS based Laplacian */
   if (h->diagonal != NULL)
     GenmapFree(h->diagonal);
   if (h->gs)
     gs_free(h->gs);
 
+  /* CSR based Laplacian */
   if (h->M)
     csr_mat_free(h->M);
-  if (h->b != NULL)
-    GenmapFree(h->b);
 
   if (h->global != NULL) {
     comm_free(h->global);

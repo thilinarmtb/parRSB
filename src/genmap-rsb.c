@@ -1,10 +1,7 @@
 #include <limits.h>
-#include <math.h>
-#include <stdio.h>
-#include <time.h>
 
 #include <genmap-impl.h>
-#include <sort.h>
+#include <genmap-sort.h>
 
 static int dump_fiedler_if_discon(genmap_handle h, int level, int max_levels) {
   struct comm *lc = h->local;

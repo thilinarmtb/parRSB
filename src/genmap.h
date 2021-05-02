@@ -84,6 +84,8 @@ int genmap_rcb(genmap_handle h);
 
 int genmap_rib(genmap_handle h);
 
+int genmap_serial_ilu(genmap_handle h);
+
 /* Misc */
 double genmap_get_max_rss();
 

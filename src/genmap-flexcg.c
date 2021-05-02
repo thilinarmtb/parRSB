@@ -1,10 +1,6 @@
-#include <math.h>
-#include <stdio.h>
+#include <genmap-iterative.h>
 
-#include <genmap-impl.h>
-#include <genmap-multigrid.h>
-
-int flex_cg(genmap_handle h, struct comm *gsc, struct mg_data *d,
+int flex_cg(genmap_handle h, struct comm *gsc, struct precond *d,
             genmap_vector ri, int max_iter, genmap_vector x) {
   assert(x->size == ri->size);
   assert(x->size == genmap_get_nel(h));
@@ -55,7 +51,7 @@ int flex_cg(genmap_handle h, struct comm *gsc, struct mg_data *d,
 
     genmap_vector_copy(z0, z);
 #if PREC
-    vcycle(z->data, r->data, d, &h->buf);
+    precond_apply(z->data, r->data, d, &h->buf);
 #else
     genmap_vector_copy(z, r);
 #endif

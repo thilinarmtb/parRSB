@@ -51,19 +51,9 @@ void mg_interpolate(GenmapScalar *v, int level, struct mg_data *d, buffer *buf);
 
 void mg_coarse_solve(GenmapScalar *u, GenmapScalar *r, struct mg_data *d);
 
-void mg_free(struct mg_data *d);
+void mg_apply(GenmapScalar *u, GenmapScalar *rhs, struct mg_data *d,
+              buffer *buf);
 
-// TODO: Move this to a separate file
-/* Algorithms */
-void vcycle(GenmapScalar *u, GenmapScalar *rhs, struct mg_data *d, buffer *buf);
-
-int project(genmap_handle h, struct comm *c, struct mg_data *d, genmap_vector r,
-            int max_iter, genmap_vector x);
-
-int flex_cg(genmap_handle h, struct comm *c, struct mg_data *d, genmap_vector r,
-            int max_iter, genmap_vector x);
-
-int rqi(genmap_handle h, struct comm *c, genmap_vector z, int max_iter,
-        genmap_vector fiedler);
+int mg_free(struct mg_data *d);
 
 #endif

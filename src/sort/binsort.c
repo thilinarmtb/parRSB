@@ -1,5 +1,5 @@
 #include <genmap-impl.h> //FIXME - include genmap-statistics
-#include <sort-impl.h>
+#include <genmap-sort-impl.h>
 
 /* assumes array is locally sorted */
 int set_bin(uint **proc_, struct sort *s, uint field, struct comm *c) {

@@ -1,6 +1,6 @@
 #include <float.h>
 #include <genmap-impl.h>
-#include <sort.h>
+#include <genmap-sort.h>
 
 void get_rib_axis_local(void *elems, uint nel, int ndim) {
   // TODO: Get rid of this

@@ -4,7 +4,7 @@
 
 #include <gencon-impl.h>
 #include <genmap-impl.h>
-#include <sort.h>
+#include <genmap-sort.h>
 
 struct minPair_private {
   uint proc;
@@ -196,11 +196,6 @@ int findConnectedPeriodicPairs(Mesh mesh, BoundaryFace f_, BoundaryFace g_,
             d2Min, tol, f.faceId, g.faceId);
     exit(1);
   }
-#if defined(GENMAP_DEBUG)
-  printf("Periodic face match (elementId,faceId): (%lld %lld) "
-         "and (%lld %lld)\n",
-         f.elementId, f.faceId, g.elementId, g.faceId);
-#endif
 
   struct minPair_private m;
   for (i = 0; i < nvf; i++) {
@@ -239,10 +234,6 @@ int gatherMatchingPeriodicFaces(Mesh mesh, struct comm *c) {
   slong eid;
   for (i = 0; i < nFaces; i++) {
     eid = GENMAP_MAX(bPtr[i].bc[0], bPtr[i].elementId);
-#if defined(GENMAP_DEBUG)
-    printf("Send matching (%lld,%lld) to (%ld,%ld).\n", bPtr[i].elementId,
-           bPtr[i].faceId, bPtr[i].bc[0], bPtr[i].bc[1]);
-#endif
     if (eid < N)
       bPtr[i].proc = eid / nelt;
     else
@@ -288,11 +279,6 @@ int setPeriodicFaceCoordinates(Mesh mesh, struct comm *c, buffer *buf) {
       int faceId = bPtr[i].faceId;
       for (j = 0; j < nvf; j++)
         bPtr[i].face.vertex[j] = ePtr[k + faces[faceId][j] - 1];
-
-#if defined(GENMAP_DEBUG)
-      printf("Periodic BC (element,face):(%ld,%ld)\n", bPtr[i].bc[0],
-             bPtr[i].bc[1]);
-#endif
     }
     i++;
   }

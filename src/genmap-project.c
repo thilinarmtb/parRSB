@@ -1,13 +1,8 @@
-#include <math.h>
-#include <stdio.h>
-
-#include <genmap-impl.h>
-#include <genmap-multigrid.h>
-#include <genmap-partition.h>
+#include <genmap-iterative.h>
 
 #define MM 505
 
-int project(genmap_handle h, struct comm *gsc, struct mg_data *d,
+int project(genmap_handle h, struct comm *gsc, struct precond *d,
             genmap_vector ri, int max_iter, genmap_vector x) {
   assert(x->size == ri->size);
   assert(x->size == genmap_get_nel(h));
@@ -69,7 +64,9 @@ int project(genmap_handle h, struct comm *gsc, struct mg_data *d,
     rr = genmap_vector_dot(r, r);
     comm_allreduce(gsc, gs_double, gs_add, &rr, 1, &buf);
 
-    if (rr < res_tol || sqrt(rr) < tol)
+    printf("i = %u, rr = %lf, res_tol = %lf, tol = %lf\n", i, rr, res_tol,
+           tol * tol);
+    if (rr < res_tol || rr < tol * tol)
       break;
 
     GenmapScalar norm0 = genmap_vector_dot(z, z);
@@ -78,7 +75,7 @@ int project(genmap_handle h, struct comm *gsc, struct mg_data *d,
     genmap_vector_copy(z0, z);
 
     metric_tic(gsc, VCYCLE);
-    vcycle(z->data, r->data, d, &h->buf);
+    precond_apply(z->data, r->data, d, &h->buf);
     metric_toc(gsc, VCYCLE);
 
     GenmapScalar norm1 = genmap_vector_dot(z, z);

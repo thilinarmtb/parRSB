@@ -1,8 +1,4 @@
-#include <math.h>
-#include <stdio.h>
-
-#include <genmap-impl.h>
-#include <genmap-multigrid.h>
+#include <genmap-iterative.h>
 
 // Input z should be orthogonal to 1-vector, have unit norm.
 // RQI should not change z.
@@ -10,10 +6,10 @@ int rqi(genmap_handle h, struct comm *gsc, genmap_vector z, int max_iter,
         genmap_vector y) {
   assert(z->size == y->size);
 
+  precond_check(h, gsc);
+
   metric_tic(gsc, PRECONDSETUP);
-  struct mg_data d;
-  mg_check(h, gsc);
-  mg_setup(h, gsc, 0, &d);
+  struct precond *d = precond_setup(0, h, gsc);
   metric_toc(gsc, PRECONDSETUP);
 
   uint lelt = z->size;
@@ -33,7 +29,7 @@ int rqi(genmap_handle h, struct comm *gsc, genmap_vector z, int max_iter,
   GenmapMalloc(max_iter * max_iter, &buf);
 
   metric_tic(gsc, PROJECT);
-  int ppfi = project(h, gsc, &d, z, 100, y);
+  int ppfi = project(h, gsc, d, z, 100, y);
   metric_toc(gsc, PROJECT);
   metric_acc(NPROJECT, ppfi);
 
@@ -118,7 +114,7 @@ int rqi(genmap_handle h, struct comm *gsc, genmap_vector z, int max_iter,
     }
 
     metric_tic(gsc, PROJECT);
-    ppfi = project(h, gsc, &d, z, 100, y);
+    ppfi = project(h, gsc, d, z, 100, y);
     metric_toc(gsc, PROJECT);
     metric_acc(NPROJECT, ppfi);
 
@@ -138,7 +134,7 @@ int rqi(genmap_handle h, struct comm *gsc, genmap_vector z, int max_iter,
       break;
   }
 
-  mg_free(&d);
+  precond_free(d);
 
   GenmapFree(Z);
   GenmapFree(GZ);

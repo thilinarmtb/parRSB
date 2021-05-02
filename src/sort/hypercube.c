@@ -1,5 +1,5 @@
+#include <genmap-sort-impl.h>
 #include <math.h>
-#include <sort-impl.h>
 
 int init_probes(struct hypercube *data, struct comm *c) {
   /* get input data */

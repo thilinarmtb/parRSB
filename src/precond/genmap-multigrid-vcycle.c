@@ -1,8 +1,8 @@
 #include <genmap-impl.h>
 #include <genmap-multigrid.h>
 
-void vcycle(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *d,
-            buffer *buf) {
+void mg_apply(GenmapScalar *u1, GenmapScalar *rhs, struct mg_data *d,
+              buffer *buf) {
   int nlevels = mg_get_nlevels(d);
   uint *lvl_off = mg_get_level_off(d);
 

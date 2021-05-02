@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 #include <gencon-impl.h>
-#include <sort.h>
+#include <genmap-sort.h>
 
 static void initSegments(Mesh mesh, struct comm *c) {
   uint nPoints = mesh->elements.n;
