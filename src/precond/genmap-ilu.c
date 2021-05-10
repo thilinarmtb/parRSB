@@ -24,14 +24,15 @@ static int ilu0(csr_mat M) {
         continue;
 
       kk = off[jj];
-      while (col[kk] < i) kk++;
+      while (col[kk] < i)
+        kk++;
       /* a_ji = a_ji / a_ii */
       if (col[kk] != i) {
         printf("kk = %u, col[kk] = %lu, j = %u, i = %u a_ji = %lf\n", kk,
                col[kk], j, i, a_ji);
         assert(0);
       }
-      a_ji = v[kk] = v[kk]/a_ii;
+      a_ji = v[kk] = v[kk] / a_ii;
 
       for (kk = kk + 1; kk < off[jj + 1]; kk++) { /* Go over the columns */
         k = col[kk];
