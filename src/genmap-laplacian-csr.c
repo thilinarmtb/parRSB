@@ -200,9 +200,7 @@ static int genmap_unweighted_laplacian_csr_init(genmap_handle h,
   sarray_sort_2(csr_entry, csr.ptr, csr.n, r, 1, c, 1, &h->buf);
 
   metric_tic(c, CSRMATSETUP);
-  if (h->M != NULL)
-    csr_mat_free(h->M);
-  csr_mat_setup(&h->M, &csr, c, &h->buf);
+  csr_mat_setup(h->M, &csr, c, &h->buf);
   array_free(&csr);
   metric_toc(c, CSRMATSETUP);
 
@@ -262,10 +260,7 @@ static int genmap_weighted_laplacian_csr_init(genmap_handle h, struct comm *c) {
   sarray_sort_2(csr_entry, csr.ptr, csr.n, r, 1, c, 1, &h->buf);
 
   metric_tic(c, CSRMATSETUP);
-  if (h->M != NULL)
-    csr_mat_free(h->M);
-
-  csr_mat_setup(&h->M, &csr, c, &h->buf);
+  csr_mat_setup(h->M, &csr, c, &h->buf);
   array_free(&csr);
   metric_toc(c, CSRMATSETUP);
 
@@ -274,10 +269,17 @@ static int genmap_weighted_laplacian_csr_init(genmap_handle h, struct comm *c) {
 
 int genmap_laplacian_csr_init(genmap_handle h, struct comm *c) {
   metric_tic(c, LAPLACIANSETUP);
+
+  if (h->M != NULL)
+    csr_mat_free(h->M);
+
+  h->M = tmalloc(struct csr_mat_, 1);
+
   if (h->options->rsb_laplacian_weighted == 0)
     genmap_unweighted_laplacian_csr_init(h, c);
   else
     genmap_weighted_laplacian_csr_init(h, c);
+
   metric_toc(c, LAPLACIANSETUP);
 }
 

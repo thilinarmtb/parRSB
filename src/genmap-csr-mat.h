@@ -28,7 +28,7 @@ struct csr_mat_ {
 
 typedef struct csr_mat_ *csr_mat;
 
-void csr_mat_setup(csr_mat *M, struct array *entries, struct comm *c,
+void csr_mat_setup(csr_mat M, struct array *entries, struct comm *c,
                    buffer *bfr);
 
 void csr_mat_apply(GenmapScalar *y, csr_mat M, GenmapScalar *x, buffer *buf);

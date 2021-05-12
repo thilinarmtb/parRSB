@@ -21,7 +21,7 @@ static struct gs_data *csr_get_top(csr_mat M, struct comm *c, buffer *buf) {
   return gsh;
 }
 
-void csr_mat_setup(csr_mat *M_, struct array *entries, struct comm *c,
+void csr_mat_setup(csr_mat M, struct array *entries, struct comm *c,
                    buffer *buf) {
   csr_entry *ptr = entries->ptr;
   sarray_sort_2(csr_entry, ptr, entries->n, r, 1, c, 1, buf);
@@ -34,8 +34,6 @@ void csr_mat_setup(csr_mat *M_, struct array *entries, struct comm *c,
     i = j, n++;
   }
 
-  GenmapMalloc(1, M_);
-  csr_mat M = *M_;
   M->rn = n;
 
   slong out[2][1], bf[2][1];
@@ -62,7 +60,10 @@ void csr_mat_setup(csr_mat *M_, struct array *entries, struct comm *c,
     if (ptr[i].r == ptr[i].c)
       M->diag[rn++] = ptr[i].v;
   }
-  assert(rn == M->rn);
+  if (rn != M->rn) {
+    printf("rn = %u, M->rn = %u\n", rn, M->rn);
+    assert(0);
+  }
 
   M->row_off[0] = 0, i = 0;
   uint nn = 0;

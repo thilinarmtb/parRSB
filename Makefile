@@ -29,10 +29,6 @@ GENCONDIR = $(SRCROOT)/src/gencon
 GENCONSRCS = $(wildcard $(GENCONDIR)/*.c)
 SRCOBJS += $(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%.o,$(GENCONSRCS))
 
-TESTDIR = $(SRCROOT)/tests
-TESTSRCS = $(wildcard $(TESTDIR)/*.c)
-TESTOBJS = $(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%,$(TESTSRCS))
-
 EXAMPLEDIR = $(SRCROOT)/examples
 EXAMPLESRCS = $(wildcard $(EXAMPLEDIR)/*.c)
 EXAMPLEOBJS = $(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%,$(EXAMPLESRCS))
@@ -60,11 +56,6 @@ endif
 
 ifneq ($(UNDERSCORE),0)
   PP += -DGENMAP_UNDERSCORE
-endif
-
-ifneq ($(BLAS),0)
-  PP += -DGENMAP_BLAS
-  LDFLAGS += -L$(BLASLIBPATH) -lblasLapack
 endif
 
 ifneq ($(MPI),0)

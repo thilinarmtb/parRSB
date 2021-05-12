@@ -58,6 +58,7 @@ int read_co2_mesh(Mesh *mesh_, char *fname, struct comm *c) {
   if (rank == 0)
     read_size += header_size;
 
+  /* To-do: check for failure */
   buf = (char *)realloc(buf, read_size * sizeof(char));
   err = MPI_File_read_ordered(file, buf, read_size, MPI_BYTE, &st);
   err = MPI_File_close(&file);
@@ -141,6 +142,7 @@ int read_connectivity(Mesh mesh, char *fname, struct comm *c) {
   if (rank == 0)
     read_size += header_size;
 
+  /* To-do: check for failure */
   buf = (char *)realloc(buf, read_size * sizeof(char));
   err = MPI_File_read_ordered(file, buf, read_size, MPI_BYTE, &st);
   err = MPI_File_close(&file);
