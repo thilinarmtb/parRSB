@@ -8,23 +8,16 @@
 
 parRSB_options parrsb_default_options = {0, -1, 0, 0, 0, 1, 1, 2, 1};
 
+#define fparRSB_partMesh FORTRAN_UNPREFIXED(fparrsb_partmesh, FPARRSB_PARTMESH)
 void fparRSB_partMesh(int *part, int *seq, long long *vtx, double *coord,
                       int *nel, int *nv, int *options, int *comm, int *err) {
   *err = 1;
   comm_ext c = MPI_Comm_f2c(*comm);
-  // TODO: Convert int options to parRSB_options instead of default options
+  /* TODO: Convert int options to parRSB_options instead of default options */
   parRSB_options opt = parrsb_default_options;
   *err = parRSB_partMesh(part, seq, vtx, coord, *nel, *nv, &opt, c);
 }
 
-/*
- * part = [nel], out,
- * seq = [nel], out,
- * vtx = [nel x nv], in,
- * coord = [nel x nv x ndim], in,
- * nel = in,
- * nv = in,
- * options = in/out */
 int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
                     int nv, parRSB_options *options, MPI_Comm comm) {
   struct comm c;
@@ -37,7 +30,7 @@ int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
     printf("running parRSB ...\n");
   fflush(stdout);
 
-  /* If MG, we need both CSR and gs implementation now */
+  /* FIXME: If MG, we need both CSR and gs implementation now */
   if (options->rsb_algo == 1)
     options->rsb_laplacian_implementation = 3;
 
@@ -65,7 +58,6 @@ int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
   MPI_Comm_split(c.c, nel > 0, rank, &comm_rsb);
 #endif
 
-  // TODO: Move this into another file
   if (nel > 0) {
     metric_init();
 
@@ -81,37 +73,31 @@ int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
     GenmapInt size_ = genmap_comm_size(genmap_global_comm(h));
 
     if (size_ > nelg) {
-      if (id == 0) {
+      if (id == 0)
         printf("Total number of elements is smaller than the "
                "number of processors.\n"
                "Run with smaller number of processors.\n");
+    } else {
+      switch (options->global_partitioner) {
+      case 0:
+        genmap_rsb(h);
+        break;
+      case 1:
+        genmap_rcb(h);
+        break;
+      case 2:
+        genmap_rib(h);
+        break;
+      default:
+        break;
       }
-      // This is wrong
-      return 1;
+
+      genmap_finalize(h);
+
+      if (options->print_timing_info > 0)
+        metric_print(&c);
+      metric_finalize();
     }
-
-    switch (options->global_partitioner) {
-    case 0:
-      genmap_rsb(h);
-      break;
-    case 1:
-      genmap_rcb(h);
-      break;
-    case 2:
-      genmap_rib(h);
-      break;
-    case 3:
-      genmap_serial_ilu(h);
-      break;
-    default:
-      break;
-    }
-
-    genmap_finalize(h);
-
-    if (options->print_timing_info > 0)
-      metric_print(&c);
-    metric_finalize();
   }
 
 #ifdef MPI

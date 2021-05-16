@@ -29,19 +29,12 @@ int genmap_laplacian_init(genmap_handle h, struct comm *c);
 int genmap_laplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
 
 /* Lanczos */
-int GenmapLanczosLegendary(genmap_handle h, struct comm *c, genmap_vector f,
-                           GenmapInt niter, genmap_vector **rr,
-                           genmap_vector diag, genmap_vector upper);
-
-int GenmapLanczos(genmap_handle h, struct comm *c, genmap_vector init,
-                  GenmapInt iter, genmap_vector **q, genmap_vector alpha,
-                  genmap_vector beta);
+int genmap_lanczos(genmap_handle h, struct comm *c, genmap_vector f,
+                   GenmapInt niter, genmap_vector **rr, genmap_vector diag,
+                   genmap_vector upper);
 
 /* Fiedler */
-int GenmapFiedlerLanczos(genmap_handle h, struct comm *c, int maxIter,
-                         int global);
-
-int GenmapFiedlerRQI(genmap_handle h, struct comm *c, int maxIter, int global);
+int GenmapFiedler(genmap_handle h, struct comm *c, int maxIter, int global);
 
 /* Components and repair */
 sint get_components(sint *component, struct rsb_element *elements,

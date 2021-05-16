@@ -1,6 +1,8 @@
 #include <genmap-impl.h>
 
 /* Load balance input data */
+/* FIXME: Refactor to do what is done in parrsb-aux:parrsb_distribute_elements
+ */
 void genmap_load_balance(struct array *eList, uint nel, int nv, double *coord,
                          long long *vtx, struct crystal *cr, buffer *bfr) {
   slong in = nel;
@@ -26,7 +28,6 @@ void genmap_load_balance(struct array *eList, uint nel, int nv, double *coord,
     element = calloc(1, sizeof(struct rsb_element));
     element->type = GENMAP_RSB_ELEMENT;
   }
-
   element->origin = cr->comm.id;
 
   array_init_(eList, nel, unit_size, __FILE__, __LINE__);
@@ -40,10 +41,11 @@ void genmap_load_balance(struct array *eList, uint nel, int nv, double *coord,
       element->proc = (eg % size) - 1;
 
     element->coord[0] = element->coord[1] = element->coord[2] = 0.0;
-    for (v = 0; v < nv; v++) {
-      for (n = 0; n < ndim; n++)
-        element->coord[n] += coord[e * ndim * nv + v * ndim + n];
-    }
+    for (v = 0; v < nv; v++)
+      for (n = 0; n < ndim; n++) {
+        uint off = e * ndim * nv + v * ndim + n;
+        element->coord[n] += coord[off];
+      }
     for (n = 0; n < ndim; n++)
       element->coord[n] /= nv;
 

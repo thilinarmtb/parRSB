@@ -23,7 +23,7 @@ void precond_apply(GenmapScalar *u, GenmapScalar *v, struct precond *p,
   if (p->type < 2)
     mg_apply(u, v, (struct mg_data *)p->data, buf);
   else if (p->type == 2)
-    ilu_apply(u, v, (struct mg_data *)p->data, buf);
+    ilu_apply(u, v, (struct ilu_data *)p->data, buf);
 }
 
 void precond_check(genmap_handle h, struct comm *c) { mg_check(h, c); }

@@ -77,12 +77,9 @@ int genmap_rsb(genmap_handle h) {
     metric_tic(lc, FIEDLER);
     int ipass = 0, iter;
     do {
-      if (h->options->rsb_algo == 0)
-        iter = GenmapFiedlerLanczos(h, lc, max_iter, global);
-      else if (h->options->rsb_algo == 1)
-        iter = GenmapFiedlerRQI(h, lc, max_iter, global);
-      metric_acc(NFIEDLER, iter);
+      GenmapFiedler(h, lc, max_iter, global);
       global = 0;
+      metric_acc(NFIEDLER, iter);
     } while (++ipass < max_pass && iter == max_iter);
     metric_toc(lc, FIEDLER);
 

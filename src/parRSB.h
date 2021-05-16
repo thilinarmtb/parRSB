@@ -21,23 +21,42 @@ typedef struct {
 
 extern parRSB_options parrsb_default_options;
 
-#define fparRSB_partMesh FORTRAN_UNPREFIXED(fparrsb_partmesh, FPARRSB_PARTMESH)
-void fparRSB_partMesh(int *part, int *seq, long long *vtx, double *coord,
-                      int *nel, int *nve, int *options, int *comm, int *err);
-
+/*
+ * part = [nel], out,
+ * seq = [nel], out,
+ * vtx = [nel x nv], in,
+ * coord = [nel x nv x ndim], in,
+ * nel = in,
+ * nv = in,
+ * options = in */
 int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
                     int nv, parRSB_options *options, MPI_Comm comm);
 
-#define fparRSB_findConnectivity                                               \
-  FORTRAN_UNPREFIXED(fparrsb_findconnectivity, FPARRSB_FINDCONNECTIVITY)
-void fparRSB_findConnectivity(long long *vertexId, double *coord, int *nel,
-                              int *nDim, long long *periodicInfo,
-                              int *nPeriodicFaces, double *tol, MPI_Fint *fcomm,
-                              int *verbose, int *err);
-
+/* vertexid = [nelt, nv], out
+ * coord = [nelt, nv, ndim], in (vertices are orders in preprocessor ordering),
+ * nel = in,
+ * ndim = in,
+ * periodicInfo = [nPeriodicFaces x 4], in,
+ * tol = in,
+ * comm = in,
+ * verbose = in
+ */
 int parRSB_findConnectivity(long long *vertexid, double *coord, int nel,
                             int nDim, long long *periodicInfo,
                             int nPeriodicFaces, double tol, MPI_Comm comm,
                             int verbose);
+
+/* Misc */
+
+int read_nek_mesh(unsigned int *nel, int *nv, long long **vl, double **coord,
+                  char *name, MPI_Comm comm, int read);
+
+int parrsb_distribute_vertices(unsigned int nelt, int nv, int *part,
+                               long long *vl, MPI_Comm comm);
+
+int parrsb_distribute_elements(unsigned int nelt, int nv, int *part,
+                               long long **vl, double **coord, MPI_Comm comm);
+
+void parrsb_part_stat(long long *vtx, int nel, int nv, MPI_Comm comm);
 
 #endif
