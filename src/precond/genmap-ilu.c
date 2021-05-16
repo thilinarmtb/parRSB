@@ -129,6 +129,18 @@ static int ilut(csr_mat M, csr_mat N, struct comm *c, GenmapScalar threshold,
   return 0;
 }
 
+static int level_schedule(struct csr_mat_ *A) {
+  const uint rn = A->rn;
+
+  const uint *off = A->row_off;
+  double *v = A->v;
+  const double *diag = A->diag;
+  const ulong *col = A->col;
+
+  return 0;
+}
+
+/* FIXME: Store L and U seprately */
 static int lu_solve(double *x, struct csr_mat_ *A, double *b, buffer *buf) {
   uint n = A->rn;
   buffer_reserve(buf, sizeof(double) * n);

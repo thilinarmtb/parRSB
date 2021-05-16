@@ -71,7 +71,7 @@ endif
 default: check lib examples install
 
 .PHONY: all
-all: check lib tests examples install
+all: check lib examples install
 
 .PHONY: check
 check:
@@ -123,5 +123,4 @@ print-%:
 $(shell mkdir -p $(BUILDDIR)/src/sort)
 $(shell mkdir -p $(BUILDDIR)/src/precond)
 $(shell mkdir -p $(BUILDDIR)/src/gencon)
-$(shell mkdir -p $(BUILDDIR)/tests)
 $(shell mkdir -p $(BUILDDIR)/examples)

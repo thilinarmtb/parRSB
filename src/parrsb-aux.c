@@ -1,6 +1,95 @@
-#include <genmap-quality.h>
+#include <mpi.h>
+#include <stdio.h>
 
-void printPartStat(long long *vtx, int nel, int nv, comm_ext ce) {
+#include <gencon.h>
+#include <genmap.h>
+
+#define MAXNV 8 /* maximum number of vertices per element */
+
+typedef struct {
+  int proc;
+  long long vtx[MAXNV];
+} elm_data;
+
+int read_nek_mesh(unsigned int *nel, int *nv, long long **vl, double **coord,
+                  char *name, MPI_Comm comm, int read) {
+  char geom_name[BUFSIZ];
+  strncpy(geom_name, name, BUFSIZ);
+  strncat(geom_name, ".re2", 5);
+
+  char conn_name[BUFSIZ];
+  strncpy(conn_name, name, BUFSIZ);
+  strncat(conn_name, ".co2", 5);
+
+  int ndim_;
+
+  struct comm c;
+  comm_init(&c, comm);
+
+  Mesh mesh;
+
+  /* Read mesh data */
+  if (read & 1) {
+    read_geometry(&mesh, geom_name, &c);
+    get_vertex_coordinates(coord, mesh);
+  }
+
+  /* FIXME: Calculate connectivity instead of the following */
+  if (read & 2) {
+    assert(read & 1);
+    read_connectivity(mesh, conn_name, &c);
+    get_vertex_ids(vl, mesh);
+  }
+
+  ndim_ = get_mesh_dim(mesh);
+  *nel = (unsigned int)get_mesh_nel(mesh);
+
+  mesh_free(mesh);
+  comm_free(&c);
+
+  MPI_Bcast(&ndim_, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  *nv = (ndim_ == 3) ? 8 : 4;
+
+  return 0;
+}
+
+int redistribute_elements(unsigned int nelt, int nv, int *part, long long *vl,
+                          MPI_Comm comm) {
+  struct array elements;
+  array_init(elm_data, &elements, nelt);
+
+  elm_data *data;
+  int e, n;
+  for (data = elements.ptr, e = 0; e < nelt; ++e) {
+    data[e].proc = part[e];
+    for (n = 0; n < nv; ++n)
+      data[e].vtx[n] = vl[e * nv + n];
+  }
+  elements.n = nelt;
+
+  struct comm c;
+  comm_init(&c, comm);
+
+  struct crystal cr;
+  crystal_init(&cr, &c);
+
+  sarray_transfer(elm_data, &elements, proc, 0, &cr);
+
+  nelt = elements.n;
+  vl = (long long *)realloc(vl, nv * nelt * sizeof(long long));
+  for (data = elements.ptr, e = 0; e < nelt; ++e) {
+    for (n = 0; n < nv; ++n)
+      vl[e * nv + n] = data[e].vtx[n];
+  }
+
+  crystal_free(&cr);
+  comm_free(&c);
+  array_free(&elements);
+
+  return 0;
+}
+
+void parrsb_part_stat(long long *vtx, int nel, int nv, MPI_Comm ce) {
   int i, j;
 
   struct comm comm;
@@ -91,3 +180,5 @@ void printPartStat(long long *vtx, int nel, int nv, comm_ext ce) {
   free(Ncomm);
   comm_free(&comm);
 }
+
+#undef MAXNV

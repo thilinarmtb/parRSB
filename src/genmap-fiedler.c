@@ -7,8 +7,8 @@
 //
 // TODO: use a separate function to generate init vector
 //
-int GenmapFiedlerRQI(genmap_handle h, struct comm *gsc, int max_iter,
-                     int global) {
+static int fiedler_rqi(genmap_handle h, struct comm *gsc, int max_iter,
+                       int global) {
   GenmapInt lelt = genmap_get_nel(h);
   genmap_vector initVec;
   genmap_vector_create(&initVec, lelt);
@@ -55,8 +55,8 @@ int GenmapFiedlerRQI(genmap_handle h, struct comm *gsc, int max_iter,
   return iter;
 }
 
-int GenmapFiedlerLanczos(genmap_handle h, struct comm *gsc, int max_iter,
-                         int global) {
+static int fiedler_lanczos(genmap_handle h, struct comm *gsc, int max_iter,
+                           int global) {
   GenmapInt lelt = genmap_get_nel(h);
   genmap_vector initVec, alphaVec, betaVec;
 
@@ -86,8 +86,7 @@ int GenmapFiedlerLanczos(genmap_handle h, struct comm *gsc, int max_iter,
 
   int iter;
   metric_tic(gsc, LANCZOS);
-  iter =
-      GenmapLanczosLegendary(h, gsc, initVec, max_iter, &q, alphaVec, betaVec);
+  iter = genmap_lanczos(h, gsc, initVec, max_iter, &q, alphaVec, betaVec);
   metric_toc(gsc, LANCZOS);
   metric_acc(NLANCZOS, iter);
 
@@ -143,4 +142,11 @@ int GenmapFiedlerLanczos(genmap_handle h, struct comm *gsc, int max_iter,
   GenmapFree(q);
 
   return iter;
+}
+
+int GenmapFiedler(genmap_handle h, struct comm *lc, int max_iter, int global) {
+  if (h->options->rsb_algo == 0)
+    return fiedler_lanczos(h, lc, max_iter, global);
+  else if (h->options->rsb_algo == 1)
+    return fiedler_rqi(h, lc, max_iter, global);
 }

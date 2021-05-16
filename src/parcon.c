@@ -16,6 +16,8 @@
     }                                                                          \
   } while (0)
 
+#define fparRSB_findConnectivity                                               \
+  FORTRAN_UNPREFIXED(fparrsb_findconnectivity, FPARRSB_FINDCONNECTIVITY)
 void fparRSB_findConnectivity(long long *vertexId, double *coord, int *nelt,
                               int *ndim, long long *periodicInfo,
                               int *nPeriodicFaces, double *tol, MPI_Fint *fcomm,
@@ -26,8 +28,6 @@ void fparRSB_findConnectivity(long long *vertexId, double *coord, int *nelt,
                                  *nPeriodicFaces, *tol, c, *verbose);
 }
 
-// coord[nelt,nv,ndim] - in, vertices are orders in preprocessor ordering
-// vertexid[nelt,nv] - out
 int parRSB_findConnectivity(long long *vertexid, double *coord, int nelt,
                             int ndim, long long *periodicInfo,
                             int nPeriodicFaces, double tol, MPI_Comm comm,
