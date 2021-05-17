@@ -4,12 +4,20 @@
 #include <gencon.h>
 #include <genmap.h>
 
-#define MAXNV 8 /* maximum number of vertices per element */
+#define MAXNV 8  /* maximum number of vertices per element */
+#define MAXDIM 3 /* maximum number of vertices per element */
+
+/* elem_data must always start vtx_data */
+typedef struct {
+  int proc;
+  long long vtx[MAXNV];
+} vtx_data;
 
 typedef struct {
   int proc;
   long long vtx[MAXNV];
-} elm_data;
+  double coord[MAXNV * MAXDIM];
+} elem_data;
 
 int read_nek_mesh(unsigned int *nel, int *nv, long long **vl, double **coord,
                   char *name, MPI_Comm comm, int read) {
@@ -53,14 +61,15 @@ int read_nek_mesh(unsigned int *nel, int *nv, long long **vl, double **coord,
   return 0;
 }
 
-int redistribute_elements(unsigned int nelt, int nv, int *part, long long *vl,
-                          MPI_Comm comm) {
+/* Merge the following two methods */
+int parrsb_distribute_vertices(unsigned int nelt, int nv, int *part,
+                               long long *vl, MPI_Comm comm) {
   struct array elements;
-  array_init(elm_data, &elements, nelt);
+  array_init(vtx_data, &elements, nelt);
 
-  elm_data *data;
+  vtx_data *data = elements.ptr;
   int e, n;
-  for (data = elements.ptr, e = 0; e < nelt; ++e) {
+  for (e = 0; e < nelt; ++e) {
     data[e].proc = part[e];
     for (n = 0; n < nv; ++n)
       data[e].vtx[n] = vl[e * nv + n];
@@ -73,13 +82,79 @@ int redistribute_elements(unsigned int nelt, int nv, int *part, long long *vl,
   struct crystal cr;
   crystal_init(&cr, &c);
 
-  sarray_transfer(elm_data, &elements, proc, 0, &cr);
+  sarray_transfer(vtx_data, &elements, proc, 0, &cr);
 
   nelt = elements.n;
   vl = (long long *)realloc(vl, nv * nelt * sizeof(long long));
   for (data = elements.ptr, e = 0; e < nelt; ++e) {
     for (n = 0; n < nv; ++n)
       vl[e * nv + n] = data[e].vtx[n];
+  }
+
+  crystal_free(&cr);
+  comm_free(&c);
+  array_free(&elements);
+
+  return 0;
+}
+
+int parrsb_distribute_elements(unsigned int nelt, int nv, int *part,
+                               long long **vl_, double **coord_,
+                               MPI_Comm comm) {
+  int ndim = (nv == 8) ? 3 : 2;
+  long long *vl = *vl_;
+  double *coord = *coord_;
+
+  size_t unit_size = 0;
+  if (coord != NULL)
+    unit_size = sizeof(elem_data);
+  else
+    unit_size = sizeof(vtx_data);
+
+  struct array elements;
+  array_init_(&elements, nelt, unit_size, __FILE__, __LINE__);
+
+  elem_data data;
+  int e, n;
+  for (e = 0; e < nelt; ++e) {
+    data.proc = part[e];
+    for (n = 0; n < nv; ++n)
+      data.vtx[n] = vl[e * nv + n];
+    array_cat_(unit_size, &elements, &data, 1, __FILE__, __LINE__);
+  }
+  assert(elements.n == nelt);
+
+  if (coord != NULL) {
+    elem_data *ed = elements.ptr;
+    for (e = 0; e < nelt; e++)
+      for (n = 0; n < ndim * nv; n++)
+        ed[e].coord[n] = coord[e * ndim * nv + n];
+  }
+
+  struct comm c;
+  comm_init(&c, comm);
+
+  struct crystal cr;
+  crystal_init(&cr, &c);
+
+  sarray_transfer_(&elements, unit_size, offsetof(vtx_data, proc), 0, &cr);
+
+  nelt = elements.n;
+  vl = *vl_ = (long long *)realloc(*vl_, nv * nelt * sizeof(long long));
+  for (e = 0; e < nelt; ++e) {
+    vtx_data *vd = (vtx_data *)(elements.ptr + unit_size * e);
+    for (n = 0; n < nv; ++n)
+      vl[e * nv + n] = vd->vtx[n];
+  }
+
+  if (coord != NULL) {
+    coord = *coord_ =
+        (double *)realloc(*coord_, ndim * nv * nelt * sizeof(double));
+    elem_data *ed = elements.ptr;
+    for (e = 0; e < nelt; ++e) {
+      for (n = 0; n < ndim * nv; ++n)
+        coord[e * ndim * nv + n] = ed[e].coord[n];
+    }
   }
 
   crystal_free(&cr);

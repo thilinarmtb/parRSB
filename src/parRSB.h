@@ -51,8 +51,11 @@ int parRSB_findConnectivity(long long *vertexid, double *coord, int nel,
 int read_nek_mesh(unsigned int *nel, int *nv, long long **vl, double **coord,
                   char *name, MPI_Comm comm, int read);
 
-int redistribute_elements(unsigned int nelt, int nv, int *part, long long *vl,
-                          MPI_Comm comm);
+int parrsb_distribute_vertices(unsigned int nelt, int nv, int *part,
+                               long long *vl, MPI_Comm comm);
+
+int parrsb_distribute_elements(unsigned int nelt, int nv, int *part,
+                               long long **vl, double **coord, MPI_Comm comm);
 
 void parrsb_part_stat(long long *vtx, int nel, int nv, MPI_Comm comm);
 

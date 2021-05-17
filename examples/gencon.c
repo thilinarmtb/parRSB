@@ -35,6 +35,8 @@ int main(int argc, char *argv[]) {
                                     MPI_COMM_WORLD, 0);
   }
 
+  /* Write connectivity */
+
   if (vl != NULL)
     free(vl);
   if (coord != NULL)

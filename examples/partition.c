@@ -34,22 +34,26 @@ int main(int argc, char *argv[]) {
   MPI_Comm_split(MPI_COMM_WORLD, color, 0, &comm);
 
   /* Read Nek5000 mesh and print mesh statistics */
+  unsigned int nelt = 0;
+  int nv = 0;
   long long *vl = NULL;
   double *coord = NULL;
-  unsigned int nelt;
-  int nv;
   int ierr = read_nek_mesh(&nelt, &nv, &vl, &coord, mesh, comm, color);
 
-  parrsb_part_stat(vl, nelt, nv, MPI_COMM_WORLD);
-
   /* Find the partition, distribute elements and print mesh statistics */
-  parRSB_options options = parrsb_default_options;
-  int *part = (int *)calloc(nelt, sizeof(int));
-  ierr = parRSB_partMesh(part, NULL, vl, coord, nelt, nv, &options,
-                         MPI_COMM_WORLD);
+  int *part = NULL;
+  if (ierr == 0) {
+    parrsb_part_stat(vl, nelt, nv, MPI_COMM_WORLD);
+
+    parRSB_options options = parrsb_default_options;
+    part = (int *)calloc(nelt, sizeof(int));
+    ierr |= parRSB_partMesh(part, NULL, vl, coord, nelt, nv, &options,
+                            MPI_COMM_WORLD);
+  }
 
   if (ierr == 0) {
-    redistribute_elements(nelt, nv, part, vl, MPI_COMM_WORLD);
+    /* Compress coords to find centroids */
+    parrsb_distribute_elements(nelt, nv, part, vl, coord, MPI_COMM_WORLD);
     parrsb_part_stat(vl, nelt, nv, MPI_COMM_WORLD);
   }
 

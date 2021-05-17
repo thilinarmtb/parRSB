@@ -72,19 +72,17 @@ int genmap_vector_ortho_one(struct comm *c, genmap_vector q1, GenmapULong n);
 int genmap_destroy_vector(genmap_vector x);
 
 /* RSB/RCB */
-void genmap_load_balance(struct array *eList, uint nel, int nv, double *coord,
+void genmap_load_balance(struct array *elist, uint nel, int nv, double *coord,
                          long long *vtx, struct crystal *cr, buffer *bfr);
 
 void genmap_restore_original(int *part, int *seq, struct crystal *cr,
-                             struct array *eList, buffer *bfr);
+                             struct array *elist, buffer *bfr);
 
 int genmap_rsb(genmap_handle h);
 
 int genmap_rcb(genmap_handle h);
 
 int genmap_rib(genmap_handle h);
-
-int genmap_ilu_project(genmap_handle h);
 
 /* Misc */
 double genmap_get_max_rss();
