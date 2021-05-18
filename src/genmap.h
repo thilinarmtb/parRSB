@@ -34,13 +34,8 @@ genmap_comm genmap_global_comm(genmap_handle h);
 void genmap_set_nvertices(genmap_handle h, int nv);
 int genmap_get_nvertices(genmap_handle h);
 
-GenmapULong genmap_get_partition_nel(genmap_handle h);
-void genmap_set_partition_nel(genmap_handle h, GenmapULong globalElements);
-
-GenmapLong genmap_get_local_start_index(genmap_handle h);
-void genmap_set_local_start_index(genmap_handle h, GenmapLong localStart);
-
 GenmapInt genmap_get_nel(genmap_handle h);
+GenmapULong genmap_get_partition_nel(genmap_handle h);
 
 int genmap_finalize(genmap_handle h);
 

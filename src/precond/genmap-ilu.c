@@ -9,38 +9,25 @@ static int ilu0(csr_mat M, csr_mat N, struct comm *c) {
 
   const uint *off = M->row_off;
   double *v = M->v;
-  const double *diag = M->diag;
   const ulong *col = M->col;
 
-  double a_ii, a_ji, a_ik;
-  uint i, ii, j, jj, k, kk;
+  double a_kk, a_kj, a_ik;
+  uint i, j, k, kk;
 
-  for (ii = 0; ii < rn - 1; ii++) { /* Go over number of rows */
-    i = ii + 1;
-    assert(csr_mat_get(&a_ii, M, i, i) == 0);
+  for (i = 2; i <= rn; i++) { /* Go over number of rows */
+    for (k = 1; k < i; k++) {
+      a_kk = M->diag[k - 1];
 
-    for (jj = ii + 1; jj < rn; jj++) {
-      j = jj + 1;
-      assert(csr_mat_get(&a_ji, M, j, i) == 0);
-      if (fabs(a_ji) < 1e-12)
+      assert(csr_mat_get_local(&a_ik, &kk, M, i, k) == 0);
+      if (fabs(a_ik) < 1e-12)
         continue;
+      a_ik = v[kk] = v[kk] / a_kk;
 
-      kk = off[jj];
-      while (col[kk] < i)
-        kk++;
-      /* a_ji = a_ji / a_ii */
-      if (col[kk] != i) {
-        printf("kk = %u, col[kk] = %lu, j = %u, i = %u a_ji = %lf\n", kk,
-               col[kk], j, i, a_ji);
-        assert(0);
-      }
-      a_ji = v[kk] = v[kk] / a_ii;
-
-      for (kk = kk + 1; kk < off[jj + 1]; kk++) { /* Go over the columns */
-        k = col[kk];
-        assert(csr_mat_get(&a_ik, M, i, k) == 0);
-        /* a_jk = a_jk - a_ji * a_ik */
-        v[kk] = v[kk] - a_ji * a_ik;
+      /* a_ij = a_ij - a_ik * a_kj */
+      for (kk++; kk < off[i]; kk++) { /* Go over the columns */
+        j = col[kk];
+        assert(csr_mat_get_local(&a_kj, NULL, M, k, j) == 0);
+        v[kk] = v[kk] - a_ik * a_kj;
       }
     }
   }
@@ -55,7 +42,6 @@ static int ilut(csr_mat M, csr_mat N, struct comm *c, GenmapScalar threshold,
 
   const uint *off = N->row_off;
   double *v = N->v;
-  const double *diag = N->diag;
   const ulong *col = N->col;
 
   /* M will have same dimensions as N, we will realloc v and col as we go */
@@ -90,7 +76,7 @@ static int ilut(csr_mat M, csr_mat N, struct comm *c, GenmapScalar threshold,
         continue;
 
       /* To-do: store diagonal separately */
-      assert(csr_mat_get(&a_kk, N, k, k) == 0);
+      assert(csr_mat_get_local(&a_kk, NULL, N, k, k) == 0);
       w[km1] = w[km1] / a_kk;
 
       /* Apply first dropping rule */
@@ -129,17 +115,6 @@ static int ilut(csr_mat M, csr_mat N, struct comm *c, GenmapScalar threshold,
   return 0;
 }
 
-static int level_schedule(struct csr_mat_ *A) {
-  const uint rn = A->rn;
-
-  const uint *off = A->row_off;
-  double *v = A->v;
-  const double *diag = A->diag;
-  const ulong *col = A->col;
-
-  return 0;
-}
-
 /* FIXME: Store L and U seprately */
 static int lu_solve(double *x, struct csr_mat_ *A, double *b, buffer *buf) {
   uint n = A->rn;
@@ -174,7 +149,7 @@ static int lu_solve(double *x, struct csr_mat_ *A, double *b, buffer *buf) {
 int ilu_setup(genmap_handle h, struct comm *c, struct ilu_data *d) {
   d->M = tmalloc(struct csr_mat_, 1);
 
-#if 0
+#if 1
   ilu0(d->M, h->M, c);
 #else
   ilut(d->M, h->M, c, 0.1, &h->buf);

@@ -2,7 +2,7 @@
 DEBUG ?= 1
 MPI ?= 1
 CC ?= mpicc
-CFLAGS ?= -g -O0
+CFLAGS ?= -O0
 BLAS ?= 1
 UNDERSCORE ?= 1
 
@@ -42,7 +42,8 @@ LDFLAGS = -L$(BUILDDIR)/lib -l$(TARGET) -L$(GSLIBPATH)/lib -lgs -lm
 PP=
 
 ifneq ($(DEBUG),0)
-  PP += -g -DGENMAP_DEBUG
+  PP += -DGENMAP_DEBUG
+  CFLAGS += -g3
 endif
 
 ifneq ($(UNDERSCORE),0)

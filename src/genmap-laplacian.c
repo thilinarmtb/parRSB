@@ -7,7 +7,7 @@ int genmap_laplacian_init(genmap_handle h, struct comm *c) {
   if (gs)
     genmap_laplacian_gs_init(h, c);
   if (csr)
-    genmap_laplacian_csr_init(h, c);
+    genmap_laplacian_csr_init(&h->M, NULL, h, c);
 }
 
 int genmap_laplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v) {

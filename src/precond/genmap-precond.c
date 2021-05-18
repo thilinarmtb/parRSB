@@ -3,7 +3,6 @@
 #include <genmap-precond.h>
 
 struct precond *precond_setup(int type, genmap_handle h, struct comm *c) {
-  // Only does MG for now
   struct precond *p = tmalloc(struct precond, 1);
   p->type = type;
 

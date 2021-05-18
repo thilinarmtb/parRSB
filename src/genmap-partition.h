@@ -19,7 +19,8 @@ int genmap_power(double *y, int N, double *A, int verbose);
 /* Laplacian */
 void genmap_number_faces_and_edges(genmap_handle h, struct comm *c);
 
-int genmap_laplacian_csr_init(genmap_handle h, struct comm *c);
+int genmap_laplacian_csr_init(struct csr_mat_ **M, ulong *elem_id,
+                              genmap_handle h, struct comm *c);
 int genmap_laplacian_csr(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
 
 int genmap_laplacian_gs_init(genmap_handle h, struct comm *c);
@@ -29,19 +30,22 @@ int genmap_laplacian_init(genmap_handle h, struct comm *c);
 int genmap_laplacian(genmap_handle h, GenmapScalar *u, GenmapScalar *v);
 
 /* Lanczos */
+int genmap_init_vector(genmap_vector *ivec, int global, struct comm *lc,
+                       genmap_handle h);
 int genmap_lanczos(genmap_handle h, struct comm *c, genmap_vector f,
                    GenmapInt niter, genmap_vector **rr, genmap_vector diag,
                    genmap_vector upper);
 
 /* Fiedler */
-int GenmapFiedler(genmap_handle h, struct comm *c, int maxIter, int global);
+int GenmapFiedler(genmap_handle h, struct comm *c, int maxIter,
+                  genmap_vector init_vec);
 
 /* Components and repair */
 sint get_components(sint *component, struct rsb_element *elements,
                     struct comm *c, buffer *buf, uint nelt, uint nv);
 
-void split_and_repair_partitions(genmap_handle h, struct comm *lc, int level,
-                                 struct comm *gc);
+void repair_partitions(genmap_handle h, int bin, int level, struct comm *lc,
+                       struct comm *gc);
 
 /* Matrix inverse */
 void matrix_inverse(int N, double *A);

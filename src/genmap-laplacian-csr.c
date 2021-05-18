@@ -8,24 +8,24 @@ struct unique_id {
 };
 
 typedef struct {
-  GenmapULong sequenceId;
   int nNeighbors;
   GenmapULong elementId;
   GenmapULong vertexId;
   uint workProc;
 } vertex;
 
-static void genmap_find_neighbors(struct array *nbrs, genmap_handle h,
-                                  struct comm *cc) {
+static void genmap_find_neighbors(struct array *nbrs, ulong *elem_id,
+                                  genmap_handle h, struct comm *cc) {
   metric_tic(cc, FIRSTHALF);
   sint lelt = genmap_get_nel(h);
-  sint nv = genmap_get_nvertices(h);
-
-  genmap_comm_scan(h, cc);
-  ulong elem_id = genmap_get_local_start_index(h) + 1;
-  ulong sequenceId = elem_id * nv;
-
+  int nv = genmap_get_nvertices(h);
   size_t size = lelt * nv;
+
+  slong out[2][1], buf[2][1];
+  slong in = lelt;
+  comm_scan(out, cc, gs_long, gs_add, &in, 1, buf);
+  ulong eid = out[0][0] + 1;
+
   struct array vertices;
   array_init(vertex, &vertices, size);
 
@@ -33,25 +33,23 @@ static void genmap_find_neighbors(struct array *nbrs, genmap_handle h,
   sint i, j;
   for (i = 0; i < lelt; i++) {
     for (j = 0; j < nv; j++) {
-      vertex vrt = {.sequenceId = sequenceId,
-                    .nNeighbors = 0,
-                    .elementId = elem_id,
+      vertex vrt = {.nNeighbors = 0,
+                    .elementId = (elem_id == NULL) ? eid : elem_id[i],
                     .vertexId = elems[i].vertices[j],
                     .workProc = cc->id};
       array_cat(vertex, &vertices, &vrt, 1);
-      sequenceId++;
     }
-    elem_id++;
+    eid++;
   }
   assert(vertices.n == lelt * nv);
 
   sarray_sort(vertex, vertices.ptr, vertices.n, vertexId, 1, &h->buf);
 
-  // Compress vertices and figure out shared ids
+  /* Compress vertices and figure out shared ids */
   struct array unique;
   array_init(struct unique_id, &unique, lelt);
 
-  ulong vertex_id = 0; // vertexId > 0
+  ulong vertex_id = 0; /* vertexId > 0 */
   vertex *vp = vertices.ptr;
   for (i = 0; i < vertices.n; i++) {
     if (vp[i].vertexId > vertex_id) {
@@ -85,13 +83,13 @@ static void genmap_find_neighbors(struct array *nbrs, genmap_handle h,
   sarray_transfer(struct unique_id, &unique, proc, 1, &cr);
   sarray_sort(struct unique_id, unique.ptr, unique.n, id, 1, &h->buf);
 
-  // Split the vertex ids to shared and local
+  /* Split the vertex ids to shared and local */
   struct array shared;
   array_init(vertex, &shared, lelt);
   struct array local;
   array_init(vertex, &local, lelt);
 
-  // Now send only the shared ids to workProc
+  /* Now send only the shared ids to workProc */
   up = unique.ptr;
   int workProc;
   s = 0;
@@ -118,7 +116,7 @@ static void genmap_find_neighbors(struct array *nbrs, genmap_handle h,
 
   sarray_transfer(vertex, &shared, workProc, 1, &cr);
 
-  // Concatenate local ids and recieved shared ids
+  /* Concatenate local ids and recieved shared ids */
   array_init(vertex, &vertices, 2 * lelt);
   array_cat(vertex, &vertices, local.ptr, local.n);
   array_cat(vertex, &vertices, shared.ptr, shared.n);
@@ -127,7 +125,7 @@ static void genmap_find_neighbors(struct array *nbrs, genmap_handle h,
 
   metric_toc(cc, FIRSTHALF);
 
-  // Generate CSR entries
+  /* Generate CSR entries */
   metric_tic(cc, SECONDHALF);
 
   sarray_sort(vertex, vertices.ptr, vertices.n, vertexId, 1, &h->buf);
@@ -155,74 +153,77 @@ static void genmap_find_neighbors(struct array *nbrs, genmap_handle h,
     }
     s = e;
   }
-  array_free(&vertices);
 
   sarray_transfer(csr_entry, nbrs, proc, 1, &cr);
 
-  metric_toc(cc, SECONDHALF);
-
+  array_free(&vertices);
   crystal_free(&cr);
+
+  metric_toc(cc, SECONDHALF);
 }
 
-static int genmap_unweighted_laplacian_csr_init(genmap_handle h,
+static int genmap_unweighted_laplacian_csr_init(struct array *csr,
+                                                csr_entry *ptr, uint pn,
+                                                genmap_handle h,
                                                 struct comm *c) {
-  metric_tic(c, FINDNBRS);
-  struct array entries;
-  genmap_find_neighbors(&entries, h, c);
-  metric_toc(c, FINDNBRS);
-
-  sarray_sort_2(csr_entry, entries.ptr, entries.n, r, 1, c, 1, &h->buf);
-
-  struct array csr;
-  array_init(csr_entry, &csr, 10);
-
-  csr_entry *ptr = entries.ptr;
+  uint nr;
   sint diag;
-  uint e = 0, e1, nr, s;
-  while (e < entries.n) {
+  uint e = 0, e1, s;
+  while (e < pn) {
     s = e;
     nr = 0;
     diag = -1;
-    while (e < entries.n && ptr[s].r == ptr[e].r) {
-      for (e1 = e; e < entries.n && ptr[e1].c == ptr[e].c; e++)
+    while (e < pn && ptr[s].r == ptr[e].r) {
+      for (e1 = e; e < pn && ptr[e1].r == ptr[e].r && ptr[e1].c == ptr[e].c;
+           e++)
         ;
-      array_cat(csr_entry, &csr, &ptr[e1], 1);
+      array_cat(csr_entry, csr, &ptr[e1], 1);
       nr++;
       if (ptr[e1].r == ptr[e1].c)
-        diag = csr.n - 1;
+        diag = csr->n - 1;
     }
     assert(diag >= 0);
-    ((csr_entry *)csr.ptr)[diag].v = nr - 1.0;
+    ((csr_entry *)csr->ptr)[diag].v = nr - 1.0;
   }
-
-  array_free(&entries);
-
-  sarray_sort_2(csr_entry, csr.ptr, csr.n, r, 1, c, 1, &h->buf);
-
-  metric_tic(c, CSRMATSETUP);
-  csr_mat_setup(h->M, &csr, c, &h->buf);
-  array_free(&csr);
-  metric_toc(c, CSRMATSETUP);
-
-#if 0
-  int nnz = h->M->row_off[h->M->rn];
-  double fro[2] = {0.0, 0.0}, buf[2];
-  for (int i = 0; i < nnz; i++) {
-    fro[0] += h->M->v[i];
-    fro[1] += h->M->v[i] * h->M->v[i];
-  }
-  comm_allreduce(c, gs_double, gs_add, &fro, 2, &buf);
-  if (c->id == 0)
-    printf("nrom(G,'1')=%g\nnorm(G,'fro')=%g\n", fro[0], fro[1]);
-#endif
 
   return 0;
 }
 
-static int genmap_weighted_laplacian_csr_init(genmap_handle h, struct comm *c) {
+static int genmap_weighted_laplacian_csr_init(struct array *csr, csr_entry *ptr,
+                                              uint pn, genmap_handle h,
+                                              struct comm *c) {
+  GenmapScalar v, v1;
+  sint diag;
+  uint e = 0, e1, s;
+  while (e < pn) {
+    s = e;
+    v = 0.0;
+    diag = -1;
+    while (e < pn && ptr[s].r == ptr[e].r) {
+      v1 = 0.0;
+      for (e1 = e; e < pn && ptr[e1].r == ptr[e].r && ptr[e1].c == ptr[e].c;
+           e++)
+        v1 += ptr[e].v;
+      ptr[e1].v = v1;
+      array_cat(csr_entry, csr, &ptr[e1], 1);
+      v += v1;
+      if (ptr[e1].r == ptr[e1].c)
+        diag = csr->n - 1;
+    }
+    assert(diag >= 0);
+    ((csr_entry *)csr->ptr)[diag].v = -h->nv - v;
+  }
+
+  return 0;
+}
+
+int genmap_laplacian_csr_init(struct csr_mat_ **M, ulong *elem_id,
+                              genmap_handle h, struct comm *c) {
+  metric_tic(c, LAPLACIANSETUP);
+
   metric_tic(c, FINDNBRS);
   struct array entries;
-  genmap_find_neighbors(&entries, h, c);
+  genmap_find_neighbors(&entries, elem_id, h, c);
   metric_toc(c, FINDNBRS);
 
   sarray_sort_2(csr_entry, entries.ptr, entries.n, r, 1, c, 1, &h->buf);
@@ -230,55 +231,19 @@ static int genmap_weighted_laplacian_csr_init(genmap_handle h, struct comm *c) {
   struct array csr;
   array_init(csr_entry, &csr, 10);
 
-  int nv = genmap_get_nvertices(h);
-
-  csr_entry *ptr = entries.ptr;
-  sint diag;
-  GenmapScalar v, v1;
-  uint e = 0, e1, s;
-  while (e < entries.n) {
-    s = e;
-    v = 0.0;
-    diag = -1;
-    while (e < entries.n && ptr[s].r == ptr[e].r) {
-      v1 = 0.0;
-      for (e1 = e;
-           e < entries.n && ptr[e1].r == ptr[e].r && ptr[e1].c == ptr[e].c; e++)
-        v1 += ptr[e].v;
-      ptr[e1].v = v1;
-      array_cat(csr_entry, &csr, &ptr[e1], 1);
-      v += v1;
-      if (ptr[e1].r == ptr[e1].c)
-        diag = csr.n - 1;
-    }
-    assert(diag >= 0);
-    ((csr_entry *)csr.ptr)[diag].v = -nv - v;
-  }
-
-  array_free(&entries);
+  if (h->options->rsb_laplacian_weighted == 0)
+    genmap_unweighted_laplacian_csr_init(&csr, entries.ptr, entries.n, h, c);
+  else
+    genmap_weighted_laplacian_csr_init(&csr, entries.ptr, entries.n, h, c);
 
   sarray_sort_2(csr_entry, csr.ptr, csr.n, r, 1, c, 1, &h->buf);
 
   metric_tic(c, CSRMATSETUP);
-  csr_mat_setup(h->M, &csr, c, &h->buf);
-  array_free(&csr);
+  csr_mat_setup(M, &csr, c, &h->buf);
   metric_toc(c, CSRMATSETUP);
 
-  return 0;
-}
-
-int genmap_laplacian_csr_init(genmap_handle h, struct comm *c) {
-  metric_tic(c, LAPLACIANSETUP);
-
-  if (h->M != NULL)
-    csr_mat_free(h->M);
-
-  h->M = tmalloc(struct csr_mat_, 1);
-
-  if (h->options->rsb_laplacian_weighted == 0)
-    genmap_unweighted_laplacian_csr_init(h, c);
-  else
-    genmap_weighted_laplacian_csr_init(h, c);
+  array_free(&entries);
+  array_free(&csr);
 
   metric_toc(c, LAPLACIANSETUP);
 }

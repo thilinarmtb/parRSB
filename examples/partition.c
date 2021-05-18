@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
   int nv = 0;
   long long *vl = NULL;
   double *coord = NULL;
-  int ierr = read_nek_mesh(&nelt, &nv, &vl, &coord, mesh, comm, color);
+  int ierr = parrsb_read_mesh(&nelt, &nv, &vl, &coord, mesh, comm, color);
 
   /* Find the partition, distribute elements and print mesh statistics */
   int *part = NULL;
@@ -52,8 +52,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (ierr == 0) {
-    /* Compress coords to find centroids */
-    parrsb_distribute_elements(nelt, nv, part, vl, coord, MPI_COMM_WORLD);
+    parrsb_distribute_elements(&nelt, &vl, &coord, part, nv, comm);
     parrsb_part_stat(vl, nelt, nv, MPI_COMM_WORLD);
   }
 

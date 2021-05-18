@@ -25,7 +25,8 @@ int main(int argc, char *argv[]) {
   unsigned int nelt;
   int nv;
   double *coord = NULL;
-  int ierr = read_nek_mesh(&nelt, &nv, NULL, &coord, mesh, MPI_COMM_WORLD, 1);
+  int ierr =
+      parrsb_read_mesh(&nelt, &nv, NULL, &coord, mesh, MPI_COMM_WORLD, 1);
 
   long long *vl = NULL;
   if (ierr == 0) {

@@ -32,7 +32,7 @@ extern parRSB_options parrsb_default_options;
 int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
                     int nv, parRSB_options *options, MPI_Comm comm);
 
-/* vertexid = [nelt, nv], out
+/* vtx = [nelt, nv], out
  * coord = [nelt, nv, ndim], in (vertices are orders in preprocessor ordering),
  * nel = in,
  * ndim = in,
@@ -41,22 +41,26 @@ int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
  * comm = in,
  * verbose = in
  */
-int parRSB_findConnectivity(long long *vertexid, double *coord, int nel,
-                            int nDim, long long *periodicInfo,
-                            int nPeriodicFaces, double tol, MPI_Comm comm,
-                            int verbose);
+int parRSB_findConnectivity(long long *vtx, double *coord, int nel, int nDim,
+                            long long *periodicInfo, int nPeriodicFaces,
+                            double tol, MPI_Comm comm, int verbose);
 
 /* Misc */
 
-int read_nek_mesh(unsigned int *nel, int *nv, long long **vl, double **coord,
-                  char *name, MPI_Comm comm, int read);
+int parrsb_read_mesh(unsigned int *nel, int *nv, long long **vl, double **coord,
+                     char *name, MPI_Comm comm, int read);
 
-int parrsb_distribute_vertices(unsigned int nelt, int nv, int *part,
-                               long long *vl, MPI_Comm comm);
-
-int parrsb_distribute_elements(unsigned int nelt, int nv, int *part,
-                               long long **vl, double **coord, MPI_Comm comm);
+int parrsb_distribute_elements(unsigned int *nelt, long long **vl,
+                               double **coord, int *part, int nv,
+                               MPI_Comm comm);
 
 void parrsb_part_stat(long long *vtx, int nel, int nv, MPI_Comm comm);
+
+struct csr_mat_ *parrsb_numbering(unsigned int *nelt, unsigned int *nlevels,
+                                  unsigned int **level_off, long long *vl,
+                                  double *coord, int nv, MPI_Comm comm);
+
+void parrsb_ilu0(unsigned int nlevels, unsigned int *level_off,
+                 struct csr_mat_ *M, MPI_Comm comm);
 
 #endif

@@ -71,10 +71,6 @@ int readRe2Header(Mesh *mesh_, MPI_File file, struct comm *c) {
   mesh->nelt = nelt;
   mesh->nDim = nDim;
 
-#if defined(GENMAP_DEBUG)
-  printf("re2 %d: %s %d %d %d %d\n", rank, version, nelgt, nelgv, nelt, nDim);
-#endif
-
   free(buf);
 
   return 0;
@@ -146,11 +142,8 @@ int readRe2Coordinates(Mesh mesh, MPI_File file, struct comm *c) {
   }
   mesh->elements.n = nUnits;
 
-#if defined(GENMAP_DEBUG)
-  printf("io: rank=%d npts=%u\n", rank, nUnits);
-#endif
-
   free(buf);
+
   return 0;
 }
 

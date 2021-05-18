@@ -2,7 +2,8 @@
 #include <genmap-impl.h>
 #include <genmap-sort.h>
 
-void get_rib_axis_local(void *elems, uint nel, int ndim) {
+#if 0
+static void get_rib_axis_local(void *elems, uint nel, int ndim) {
   // TODO: Get rid of this
   size_t unit_size;
   unsigned char *type = elems;
@@ -55,7 +56,7 @@ void get_rib_axis_local(void *elems, uint nel, int ndim) {
   }
 }
 
-void get_rib_axis(struct array *a, struct comm *c, int ndim) {
+static void get_rib_axis(struct array *a, struct comm *c, int ndim) {
   void *elems = a->ptr;
 
   // TODO: Get rid of this
@@ -117,7 +118,7 @@ void get_rib_axis(struct array *a, struct comm *c, int ndim) {
   }
 }
 
-void rib_local(struct array *a, uint start, uint end, int ndim, buffer *buf) {
+static void rib_local(struct array *a, uint start, uint end, int ndim, buffer *buf) {
   sint size = end - start;
   assert(size >= 0);
 
@@ -147,7 +148,7 @@ void rib_local(struct array *a, uint start, uint end, int ndim, buffer *buf) {
   rib_local(a, mid, end, ndim, buf);
 }
 
-int rib_level(struct comm *c, struct array *a, int ndim, buffer *bfr) {
+static int rib_level(struct comm *c, struct array *a, int ndim, buffer *bfr) {
   if (c->np == 1)
     return 0;
 
@@ -162,8 +163,10 @@ int rib_level(struct comm *c, struct array *a, int ndim, buffer *bfr) {
 
   return 0;
 }
+#endif
 
 int rib(struct comm *ci, struct array *elements, int ndim, buffer *bfr) {
+#if 0
   struct comm c;
   comm_dup(&c, ci);
 
@@ -197,11 +200,12 @@ int rib(struct comm *ci, struct array *elements, int ndim, buffer *bfr) {
   rib_local(elements, 0, elements->n, ndim, bfr);
 
   comm_free(&c);
-
+#endif
   return 0;
 }
 
 int genmap_rib(genmap_handle h) {
+#if 0
   struct comm *lc = h->local;
 
   int ndim = (h->nv == 8) ? 3 : 2;
@@ -212,6 +216,6 @@ int genmap_rib(genmap_handle h) {
   int e;
   for (e = 0; e < h->elements->n; e++)
     eptr[e].seq = e;
-
+#endif
   return 0;
 }
