@@ -21,7 +21,8 @@ static struct gs_data *csr_get_top(csr_mat M, struct comm *c, buffer *buf) {
   return gsh;
 }
 
-void csr_mat_setup(csr_mat M, struct array *entries, struct comm *c,
+/* TODO: Get rid of row_start */
+void csr_mat_setup(struct csr_mat_ **M_, struct array *entries, struct comm *c,
                    buffer *buf) {
   csr_entry *ptr = entries->ptr;
   sarray_sort_2(csr_entry, ptr, entries->n, r, 1, c, 1, buf);
@@ -34,29 +35,38 @@ void csr_mat_setup(csr_mat M, struct array *entries, struct comm *c,
     i = j, n++;
   }
 
+  struct csr_mat_ *M = *M_ = tmalloc(struct csr_mat_, 1);
   M->rn = n;
 
   slong out[2][1], bf[2][1];
   slong in = M->rn;
-  comm_scan(out, c, gs_long, gs_add, &in, 1, bf);
-  M->row_start = out[0][0] + 1;
+  if (c != NULL) {
+    comm_scan(out, c, gs_long, gs_add, &in, 1, bf);
+    M->row_start = out[0][0] + 1;
+  } else
+    M->row_start = 0;
 
   GenmapMalloc(M->rn + 1, &M->row_off);
+  M->row_off[0] = 0;
 
   if (n == 0) {
     M->col = NULL;
     M->v = NULL;
     M->diag = NULL;
+    M->row_id = NULL;
+    return;
   } else {
     GenmapMalloc(entries->n, &M->col);
     GenmapMalloc(entries->n, &M->v);
     GenmapMalloc(M->rn, &M->diag);
+    GenmapMalloc(M->rn, &M->row_id);
   }
 
   ptr = entries->ptr;
   uint rn = 0;
   for (i = 0; i < entries->n; i++) {
-    M->col[i] = ptr[i].c, M->v[i] = ptr[i].v;
+    M->col[i] = ptr[i].c;
+    M->v[i] = ptr[i].v;
     if (ptr[i].r == ptr[i].c)
       M->diag[rn++] = ptr[i].v;
   }
@@ -65,18 +75,23 @@ void csr_mat_setup(csr_mat M, struct array *entries, struct comm *c,
     assert(0);
   }
 
-  M->row_off[0] = 0, i = 0;
   uint nn = 0;
+  i = 0;
   while (i < entries->n) {
+    M->row_id[nn] = ptr[i].r;
     j = i + 1;
     while (j < entries->n && ptr[i].r == ptr[j].r)
       j++;
     i = M->row_off[++nn] = j;
   }
+
   assert(n == nn);
   assert(M->row_off[n] == entries->n);
 
-  M->gsh = csr_get_top(M, c, buf);
+  if (c != NULL)
+    M->gsh = csr_get_top(M, c, buf);
+  else
+    M->gsh = NULL;
 }
 
 static void csr_mat_gather(csr_mat M, struct gs_data *gsh, GenmapScalar *x,
@@ -139,9 +154,9 @@ void csr_mat_print(csr_mat M, struct comm *c) {
   }
 }
 
-int csr_mat_get(double *val, csr_mat M, uint i, uint j) {
-  if (i > M->rn || j > M->rn || i == 0 || j == 0) {
-    printf("%s:%d: %u %u %u\n", __FILE__, __LINE__, i, j, M->rn);
+int csr_mat_get_local(double *val, uint *off, csr_mat M, uint i, ulong j) {
+  if (i > M->rn || i == 0 || j == 0) {
+    printf("%s:%d: %lu %lu %u\n", __FILE__, __LINE__, i, j, M->rn);
     return 1;
   }
 
@@ -150,12 +165,43 @@ int csr_mat_get(double *val, csr_mat M, uint i, uint j) {
   for (s = M->row_off[i - 1]; s < M->row_off[i]; s++)
     if (M->col[s] == j) {
       *val = M->v[s];
-      break;
+      if (off != NULL)
+        *off = s;
+      return 0;
     }
 
-  if (s == M->row_off[i])
-    *val = 0.0;
+  *val = 0.0;
+  if (off != NULL)
+    *off = M->row_off[M->rn];
+  return 0;
+}
 
+int csr_mat_get_global(double *val, uint *off, csr_mat M, ulong i, ulong j) {
+  if (i == 0 || j == 0)
+    return 1;
+  assert(M != NULL && "Input matrix is NULL");
+
+  /* TODO: Use binary search */
+  uint ii;
+  for (ii = 0; ii < M->rn; ii++)
+    if (M->row_id[ii] == i)
+      break;
+
+  if (ii == M->rn)
+    return 1;
+
+  uint s;
+  for (s = M->row_off[ii]; s < M->row_off[ii + 1]; s++)
+    if (M->col[s] == j) {
+      *val = M->v[s];
+      if (off != NULL)
+        *off = s;
+      return 0;
+    }
+
+  *val = 0.0;
+  if (off != NULL)
+    *off = M->row_off[M->rn];
   return 0;
 }
 
@@ -165,6 +211,9 @@ int csr_mat_copy(csr_mat D, csr_mat S) {
 
   D->row_start = S->row_start;
   uint rn = D->rn = S->rn;
+
+  D->row_id = calloc(rn, sizeof(ulong));
+  memcpy(D->row_id, S->row_id, sizeof(ulong) * rn);
 
   D->row_off = calloc(rn + 1, sizeof(uint));
   memcpy(D->row_off, S->row_off, sizeof(uint) * (rn + 1));
@@ -194,6 +243,8 @@ int csr_mat_free(csr_mat M) {
     GenmapFree(M->diag);
   if (M->row_off)
     GenmapFree(M->row_off);
+  if (M->row_id)
+    GenmapFree(M->row_id);
   if (M->gsh)
     gs_free(M->gsh);
   GenmapFree(M);

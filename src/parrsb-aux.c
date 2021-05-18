@@ -7,7 +7,7 @@
 #define MAXNV 8  /* maximum number of vertices per element */
 #define MAXDIM 3 /* maximum number of vertices per element */
 
-/* elem_data must always start vtx_data */
+/* elem_data must always start with vtx_data */
 typedef struct {
   int proc;
   long long vtx[MAXNV];
@@ -19,87 +19,48 @@ typedef struct {
   double coord[MAXNV * MAXDIM];
 } elem_data;
 
-int read_nek_mesh(unsigned int *nel, int *nv, long long **vl, double **coord,
-                  char *name, MPI_Comm comm, int read) {
-  char geom_name[BUFSIZ];
-  strncpy(geom_name, name, BUFSIZ);
-  strncat(geom_name, ".re2", 5);
-
-  char conn_name[BUFSIZ];
-  strncpy(conn_name, name, BUFSIZ);
-  strncat(conn_name, ".co2", 5);
-
-  int ndim_;
-
+int parrsb_read_mesh(unsigned int *nel, int *nv, long long **vl, double **coord,
+                     char *name, MPI_Comm comm, int read) {
   struct comm c;
   comm_init(&c, comm);
 
   Mesh mesh;
 
-  /* Read mesh data */
+  /* Read geometry from .re2 file */
   if (read & 1) {
+    char geom_name[BUFSIZ];
+    strncpy(geom_name, name, BUFSIZ);
+    strncat(geom_name, ".re2", 5);
+
     read_geometry(&mesh, geom_name, &c);
     get_vertex_coordinates(coord, mesh);
   }
 
-  /* FIXME: Calculate connectivity instead of the following */
+  /* Read connectivity from .co2 file */
   if (read & 2) {
+    char conn_name[BUFSIZ];
+    strncpy(conn_name, name, BUFSIZ);
+    strncat(conn_name, ".co2", 5);
+
     assert(read & 1);
     read_connectivity(mesh, conn_name, &c);
     get_vertex_ids(vl, mesh);
   }
 
-  ndim_ = get_mesh_dim(mesh);
   *nel = (unsigned int)get_mesh_nel(mesh);
+
+  int ndim = get_mesh_dim(mesh);
+  MPI_Bcast(&ndim, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  *nv = (ndim == 3) ? 8 : 4;
 
   mesh_free(mesh);
   comm_free(&c);
 
-  MPI_Bcast(&ndim_, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  *nv = (ndim_ == 3) ? 8 : 4;
-
   return 0;
 }
 
-/* Merge the following two methods */
-int parrsb_distribute_vertices(unsigned int nelt, int nv, int *part,
-                               long long *vl, MPI_Comm comm) {
-  struct array elements;
-  array_init(vtx_data, &elements, nelt);
-
-  vtx_data *data = elements.ptr;
-  int e, n;
-  for (e = 0; e < nelt; ++e) {
-    data[e].proc = part[e];
-    for (n = 0; n < nv; ++n)
-      data[e].vtx[n] = vl[e * nv + n];
-  }
-  elements.n = nelt;
-
-  struct comm c;
-  comm_init(&c, comm);
-
-  struct crystal cr;
-  crystal_init(&cr, &c);
-
-  sarray_transfer(vtx_data, &elements, proc, 0, &cr);
-
-  nelt = elements.n;
-  vl = (long long *)realloc(vl, nv * nelt * sizeof(long long));
-  for (data = elements.ptr, e = 0; e < nelt; ++e) {
-    for (n = 0; n < nv; ++n)
-      vl[e * nv + n] = data[e].vtx[n];
-  }
-
-  crystal_free(&cr);
-  comm_free(&c);
-  array_free(&elements);
-
-  return 0;
-}
-
-int parrsb_distribute_elements(unsigned int nelt, int nv, int *part,
-                               long long **vl_, double **coord_,
+int parrsb_distribute_elements(unsigned int *nelt_, long long **vl_,
+                               double **coord_, int *part, int nv,
                                MPI_Comm comm) {
   int ndim = (nv == 8) ? 3 : 2;
   long long *vl = *vl_;
@@ -111,6 +72,7 @@ int parrsb_distribute_elements(unsigned int nelt, int nv, int *part,
   else
     unit_size = sizeof(vtx_data);
 
+  uint nelt = *nelt_;
   struct array elements;
   array_init_(&elements, nelt, unit_size, __FILE__, __LINE__);
 
@@ -140,6 +102,8 @@ int parrsb_distribute_elements(unsigned int nelt, int nv, int *part,
   sarray_transfer_(&elements, unit_size, offsetof(vtx_data, proc), 0, &cr);
 
   nelt = elements.n;
+  *nelt_ = nelt;
+
   vl = *vl_ = (long long *)realloc(*vl_, nv * nelt * sizeof(long long));
   for (e = 0; e < nelt; ++e) {
     vtx_data *vd = (vtx_data *)(elements.ptr + unit_size * e);

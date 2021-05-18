@@ -33,8 +33,37 @@ static int check_convergence(struct comm *gc, int max_pass, int max_iter) {
   }
 }
 
+int genmap_init_vector(genmap_vector *ivec_, int global, struct comm *lc,
+                       genmap_handle h) {
+  sint lelt = genmap_get_nel(h);
+  genmap_vector_create(ivec_, lelt);
+  genmap_vector ivec = *ivec_;
+
+  slong out[2][1], buf[2][1];
+  slong in = lelt;
+  comm_scan(out, lc, gs_long, gs_add, &in, 1, buf);
+  h->nel = out[1][0];
+
+  struct rsb_element *elements = genmap_get_elements(h);
+  sint i;
+  if (global > 0)
+    for (i = 0; i < lelt; i++)
+      ivec->data[i] = out[0][0] + i + 1;
+  else
+    for (i = 0; i < lelt; i++)
+      ivec->data[i] = elements[i].fiedler;
+
+  genmap_vector_ortho_one(lc, ivec, genmap_get_partition_nel(h));
+  GenmapScalar rtr = genmap_vector_dot(ivec, ivec);
+  GenmapScalar rni;
+  comm_allreduce(lc, gs_double, gs_add, &rtr, 1, &rni);
+  rni = 1.0 / sqrt(rtr);
+  genmap_vector_scale(ivec, ivec, rni);
+
+  return 0;
+}
+
 int genmap_rsb(genmap_handle h) {
-  int verbose = h->options->debug_level > 1;
   int max_iter = 50;
   int max_pass = 50;
 
@@ -46,40 +75,32 @@ int genmap_rsb(genmap_handle h) {
 
   uint nelt = genmap_get_nel(h);
   struct rsb_element *e = genmap_get_elements(h);
-  GenmapInt i;
-  for (i = 0; i < nelt; i++)
-    e[i].globalId0 = genmap_get_local_start_index(h) + i + 1;
 
   int nv = h->nv;
   int ndim = (nv == 8) ? 3 : 2;
 
-  int np = gc->np;
   int level = 0;
 
-  while ((np = lc->np) > 1) {
-    int global = 1;
-
+  while (lc->np > 1) {
     /* Run RCB, RIB pre-step or just sort by global id */
-    if (h->options->rsb_prepartition == 1) { // RCB
-      metric_tic(lc, RCB);
+    metric_tic(lc, RCB);
+    if (h->options->rsb_prepartition == 1) // RCB
       rcb(lc, h->elements, ndim, &h->buf);
-      metric_toc(lc, RCB);
-    } else if (h->options->rsb_prepartition == 2) { // RIB
-      metric_tic(lc, RCB);
+    else if (h->options->rsb_prepartition == 2) // RIB
       rib(lc, h->elements, ndim, &h->buf);
-      metric_toc(lc, RCB);
-    } else {
-      parallel_sort(struct rsb_element, h->elements, globalId0, gs_long, 0, 1,
-                    lc, &h->buf);
-    }
+    metric_toc(lc, RCB);
 
     /* Run fiedler */
     metric_tic(lc, FIEDLER);
     int ipass = 0, iter;
     do {
-      GenmapFiedler(h, lc, max_iter, global);
-      global = 0;
+      genmap_vector ivec;
+      genmap_init_vector(&ivec, ipass == 0, lc, h);
+
+      iter = GenmapFiedler(h, lc, max_iter, ivec);
       metric_acc(NFIEDLER, iter);
+
+      genmap_destroy_vector(ivec);
     } while (++ipass < max_pass && iter == max_iter);
     metric_toc(lc, FIEDLER);
 
@@ -90,10 +111,16 @@ int genmap_rsb(genmap_handle h) {
     metric_toc(lc, FIEDLERSORT);
 
     /* Bisect */
-    double t = comm_time();
-    split_and_repair_partitions(h, lc, level, gc);
-    t = comm_time() - t;
-    metric_acc(BISECTANDREPAIR, t);
+    int bin = 1;
+    if (lc->id < (lc->np + 1) / 2)
+      bin = 0;
+    repair_partitions(h, bin, level, lc, gc);
+
+    struct comm tc;
+    genmap_comm_split(lc, bin, lc->id, &tc);
+    comm_free(lc);
+    comm_dup(lc, &tc);
+    comm_free(&tc);
 
     genmap_comm_scan(h, lc);
     metric_push_level();

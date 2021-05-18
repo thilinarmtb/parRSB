@@ -4,47 +4,44 @@
 #include <parRSB.h>
 
 static int project_ilu(genmap_handle h) {
-  struct comm *lc = h->local;
   struct comm *gc = h->global;
 
   int nv = h->nv;
   int ndim = (nv == 8) ? 3 : 2;
 
-  int np = gc->np;
-  assert(np == 1);
-
-  uint lelt = genmap_get_nel(h);
-
   genmap_vector init;
+  sint lelt = genmap_get_nel(h);
   genmap_vector_create(&init, lelt);
+
+  slong out[2][1], buf[2][1];
+  slong in = lelt;
+  comm_scan(out, gc, gs_long, gs_add, &in, 1, buf);
 
   uint i;
   for (i = 0; i < lelt; i++)
-    init->data[i] = genmap_get_local_start_index(h) + i + 1;
+    init->data[i] = out[0][0] + i + 1;
   genmap_vector_ortho_one(gc, init, lelt);
 
   genmap_vector y;
   genmap_vector_create_zeros(&y, lelt);
 
   struct precond *d = precond_setup(2, h, gc);
-
   int ppfi = project(h, gc, d, init, 100, y);
 
   precond_free(d);
-
   genmap_destroy_vector(y);
-
   genmap_destroy_vector(init);
 
   return ppfi;
 }
 
-static int partition(unsigned int *nelt_, int *nv_, long long **vl,
-                     double **coord, char *mesh, double tol, MPI_Comm comm) {
+static int read_mesh_and_con(unsigned int *nelt_, int *nv_, long long **vl,
+                             double **coord, char *mesh, double tol,
+                             MPI_Comm comm) {
   /* Read the geometry from the .re2 file */
   unsigned int nelt = 0;
   int nv = 0;
-  int ierr = read_nek_mesh(&nelt, &nv, NULL, coord, mesh, comm, 1);
+  int ierr = parrsb_read_mesh(&nelt, &nv, NULL, coord, mesh, comm, 1);
 
   /* Calculate connectivity */
   if (ierr == 0) {
@@ -54,25 +51,6 @@ static int partition(unsigned int *nelt_, int *nv_, long long **vl,
         parRSB_findConnectivity(*vl, *coord, nelt, ndim, NULL, 0, tol, comm, 0);
   }
 
-  /* Print mesh statistics and find a potentail partition */
-  int *part = NULL;
-  if (ierr == 0) {
-    parrsb_part_stat(*vl, nelt, nv, comm);
-
-    parRSB_options options = parrsb_default_options;
-    part = (int *)calloc(nelt, sizeof(int));
-    ierr |= parRSB_partMesh(part, NULL, *vl, *coord, nelt, nv, &options, comm);
-  }
-
-  /* Distribute elements to the partition found and print mesh statistics */
-  if (ierr == 0) {
-    parrsb_distribute_elements(nelt, nv, part, vl, coord, comm);
-    parrsb_part_stat(*vl, nelt, nv, comm);
-  }
-
-  if (part != NULL)
-    free(part);
-
   *nelt_ = nelt;
   *nv_ = nv;
 
@@ -81,6 +59,12 @@ static int partition(unsigned int *nelt_, int *nv_, long long **vl,
 
 static genmap_handle setup_laplacian(unsigned int nelt, int nv, long long *vl,
                                      double *coord, MPI_Comm comm) {
+  parRSB_options options = parrsb_default_options;
+  options.rsb_laplacian_implementation = 2;
+
+  genmap_handle h;
+  genmap_init(&h, comm, &options);
+
   struct comm c;
   comm_init(&c, comm);
 
@@ -92,10 +76,6 @@ static genmap_handle setup_laplacian(unsigned int nelt, int nv, long long *vl,
 
   struct array elems;
   genmap_load_balance(&elems, nelt, nv, coord, vl, &cr, &buf);
-
-  genmap_handle h;
-  parRSB_options options = parrsb_default_options;
-  genmap_init(&h, comm, &options);
 
   genmap_set_elements(h, &elems);
   genmap_set_nvertices(h, nv);
@@ -135,12 +115,10 @@ int main(int argc, char *argv[]) {
   double *coord = NULL;
   unsigned int nelt = 0;
   int nv = 0;
-  partition(&nelt, &nv, &vl, &coord, mesh, tol, MPI_COMM_WORLD);
+  read_mesh_and_con(&nelt, &nv, &vl, &coord, mesh, tol, MPI_COMM_WORLD);
 
   genmap_handle h = setup_laplacian(nelt, nv, vl, coord, MPI_COMM_WORLD);
-
   project_ilu(h);
-
   genmap_finalize(h);
 
   if (vl != NULL)

@@ -38,6 +38,9 @@ int genmap_init(genmap_handle *h_, comm_ext ce, parRSB_options *options) {
 
   h->options = options;
 
+  h->start = 0;
+  h->nel = 0;
+
   return 0;
 }
 
@@ -80,16 +83,7 @@ int genmap_get_nvertices(genmap_handle h) { return h->nv; }
 void genmap_set_nvertices(genmap_handle h, int nv) { h->nv = nv; }
 
 GenmapInt genmap_get_nel(genmap_handle h) { return h->elements->n; }
-
 GenmapULong genmap_get_partition_nel(genmap_handle h) { return h->nel; }
-void genmap_set_partition_nel(genmap_handle h, GenmapULong globalElements) {
-  h->nel = globalElements;
-}
-
-GenmapLong genmap_get_local_start_index(genmap_handle h) { return h->start; }
-void genmap_set_local_start_index(genmap_handle h, GenmapLong localStart) {
-  h->start = localStart;
-}
 
 int GenmapMallocArray(size_t n, size_t unit, void *p) {
   int ierr = posix_memalign((void **)p, GENMAP_ALIGN, n * unit);

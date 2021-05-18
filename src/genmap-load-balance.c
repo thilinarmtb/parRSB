@@ -1,14 +1,14 @@
 #include <genmap-impl.h>
 
-/* Load balance input data */
-/* FIXME: Refactor to do what is done in parrsb-aux:parrsb_distribute_elements
+/* Load balance input data
+ * FIXME: Refactor to do what is done in parrsb-aux:parrsb_distribute_elements
  */
 void genmap_load_balance(struct array *eList, uint nel, int nv, double *coord,
                          long long *vtx, struct crystal *cr, buffer *bfr) {
   slong in = nel;
   slong out[2][1], buf[2][1];
   comm_scan(out, &cr->comm, gs_long, gs_add, &in, 1, buf);
-  slong nelg_start = out[0][0];
+  slong start = out[0][0];
   slong nelg = out[1][0];
 
   int size = cr->comm.np;
@@ -35,7 +35,7 @@ void genmap_load_balance(struct array *eList, uint nel, int nv, double *coord,
   int ndim = (nv == 8) ? 3 : 2;
   int e, n, v;
   for (e = 0; e < nel; ++e) {
-    slong eg = element->globalId = nelg_start + e + 1;
+    slong eg = element->globalId = start + e + 1;
     element->proc = (int)((eg - 1) / nstar);
     if (eg > size * nstar)
       element->proc = (eg % size) - 1;
@@ -56,6 +56,7 @@ void genmap_load_balance(struct array *eList, uint nel, int nv, double *coord,
   if (vtx != NULL) { // RSB
     struct rsb_element *elements = eList->ptr;
     for (e = 0; e < nel; e++) {
+      elements[e].level = -1;
       for (v = 0; v < nv; v++)
         elements[e].vertices[v] = vtx[e * nv + v];
     }

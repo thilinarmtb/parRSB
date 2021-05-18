@@ -4,89 +4,44 @@
 #include <genmap-impl.h>
 #include <genmap-iterative.h>
 #include <genmap-partition.h>
-//
-// TODO: use a separate function to generate init vector
-//
+
 static int fiedler_rqi(genmap_handle h, struct comm *gsc, int max_iter,
-                       int global) {
+                       genmap_vector init_vec) {
   GenmapInt lelt = genmap_get_nel(h);
-  genmap_vector initVec;
-  genmap_vector_create(&initVec, lelt);
-
-  struct rsb_element *elements = genmap_get_elements(h);
-  GenmapInt i;
-  if (global > 0) {
-    for (i = 0; i < lelt; i++)
-      initVec->data[i] = genmap_get_local_start_index(h) + i + 1;
-  } else {
-    for (i = 0; i < lelt; i++)
-      initVec->data[i] = elements[i].fiedler;
-  }
-
-  genmap_vector_ortho_one(gsc, initVec, genmap_get_partition_nel(h));
-
-  GenmapScalar norm = genmap_vector_dot(initVec, initVec), normi;
-  comm_allreduce(gsc, gs_double, gs_add, &norm, 1, &normi);
-  normi = 1.0 / sqrt(norm);
-  genmap_vector_scale(initVec, initVec, normi);
-
-  genmap_laplacian_init(h, gsc);
-
   genmap_vector y;
   genmap_vector_create_zeros(&y, lelt);
 
   metric_tic(gsc, RQI);
-  int iter = rqi(h, gsc, initVec, max_iter, y);
+  int iter = rqi(h, gsc, init_vec, max_iter, y);
   metric_toc(gsc, RQI);
   metric_acc(NRQI, iter);
 
-  norm = 0;
+  GenmapScalar norm = 0, normi;
+  sint i;
   for (i = 0; i < lelt; i++)
     norm += y->data[i] * y->data[i];
   comm_allreduce(gsc, gs_double, gs_add, &norm, 1, &normi);
+  normi = 1.0 / sqrt(norm);
 
-  genmap_vector_scale(y, y, 1. / sqrt(norm));
+  genmap_vector_scale(y, y, normi);
+  struct rsb_element *elements = genmap_get_elements(h);
   for (i = 0; i < lelt; i++)
     elements[i].fiedler = y->data[i];
 
   genmap_destroy_vector(y);
-  genmap_destroy_vector(initVec);
 
   return iter;
 }
 
 static int fiedler_lanczos(genmap_handle h, struct comm *gsc, int max_iter,
-                           int global) {
-  GenmapInt lelt = genmap_get_nel(h);
-  genmap_vector initVec, alphaVec, betaVec;
-
-  genmap_vector_create(&initVec, genmap_get_nel(h));
-  struct rsb_element *elements = genmap_get_elements(h);
-
-  GenmapInt i;
-  if (global > 0) {
-    for (i = 0; i < lelt; i++)
-      initVec->data[i] = genmap_get_local_start_index(h) + i + 1;
-  } else {
-    for (i = 0; i < lelt; i++)
-      initVec->data[i] = elements[i].fiedler;
-  }
-
+                           genmap_vector init_vec) {
+  genmap_vector alphaVec, betaVec;
   genmap_vector_create(&alphaVec, max_iter);
   genmap_vector_create(&betaVec, max_iter - 1);
   genmap_vector *q = NULL;
 
-  genmap_vector_ortho_one(gsc, initVec, genmap_get_partition_nel(h));
-  GenmapScalar rtr = genmap_vector_dot(initVec, initVec), rni;
-  comm_allreduce(gsc, gs_double, gs_add, &rtr, 1, &rni);
-  rni = 1.0 / sqrt(rtr);
-  genmap_vector_scale(initVec, initVec, rni);
-
-  genmap_laplacian_init(h, gsc);
-
-  int iter;
   metric_tic(gsc, LANCZOS);
-  iter = genmap_lanczos(h, gsc, initVec, max_iter, &q, alphaVec, betaVec);
+  int iter = genmap_lanczos(h, gsc, init_vec, max_iter, &q, alphaVec, betaVec);
   metric_toc(gsc, LANCZOS);
   metric_acc(NLANCZOS, iter);
 
@@ -101,6 +56,7 @@ static int fiedler_lanczos(genmap_handle h, struct comm *gsc, int max_iter,
 
   GenmapScalar eValMin = fabs(eValues->data[0]);
   GenmapInt eValMinI = 0;
+  int i;
   for (i = 1; i < iter; i++) {
     if (fabs(eValues->data[i]) < eValMin) {
       eValMin = fabs(eValues->data[i]);
@@ -109,8 +65,9 @@ static int fiedler_lanczos(genmap_handle h, struct comm *gsc, int max_iter,
   }
   genmap_vector_copy(evTriDiag, eVectors[eValMinI]);
 
-  GenmapInt j;
+  GenmapInt lelt = genmap_get_nel(h);
   genmap_vector_create_zeros(&evLanczos, lelt);
+  GenmapInt j;
   for (i = 0; i < lelt; i++) {
     for (j = 0; j < iter; j++)
       evLanczos->data[i] += q[j]->data[i] * evTriDiag->data[j];
@@ -122,15 +79,14 @@ static int fiedler_lanczos(genmap_handle h, struct comm *gsc, int max_iter,
 
   comm_allreduce(gsc, gs_double, gs_add, &norm, 1, &normi);
   genmap_vector_scale(evLanczos, evLanczos, 1. / sqrt(norm));
+  struct rsb_element *elements = genmap_get_elements(h);
   for (i = 0; i < lelt; i++)
     elements[i].fiedler = evLanczos->data[i];
 
-  genmap_destroy_vector(initVec);
   genmap_destroy_vector(alphaVec);
   genmap_destroy_vector(betaVec);
   genmap_destroy_vector(evLanczos);
   genmap_destroy_vector(evTriDiag);
-
   genmap_destroy_vector(eValues);
   for (i = 0; i < iter; i++)
     genmap_destroy_vector(eVectors[i]);
@@ -138,15 +94,20 @@ static int fiedler_lanczos(genmap_handle h, struct comm *gsc, int max_iter,
 
   for (i = 0; i < iter + 1; i++)
     genmap_destroy_vector(q[i]);
-
   GenmapFree(q);
 
   return iter;
 }
 
-int GenmapFiedler(genmap_handle h, struct comm *lc, int max_iter, int global) {
+int GenmapFiedler(genmap_handle h, struct comm *lc, int max_iter,
+                  genmap_vector init_vec) {
+  genmap_laplacian_init(h, lc);
+
   if (h->options->rsb_algo == 0)
-    return fiedler_lanczos(h, lc, max_iter, global);
+    return fiedler_lanczos(h, lc, max_iter, init_vec);
   else if (h->options->rsb_algo == 1)
-    return fiedler_rqi(h, lc, max_iter, global);
+    return fiedler_rqi(h, lc, max_iter, init_vec);
+
+  if (h->M != NULL)
+    csr_mat_free(h->M);
 }

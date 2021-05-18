@@ -19,7 +19,6 @@ struct genmap_handle_private {
   genmap_comm local;
 
   GenmapLong nel;
-  GenmapLong Nnodes;
   GenmapLong start;
   int nv;
 

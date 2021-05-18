@@ -6,7 +6,7 @@
 #include <genmap-impl.h>
 #include <parRSB.h>
 
-parRSB_options parrsb_default_options = {0, -1, 0, 0, 0, 1, 1, 2, 1};
+parRSB_options parrsb_default_options = {0, -1, 0, 0, 0, 1, 1, 1, 1};
 
 #define fparRSB_partMesh FORTRAN_UNPREFIXED(fparrsb_partmesh, FPARRSB_PARTMESH)
 void fparRSB_partMesh(int *part, int *seq, long long *vtx, double *coord,
@@ -43,9 +43,8 @@ int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
   buffer bfr;
   buffer_init(&bfr, 1024);
 
-  struct array eList;
-
   /* Load balance input data */
+  struct array eList;
   genmap_load_balance(&eList, nel, nv, coord, vtx, &cr, &bfr);
 
   double time1 = comm_time();

@@ -72,7 +72,6 @@ struct rcb_element {
   GenmapInt seq;
   GenmapLong globalId;
   GenmapScalar coord[GC_MAX_DIM];
-  GenmapScalar fiedler;
 };
 
 /* rsb_element should be a superset of rcb_element */
@@ -86,7 +85,7 @@ struct rsb_element {
   GenmapScalar fiedler;
   GenmapLong vertices[GC_MAX_VERTICES + GC_MAX_EDGES + GC_MAX_FACES];
   GenmapInt part;
-  GenmapULong globalId0;
+  int level;
 };
 
 #endif
