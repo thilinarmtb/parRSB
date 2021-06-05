@@ -33,8 +33,12 @@ int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
   int rank = c.id;
   int size = c.np;
 
+  slong nelg = nel;
+  slong lbuf;
+  comm_allreduce(&c, gs_long, gs_add, &nelg, 1, &lbuf);
+
   if (rank == 0)
-    printf("running parRSB ...\n");
+    printf("running parRSB ... np = %d nelg = %ld\n", size, nelg);
   fflush(stdout);
 
   comm_barrier(&c);
@@ -58,11 +62,22 @@ int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
   /* Run RSB now */
   comm_ext comm_rsb;
 #ifdef MPI
-  MPI_Comm_split(c.c, nel > 0, rank, &comm_rsb);
+  MPI_Comm_split(c.c, eList.n > 0, rank, &comm_rsb);
 #endif
 
+  int rank0, size0;
+  MPI_Comm_rank(comm_rsb, &rank0);
+  MPI_Comm_size(comm_rsb, &size0);
+
+  long nelg0_ = eList.n;
+  long nelg0;
+  MPI_Allreduce(&nelg0_, &nelg0, 1, MPI_LONG, MPI_SUM, comm_rsb);
+
   // TODO: Move this into another file
-  if (nel > 0) {
+  if (eList.n > 0) {
+    if (rank0 == 0)
+      printf("\t parRSB np0: %ld, nelg0 = %d\n", size0, nelg0);
+
     metric_init();
 
     genmap_handle h;

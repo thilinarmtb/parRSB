@@ -43,19 +43,20 @@ sint get_components(sint *component, struct rsb_element *elements,
   for (e = 0; e < nelt; e++)
     component[e] = -1;
 
-  struct array arr;
-  array_init(struct unmarked, &arr, nelt);
-
   struct comm cc;
 
+  struct array arr;
   struct unmarked u;
-  uint d;
-  slong nnz1, nnzg, nnzg0, nnzb, nmarked = 0;
+  slong nmarked = 0;
   sint count = 0;
+  uint d;
+  slong nnz1, nnzg, nnzg0, nnzb;
 
   do {
-    // Count unmarked elements
+    array_init(struct unmarked, &arr, nelt);
     arr.n = 0;
+
+    /* Count unmarked elements */
     for (e = 0; e < nelt; e++) {
       if (component[e] == -1) {
         u.index = e;
@@ -122,6 +123,7 @@ sint get_components(sint *component, struct rsb_element *elements,
     }
 
     comm_free(&cc);
+    array_free(&arr);
 
     comm_allreduce(c, gs_long, gs_add, &nnz1, 1, &nnzb);
     nmarked += nnz1;
@@ -263,15 +265,16 @@ sint count_comp_sizes(sint *comp_ids, slong *min_, slong *max_, struct comm *tc,
   struct rsb_element *e = genmap_get_elements(h);
   uint nelt = genmap_get_nel(h);
   int nv = genmap_get_nvertices(h);
-
   sint ncomp = get_components(comp_ids, e, tc, &h->buf, nelt, nv);
 
   slong *size;
   GenmapCalloc(2 * ncomp, &size);
 
   uint i;
-  for (i = 0; i < nelt; i++)
+  for (i = 0; i < nelt; i++) {
+    assert(comp_ids[i] < ncomp && comp_ids[i] >= 0 && "Something is wrong !");
     size[comp_ids[i]]++;
+  }
 
   comm_allreduce(tc, gs_long, gs_add, size, ncomp, &size[ncomp]);
 
@@ -296,12 +299,21 @@ void split_and_repair_partitions(genmap_handle h, struct comm *lc, int level,
                                  struct comm *gc) {
   sint np = lc->np;
   sint id = lc->id;
-  int bin = 1;
+  sint bin = 1;
   if (id < (np + 1) / 2)
     bin = 0;
 
   struct comm tc;
   genmap_comm_split(lc, bin, id, &tc);
+
+  sint low_np = (np + 1) / 2;
+  sint high_np = np - low_np;
+  sint start = (1 - bin) * low_np;
+  sint P = bin * low_np + (1 - bin) * high_np;
+
+  if (tc.id == 0)
+    printf("rank: %04d, start = %d, P = %d, high_np = %d, low_np = %d\n",
+           gc->id, start, P, high_np, low_np);
 
   /* Check for disconnected components */
   GenmapInitLaplacianWeighted(h, &tc);
@@ -320,11 +332,13 @@ void split_and_repair_partitions(genmap_handle h, struct comm *lc, int level,
   sint ncomp;
   slong min, max;
   ncomp = count_comp_sizes(comp_ids, &min, &max, &tc, h);
+  assert(ncomp > 0 && "Number of components should be > 0");
+
   slong ncompg = ncomp;
   comm_allreduce(lc, gs_long, gs_max, &ncompg, 1, &buf);
 
-  sint root = (lc->id == 0) * gc->id;
-  comm_allreduce(lc, gs_int, gs_max, &root, 1, &buf);
+  sint root = (tc.id == 0) * gc->id;
+  comm_allreduce(&tc, gs_int, gs_max, &root, 1, &buf);
 
   if (tc.id == 0 && ncomp > 1) {
     printf(
@@ -336,6 +350,9 @@ void split_and_repair_partitions(genmap_handle h, struct comm *lc, int level,
 
   int attempt = 0;
   int nattempts = 2 * ncompg;
+
+  printf("rank:%04d start repair\n", gc->id);
+  fflush(stdout);
 
   while (ncompg > 1 && attempt < nattempts) {
     slong *comp_count = NULL;
@@ -358,11 +375,11 @@ void split_and_repair_partitions(genmap_handle h, struct comm *lc, int level,
         min_count = comp_count[ncomp + i];
         min_id = i;
       }
+    assert(min_id >= 0 && min_id < ncomp && "Invalid range for min_id");
 
     slong min_count_global = min_count;
     comm_allreduce(lc, gs_long, gs_min, &min_count_global, 1, &buf);
-
-    // bin is the tie breaker
+    /* bin is the tie breaker */
     sint min_bin = (min_count_global == min_count) ? bin : INT_MAX;
     comm_allreduce(lc, gs_int, gs_min, &min_bin, 1, &buf);
 
@@ -370,26 +387,28 @@ void split_and_repair_partitions(genmap_handle h, struct comm *lc, int level,
     crystal_init(&cr, lc);
 
     for (i = 0; i < nelt; i++)
-      e[i].proc = id;
+      e[i].proc = lc->id;
 
-    sint low_np = (np + 1) / 2;
-    sint high_np = np - low_np;
-    sint start = (1 - bin) * low_np;
-    sint P = bin * low_np + (1 - bin) * high_np;
     slong size = (min_count_global + P - 1) / P;
+    if (tc.id == 0)
+      printf("min_count_global = %ld size = %ld\n", min_count_global, size);
 
     if (min_count_global == min_count && min_bin == bin) {
       slong in = comp_count[min_id];
       slong out[2][1], buff[2][1];
       comm_scan(out, &tc, gs_long, gs_add, &in, 1, buff);
       slong off = out[0][0];
+      assert(out[1][0] == min_count_global && "Something is wrong !");
 
       for (i = 0; i < nelt; i++) {
         if (comp_ids[i] == min_id) {
           e[i].proc = start + off / size;
+          assert(e[i].proc >= 0 && e[i].proc < lc->np && "Something is wrong !");
           off++;
         }
       }
+
+      assert((off - out[0][0]) == in && "Something is wrong !");
     }
 
     sarray_transfer(struct rsb_element, h->elements, proc, 1, &cr);
@@ -397,15 +416,17 @@ void split_and_repair_partitions(genmap_handle h, struct comm *lc, int level,
 
     attempt++;
 
-    // Do a load balanced sort in each partition
+    /* Do a load balanced sort in each partition */
     parallel_sort(struct rsb_element, h->elements, fiedler, gs_double, 0, 1,
                   &tc, &h->buf);
     genmap_comm_scan(h, &tc);
-    nelt = genmap_get_nel(h);
-    GenmapInitLaplacianWeighted(h, &tc);
 
+    GenmapInitLaplacianWeighted(h, &tc);
+    nelt = genmap_get_nel(h);
     GenmapRealloc(nelt, &comp_ids);
-    ncompg = ncomp = count_comp_sizes(comp_ids, &min, &max, &tc, h);
+    ncomp = count_comp_sizes(comp_ids, &min, &max, &tc, h);
+
+    ncompg = ncomp;
     comm_allreduce(lc, gs_long, gs_max, &ncompg, 1, &buf);
     if (tc.id == 0 && ncomp > 1) {
       printf("\t\t %ld disconnected components after attempt %d/%d, Level = %d "
@@ -418,7 +439,13 @@ void split_and_repair_partitions(genmap_handle h, struct comm *lc, int level,
     GenmapFree(comp_count);
   }
 
+  printf("rank:%04d end repair\n", gc->id);
+  fflush(stdout);
+
   balance_partitions(h, &tc, bin, lc);
+
+  printf("rank:%04d end balance\n", gc->id);
+  fflush(stdout);
 
   nelt = genmap_get_nel(h);
   GenmapRealloc(nelt, &comp_ids);

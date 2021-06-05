@@ -1,5 +1,5 @@
 ## General build parameters ##
-DEBUG ?= 0
+DEBUG ?= 1
 MPI ?= 1
 CC ?= mpicc
 CFLAGS ?= -g -O0
@@ -46,7 +46,7 @@ LDFLAGS = -L$(BUILDDIR)/lib -l$(TARGET) -L$(GSLIBPATH)/lib -lgs -lm
 PP=
 
 ifneq ($(DEBUG),0)
-  PP += -g -DGENMAP_DEBUG
+  PP += -g
 endif
 
 ifneq ($(UNDERSCORE),0)
