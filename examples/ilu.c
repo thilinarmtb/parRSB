@@ -114,26 +114,24 @@ int main(int argc, char *argv[]) {
   read_mesh_and_con(&nelt, &nv, &vl, &coord, mesh, tol, MPI_COMM_WORLD);
 
   /* Generate CSR matrix with RSB ordering */
-  unsigned int *map = NULL;
-  long long *gid = NULL;
   unsigned int nlevels = 0;
   unsigned int *level_off = NULL;
-  struct csr_mat_ *R = parrsb_numbering(&nelt, &nlevels, &level_off, vl, coord,
-                                        nv, MPI_COMM_WORLD);
+  MPI_Comm *comms = NULL;
+  struct csr_mat_ *R = parrsb_numbering(&nelt, &nlevels, &level_off, &comms, vl,
+                                        coord, nv, MPI_COMM_WORLD);
 
-  /* Dump the matrix */
-  dump_csr_mat("Reordered.dump", R, MPI_COMM_WORLD);
+  parrsb_ilu0(nlevels, level_off, comms, R);
 
-  parrsb_ilu0(nlevels, level_off, R, MPI_COMM_WORLD);
-
+  if (comms != NULL) {
+    int i;
+    for (i = 0; i < nlevels; i++)
+      MPI_Comm_free(&comms[i]);
+    free(comms);
+  }
   if (vl != NULL)
     free(vl);
   if (coord != NULL)
     free(coord);
-  if (gid != NULL)
-    free(gid);
-  if (map != NULL)
-    free(map);
   if (level_off != NULL)
     free(level_off);
   if (R != NULL)

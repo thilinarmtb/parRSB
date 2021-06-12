@@ -57,10 +57,14 @@ int parrsb_distribute_elements(unsigned int *nelt, long long **vl,
 void parrsb_part_stat(long long *vtx, int nel, int nv, MPI_Comm comm);
 
 struct csr_mat_ *parrsb_numbering(unsigned int *nelt, unsigned int *nlevels,
-                                  unsigned int **level_off, long long *vl,
-                                  double *coord, int nv, MPI_Comm comm);
+                                  unsigned int **level_off, MPI_Comm **comms,
+                                  long long *vl, double *coord, int nv,
+                                  MPI_Comm comm);
 
-void parrsb_ilu0(unsigned int nlevels, unsigned int *level_off,
-                 struct csr_mat_ *M, MPI_Comm comm);
+void parrsb_ilu0(unsigned int nlevels, unsigned int *level_off, MPI_Comm *comms,
+                 struct csr_mat_ *M);
 
+void parrsb_lu_solve(double *x, struct csr_mat_ *M, double *b,
+                     unsigned int nlevels, unsigned int *level_off,
+                     MPI_Comm *comms);
 #endif

@@ -21,7 +21,7 @@ static struct gs_data *csr_get_top(csr_mat M, struct comm *c, buffer *buf) {
   return gsh;
 }
 
-/* TODO: Get rid of row_start and setup gs if c != NULL */
+/* TODO: Get rid of row_start */
 void csr_mat_setup(struct csr_mat_ **M_, struct array *entries, struct comm *c,
                    buffer *buf) {
   csr_entry *ptr = entries->ptr;
@@ -40,8 +40,11 @@ void csr_mat_setup(struct csr_mat_ **M_, struct array *entries, struct comm *c,
 
   slong out[2][1], bf[2][1];
   slong in = M->rn;
-  comm_scan(out, c, gs_long, gs_add, &in, 1, bf);
-  M->row_start = out[0][0] + 1;
+  if (c != NULL) {
+    comm_scan(out, c, gs_long, gs_add, &in, 1, bf);
+    M->row_start = out[0][0] + 1;
+  } else
+    M->row_start = 0;
 
   GenmapMalloc(M->rn + 1, &M->row_off);
   M->row_off[0] = 0;
@@ -85,7 +88,10 @@ void csr_mat_setup(struct csr_mat_ **M_, struct array *entries, struct comm *c,
   assert(n == nn);
   assert(M->row_off[n] == entries->n);
 
-  M->gsh = csr_get_top(M, c, buf);
+  if (c != NULL)
+    M->gsh = csr_get_top(M, c, buf);
+  else
+    M->gsh = NULL;
 }
 
 static void csr_mat_gather(csr_mat M, struct gs_data *gsh, GenmapScalar *x,
@@ -150,7 +156,7 @@ void csr_mat_print(csr_mat M, struct comm *c) {
 
 int csr_mat_get_local(double *val, uint *off, csr_mat M, uint i, ulong j) {
   if (i > M->rn || i == 0 || j == 0) {
-    printf("%s:%d: %u %u %u\n", __FILE__, __LINE__, i, j, M->rn);
+    printf("%s:%d: %lu %lu %u\n", __FILE__, __LINE__, i, j, M->rn);
     return 1;
   }
 
@@ -171,16 +177,18 @@ int csr_mat_get_local(double *val, uint *off, csr_mat M, uint i, ulong j) {
 }
 
 int csr_mat_get_global(double *val, uint *off, csr_mat M, ulong i, ulong j) {
-  if (i == 0 || j == 0) {
-    printf("%s:%d: %u %u %u\n", __FILE__, __LINE__, i, j);
+  if (i == 0 || j == 0)
     return 1;
-  }
+  assert(M != NULL && "Input matrix is NULL");
 
   /* TODO: Use binary search */
   uint ii;
   for (ii = 0; ii < M->rn; ii++)
     if (M->row_id[ii] == i)
       break;
+
+  if (ii == M->rn)
+    return 1;
 
   uint s;
   for (s = M->row_off[ii]; s < M->row_off[ii + 1]; s++)

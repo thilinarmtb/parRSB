@@ -40,7 +40,7 @@ static int number_elements_aux(uint **level_off_, sint nlevel, uint nelt,
   free(out);
   free(buf);
 
-  return nlevel;
+  return 0;
 }
 
 static slong id_separator_levels(int level, uint nelt, int nv,
@@ -118,7 +118,8 @@ static slong id_separator_levels(int level, uint nelt, int nv,
   free(interface);
 }
 
-static int number_elements(uint **level_off, genmap_handle h) {
+static int number_elements(MPI_Comm **comms_, uint **level_off,
+                           genmap_handle h) {
   int max_iter = 50;
   int max_pass = 50;
 
@@ -134,6 +135,9 @@ static int number_elements(uint **level_off, genmap_handle h) {
   int nv = h->nv;
   int ndim = (nv == 8) ? 3 : 2;
   int level = 0;
+
+  int nlevels = log2(gc->np) + 2;
+  MPI_Comm *comms = *comms_ = tcalloc(MPI_Comm, nlevels);
 
   while (lc->np > 1) {
     /* Run RCB, RIB pre-step or just sort by global id */
@@ -167,6 +171,8 @@ static int number_elements(uint **level_off, genmap_handle h) {
     e = genmap_get_elements(h);
     id_separator_levels(level, nelt, nv, e, bin, lc, &h->buf, gc);
 
+    MPI_Comm_dup(lc->c, &comms[level]);
+
     struct comm tc;
     genmap_comm_split(lc, bin, lc->id, &tc);
     comm_free(lc);
@@ -177,6 +183,7 @@ static int number_elements(uint **level_off, genmap_handle h) {
 
     level++;
   }
+  MPI_Comm_dup(lc->c, &comms[level]);
 
   e = genmap_get_elements(h);
   nelt = genmap_get_nel(h);
@@ -187,13 +194,14 @@ static int number_elements(uint **level_off, genmap_handle h) {
       e[i].level = level;
   }
 
-  int nlevels = number_elements_aux(level_off, level + 1, nelt, e, gc);
-  return nlevels;
+  number_elements_aux(level_off, level + 1, nelt, e, gc);
+  return level + 1;
 }
 
 struct csr_mat_ *parrsb_numbering(unsigned int *nelt_, unsigned int *nlevels_,
-                                  unsigned int **level_off_, long long *vl,
-                                  double *coord, int nv, MPI_Comm comm) {
+                                  unsigned int **level_off, MPI_Comm **comms,
+                                  long long *vl, double *coord, int nv,
+                                  MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 
@@ -220,9 +228,10 @@ struct csr_mat_ *parrsb_numbering(unsigned int *nelt_, unsigned int *nlevels_,
   genmap_set_nvertices(h, nv);
   genmap_comm_scan(h, genmap_global_comm(h));
 
-  int nlevels = *nlevels_ = number_elements(level_off_, h);
+  int nlevels = *nlevels_ = number_elements(comms, level_off, h);
   nelt = *nelt_ = genmap_get_nel(h);
 
+  /* TODO get rid of gid */
   ulong *gid = tcalloc(ulong, nelt);
   struct rsb_element *e = genmap_get_elements(h);
   uint i;

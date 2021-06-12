@@ -1,7 +1,7 @@
 #include <genmap-ilu.h>
 #include <genmap-impl.h>
 
-static int ilu0(csr_mat M, csr_mat N, struct comm *c) {
+static int serial_ilu0(csr_mat M, csr_mat N, struct comm *c) {
   csr_mat_copy(M, N);
 
   const uint rn = M->rn;
@@ -33,7 +33,7 @@ static int ilu0(csr_mat M, csr_mat N, struct comm *c) {
   }
 }
 
-static int ilut(csr_mat M, csr_mat N, struct comm *c, GenmapScalar threshold,
+static int serial_ilut(csr_mat M, csr_mat N, struct comm *c, GenmapScalar threshold,
                 buffer *buf) {
   assert(fabs(threshold) < 1.0);
 
@@ -146,24 +146,24 @@ static int lu_solve(double *x, struct csr_mat_ *A, double *b, buffer *buf) {
   return 0;
 }
 
-int ilu_setup(genmap_handle h, struct comm *c, struct ilu_data *d) {
+int serial_ilu_setup(genmap_handle h, struct comm *c, struct serial_ilu_data *d) {
   d->M = tmalloc(struct csr_mat_, 1);
 
 #if 1
-  ilu0(d->M, h->M, c);
+  serial_ilu0(d->M, h->M, c);
 #else
-  ilut(d->M, h->M, c, 0.1, &h->buf);
+  serial_ilut(d->M, h->M, c, 0.1, &h->buf);
 #endif
 
   return 0;
 }
 
-int ilu_apply(GenmapScalar *u, GenmapScalar *rhs, struct ilu_data *d,
+int serial_ilu_apply(GenmapScalar *u, GenmapScalar *rhs, struct serial_ilu_data *d,
               buffer *buf) {
   return lu_solve(u, d->M, rhs, buf);
 }
 
-int ilu_free(struct ilu_data *d) {
+int serial_ilu_free(struct serial_ilu_data *d) {
   csr_mat_free(d->M);
   free(d);
 
