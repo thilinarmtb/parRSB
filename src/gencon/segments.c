@@ -13,6 +13,7 @@ static void initSegments(Mesh mesh, struct comm *c) {
   in[0] = nPoints;
   comm_scan(out, c, gs_long, gs_add, in, 1, buf);
   slong start = out[0][0];
+
   uint i;
   for (i = 0; i < nPoints; i++) {
     points[i].ifSegment = 0;
@@ -130,11 +131,17 @@ static int mergeSegments(Mesh mesh, struct comm *c, buffer *bfr) {
       break;
     }
 
-  // TODO: comm_scan
   sint out[2][1], buf[2][1], in[1];
-  in[0] = ifseg * c->id;
+  in[0] = ifseg * (c->id + 1);
   comm_scan(out, c, gs_int, gs_max, in, 1, buf);
-  sint rank = out[0][0];
+  sint rank = out[0][0] - 1;
+
+  if (rank == -1) {
+    if (c->id > 0)
+      rank = c->id - 1;
+    else if (c->id == 0)
+      rank = 0;
+  }
 
   // If rank > 0, send i = 0,... n-1 where points[i].ifSegment == 0 to
   // rank with previous ifSegment == 1
@@ -182,12 +189,14 @@ struct schedule {
     Point points = mesh->elements.ptr;                                         \
                                                                                \
     int nDim = mesh->nDim;                                                     \
-    if (nDim == 3)                                                             \
+    if (nDim == 13)                                                            \
       sarray_sort_3(struct Point_private, points, nPoints, x[xa], 3, x[xb], 3, \
                     x[xc], 3, bfr);                                            \
-    else if (nDim == 2)                                                        \
+    else if (nDim == 12)                                                       \
       sarray_sort_2(struct Point_private, points, nPoints, x[xa], 3, x[xb], 3, \
                     bfr);                                                      \
+    sarray_sort_2(struct Point_private, points, nPoints, x[xa], 3, sequenceId, \
+                  1, bfr);                                                     \
   } while (0)
 
 #define segments_by_coord(cnt, sched, mesh, c, xa, tolSquared, bfr)            \
@@ -246,24 +255,39 @@ int findScheduleAndSort(struct schedule sched[3], Mesh mesh, struct comm *c,
 
 int findSegments(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
                  buffer *bfr) {
-  uint nPoints = mesh->elements.n;
-  Point points = mesh->elements.ptr;
-  int nDim = mesh->nDim;
-
-  int bin = (nPoints > 0);
-
-  struct comm nonZeroRanks, dup;
-  genmap_comm_split(c, bin, c->id, &nonZeroRanks);
-  comm_dup(&dup, &nonZeroRanks);
-
   GenmapScalar tolSquared = tol * tol;
   struct schedule sched[3];
   sched[0].dim = 0, sched[1].dim = 1, sched[2].dim = 2;
   sort_by_coord(mesh, c, 0, 1, 2, bfr);
+
+  Point points = mesh->elements.ptr;
+  uint nPoints = mesh->elements.n;
+
+#if 0
+  int i;
+  for (i = 0; i < c->np; i++) {
+    if (i == c->id) {
+      printf("id = %d (%.10e,%.10e,%.10e)/(%.10e,%.10e,%.10e)\n", c->id,
+             points[0].x[0], points[0].x[1], points[0].x[2],
+             points[nPoints - 1].x[0], points[nPoints - 1].x[1],
+             points[nPoints - 1].x[2]);
+    }
+    fflush(stdout);
+    comm_barrier(c);
+  }
+#endif
+
   initSegments(mesh, c);
 
-  int t, d, merge = 1, err = 0;
-  for (t = 0; t < nDim && err == 0; t++) {
+  struct comm nonZeroRanks, dup;
+  int bin = (nPoints > 0);
+  genmap_comm_split(c, bin, c->id, &nonZeroRanks);
+  comm_dup(&dup, &nonZeroRanks);
+
+  int merge = 1;
+  int nDim = mesh->nDim;
+  int t, d;
+  for (t = 0; t < nDim; t++) {
     for (d = 0; d < nDim; d++) {
       int dim = sched[d].dim;
 
@@ -273,7 +297,7 @@ int findSegments(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
 
         slong segments = countSegments(mesh, &nonZeroRanks);
         int rank = nonZeroRanks.id;
-        if (rank == 0 && verbose > 0)
+        if (rank == 0)
           printf("\tlocglob: %d %d %lld\n", t + 1, dim + 1, segments);
 
         if (merge > 0) {
@@ -293,5 +317,5 @@ int findSegments(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
   comm_free(&dup);
   comm_free(&nonZeroRanks);
 
-  return err;
+  return 0;
 }
