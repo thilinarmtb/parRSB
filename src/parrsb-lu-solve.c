@@ -16,6 +16,7 @@ struct rhs_entry {
   ulong r;
   uint proc;
   GenmapScalar v;
+  uint old;
 };
 
 /* TODO: Do a binary search */
@@ -53,6 +54,7 @@ static struct array *find_outbound_rows(struct array *rows, int p, int fw,
         ri.proc = col[j] % c->np;
         ri.owner = find_gid(col[j], M->row_id, rn);
         array_cat(struct row_info, &rows_aux, &ri, 1);
+        //printf("p = %d level = %d row = %ld id = %ld\n", p, level, id, col[j]);
       }
     }
   else
@@ -60,14 +62,11 @@ static struct array *find_outbound_rows(struct array *rows, int p, int fw,
       ulong id = M->row_id[i];
       for (j = M->row_off[i + 1] - 1; j >= (int)M->row_off[i] && col[j] >= id;
            j--) {
-#if 0
-        if (level == 1 && p == 0)
-          printf("gid0=%ld\n", col[j]);
-#endif
         ri.gid = col[j];
         ri.proc = col[j] % c->np;
         ri.owner = find_gid(col[j], M->row_id, rn);
         array_cat(struct row_info, &rows_aux, &ri, 1);
+        //printf("p = %d level = %d row = %ld id = %ld\n", p, level, id, col[j]);
       }
     }
 
@@ -80,19 +79,10 @@ static struct array *find_outbound_rows(struct array *rows, int p, int fw,
     struct row_info *ptr = rows_aux.ptr;
     array_cat(struct row_info, rows, &ptr[0], 1);
     slong cur_gid = ptr[0].gid;
-#if 0
-    if (level == 1 && p == 0)
-      printf("cur_gid0=%ld\n", cur_gid);
-#endif
-
     for (i = 1; i < rows_aux.n; i++) {
       if (ptr[i].gid != cur_gid) {
         array_cat(struct row_info, rows, &ptr[i], 1);
         cur_gid = ptr[i].gid;
-#if 0
-        if (level == 1 && p == 0)
-          printf("cur_gid0=%ld\n", cur_gid);
-#endif
       }
     }
   }
@@ -206,9 +196,18 @@ static int send_outbound_rows(struct array *entries, struct array *rows,
   return 0;
 }
 
-static void concat_outbound_rows(struct array *all, struct row_info *ptr,
+static void concat_outbound_rows(struct array *all, struct rhs_entry *ptr,
                                  uint n, int level, int p, struct comm *c,
                                  buffer *buf) {
+  struct rhs_entry *ptr0 = all->ptr;
+  uint i;
+  for (i = 0; i < all->n; i++)
+    ptr0[i].old = 1;
+  for (i = 0; i < n; i++) {
+    ptr[i].old = 0;
+    //printf("p = %d level = %d r = %ld, v = %lf\n", p, level, ptr[i].r, ptr[i].v);
+  }
+
   struct array temp;
   array_init(struct rhs_entry, &temp, 10);
 #if 0
@@ -216,9 +215,9 @@ static void concat_outbound_rows(struct array *all, struct row_info *ptr,
     printf("%d temp.n=%u all->n=%u n=%u\n", c->id, temp.n, all->n, n);
 #endif
 
-  array_cat(struct rhs_entry, &temp, all->ptr, all->n);
   array_cat(struct rhs_entry, &temp, ptr, n);
-  sarray_sort(struct rhs_entry, temp.ptr, temp.n, r, 1, buf);
+  array_cat(struct rhs_entry, &temp, all->ptr, all->n);
+  sarray_sort_2(struct rhs_entry, temp.ptr, temp.n, r, 1, old, 0, buf);
 
   array_free(all);
   array_init(struct rhs_entry, all, 10);
@@ -232,7 +231,6 @@ static void concat_outbound_rows(struct array *all, struct row_info *ptr,
       printf("gid2=%ld\n", gid);
 #endif
 
-    uint i;
     for (i = 1; i < temp.n; i++)
       if (ptr[i].r != gid) {
         array_cat(struct rhs_entry, all, &ptr[i], 1);
@@ -274,8 +272,14 @@ static int fw_solve_level(double *y, struct csr_mat_ *A, double *b,
     y[i] = b[i];
     /* Remove the dot product: L[i, j] * y[j], j < i */
     for (j = A->row_off[i]; j < A->row_off[i + 1] && A->col[j] < A->row_id[i];
-         j++)
-      y[i] -= A->v[j] * get_rhs(A->col[j], A->rn, A->row_id, y, entries, level, p);
+         j++) {
+      double x = get_rhs(A->col[j], A->rn, A->row_id, y, entries, level, p);
+      y[i] -= A->v[j] * x;
+      // printf("level = %d row = %ld p = %d b[i] = %lf, v=%lf x = %lf y[i] = %lf\n",
+      //        level, A->row_id[i], p, b[i], A->v[j], x, y[i]);
+    }
+    printf("forward level = %d row = %ld p = %d b[i] = %lf, y[i] = %lf\n",
+           level, A->row_id[i], p, b[i], y[i]);
   }
 
   return 0;
@@ -294,8 +298,12 @@ static int bw_solve_level(double *x, struct csr_mat_ *A, double *y,
     /* Remove the dot product: L[i, j] * x[j], j > i */
     for (j = A->row_off[i + 1] - 1;
          j >= A->row_off[i] && A->col[j] > A->row_id[i]; j--)
-      x[i] -= A->v[j] * get_rhs(A->col[j], A->rn, A->row_id, x, entries, level, p);
-    x[i] /= A->v[j];
+      x[i] -=
+          A->v[j] * get_rhs(A->col[j], A->rn, A->row_id, x, entries, level, p);
+    if (fabs(A->v[j] - 0) > 1e-12)
+      x[i] /= A->v[j];
+    printf("backward level = %d row = %ld p = %d y[i] = %lf, x[i] = %lf\n",
+           level, A->row_id[i], p, y[i], x[i]);
   }
 
   return 0;
@@ -322,7 +330,7 @@ static int lu_solve_aux(double *x, struct csr_mat_ *A, double *b, int nlevels,
       /* Receive rows from other processors */
       struct array entries, rows;
       find_outbound_rows(&rows, p, 1, i, level_off, A, &c, buf);
-      send_outbound_rows(&entries, &rows, A, b, &c, i, p, buf);
+      send_outbound_rows(&entries, &rows, A, y, &c, i, p, buf);
       concat_outbound_rows(&all, entries.ptr, entries.n, i, p, &c, buf);
 
       if (c.id == p)
@@ -348,7 +356,7 @@ static int lu_solve_aux(double *x, struct csr_mat_ *A, double *b, int nlevels,
       /* Receive rows from other processors */
       struct array entries, rows;
       find_outbound_rows(&rows, p, 0, i, level_off, A, &c, buf);
-      send_outbound_rows(&entries, &rows, A, y, &c, i, p, buf);
+      send_outbound_rows(&entries, &rows, A, x, &c, i, p, buf);
       concat_outbound_rows(&all, entries.ptr, entries.n, i, p, &c, buf);
 
       if (c.id == p)

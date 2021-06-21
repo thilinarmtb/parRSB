@@ -1,14 +1,14 @@
+#include <genmap-csr-mat.h>
 #include <genmap-iterative.h>
 #include <genmap.h>
 
 #include <parRSB.h>
 
-static int project_ilu(genmap_handle h) {
+static int project_ilu(genmap_handle h, unsigned int lelt) {
   struct comm *gc = h->global;
-  struct precond *d = precond_setup(2, h, gc);
+  struct precond *d = precond_setup(3, h, gc);
 
   genmap_vector init;
-  sint lelt = genmap_get_nel(h);
   genmap_vector_create(&init, lelt);
 
   slong out[2][1], buf[2][1];
@@ -17,7 +17,9 @@ static int project_ilu(genmap_handle h) {
 
   uint i;
   for (i = 0; i < lelt; i++)
-    init->data[i] = out[0][0] + i + 1;
+    //init->data[i] = out[0][0] + i + 1;
+    init->data[i] = h->M->row_id[i];
+
   genmap_vector_ortho_one(gc, init, out[1][0]);
 
   genmap_vector y;
@@ -54,44 +56,6 @@ static int read_mesh_and_con(unsigned int *nelt_, int *nv_, long long **vl,
   return ierr;
 }
 
-static genmap_handle setup_laplacian(unsigned int nelt, int nv, long long *vl,
-                                     double *coord, MPI_Comm comm) {
-  parRSB_options options = parrsb_default_options;
-  options.rsb_laplacian_implementation = 2;
-
-  genmap_handle h;
-  genmap_init(&h, comm, &options);
-
-  struct comm c;
-  comm_init(&c, comm);
-
-  struct crystal cr;
-  crystal_init(&cr, &c);
-
-  buffer buf;
-  buffer_init(&buf, 1024);
-
-  struct array elems;
-  genmap_load_balance(&elems, nelt, nv, coord, vl, &cr, &buf);
-
-  genmap_set_elements(h, &elems);
-  genmap_set_nvertices(h, nv);
-
-  struct comm *gc = genmap_global_comm(h);
-  genmap_comm_scan(h, gc);
-
-  genmap_number_faces_and_edges(h, gc);
-
-  genmap_laplacian_init(h, gc);
-
-  buffer_free(&buf);
-  crystal_free(&cr);
-  comm_free(&c);
-  array_free(&elems);
-
-  return h;
-}
-
 int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);
 
@@ -115,8 +79,16 @@ int main(int argc, char *argv[]) {
   int nv = 0;
   read_mesh_and_con(&nelt, &nv, &vl, &coord, mesh, tol, MPI_COMM_WORLD);
 
-  genmap_handle h = setup_laplacian(nelt, nv, vl, coord, MPI_COMM_WORLD);
-  project_ilu(h);
+  genmap_handle h =
+      parrsb_numbering_w_handle(&nelt, vl, coord, nv, MPI_COMM_WORLD);
+
+  csr_mat_dump("Reordered.dump", h->M, MPI_COMM_WORLD);
+
+  parRSB_options options = parrsb_default_options;
+  options.rsb_laplacian_implementation = 2;
+  h->options = &options;
+
+  project_ilu(h, nelt);
   genmap_finalize(h);
 
   if (vl != NULL)
