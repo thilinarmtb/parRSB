@@ -11,7 +11,7 @@ static struct gs_data *csr_get_top(csr_mat M, struct comm *c, buffer *buf) {
   uint i, j;
   for (i = 0; i < rn; i++)
     for (j = M->row_off[i]; j < M->row_off[i + 1]; j++)
-      if (M->row_start + i == M->col[j])
+      if (M->row_id[i] == M->col[j])
         ids[j] = M->col[j];
       else
         ids[j] = -M->col[j];
@@ -54,6 +54,7 @@ void csr_mat_setup(struct csr_mat_ **M_, struct array *entries, struct comm *c,
     M->v = NULL;
     M->diag = NULL;
     M->row_id = NULL;
+    M->gsh = NULL;
     return;
   } else {
     GenmapMalloc(entries->n, &M->col);
@@ -100,7 +101,7 @@ static void csr_mat_gather(csr_mat M, struct gs_data *gsh, GenmapScalar *x,
   sint i, j;
   for (i = 0; i < M->rn; i++)
     for (j = M->row_off[i]; j < M->row_off[i + 1]; j++)
-      if (M->col[j] == s + i)
+      if (M->col[j] == M->row_id[i])
         buf[j] = x[i];
       else
         buf[j] = 0.0;
@@ -146,8 +147,7 @@ void csr_mat_print(csr_mat M, struct comm *c) {
     if (c->id == k) {
       for (i = 0; i < rn; i++) {
         for (j = offsets[i]; j < offsets[i + 1]; j++)
-          fprintf(stderr, "(%lu,%lu) -> %.10lf\n", M->row_start + i, col[j],
-                  v[j]);
+          printf("(%lu,%lu) -> %.10lf\n", M->row_id[i], col[j], v[j]);
       }
     }
     fflush(stderr);
@@ -233,6 +233,70 @@ int csr_mat_copy(csr_mat D, csr_mat S) {
 
   return 0;
 }
+
+#define write_T(dest, val, T, nunits)                                          \
+  do {                                                                         \
+    T v = val;                                                                 \
+    memcpy(dest, &(val), sizeof(T) * nunits);                                  \
+    dest += sizeof(T) * nunits;                                                \
+  } while (0)
+
+int csr_mat_dump(const char *fname, struct csr_mat_ *M, MPI_Comm comm) {
+  int rank, size;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+  MPI_File file;
+  int err = MPI_File_open(comm, fname, MPI_MODE_CREATE | MPI_MODE_WRONLY,
+                          MPI_INFO_NULL, &file);
+  if (err != 0 && rank == 0)
+    fprintf(stderr, "%s:%d Error opening file %s for writing.\n", __FILE__,
+            __LINE__, fname);
+  if (err != 0)
+    return err;
+
+  long nelt = M->rn;
+  long nnz = M->row_off[nelt];
+
+  long nnzg;
+  MPI_Allreduce(&nnz, &nnzg, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD);
+
+  /* Write i, j, v, rank */
+  uint write_size = (2 * sizeof(long) + sizeof(double) + sizeof(int)) * nnz;
+  if (rank == 0)
+    write_size += sizeof(long); /* for nelgt */
+
+  char *pbuf, *pbuf0;
+  pbuf = pbuf0 = (char *)calloc(write_size, sizeof(char));
+  if (rank == 0)
+    write_T(pbuf0, nnzg, long, 1);
+
+  uint i, j;
+  for (i = 0; i < nelt; i++) {
+    slong row = M->row_id[i];
+    for (j = M->row_off[i]; j < M->row_off[i + 1]; j++) {
+      write_T(pbuf0, row, long, 1);
+      write_T(pbuf0, M->col[j], long, 1);
+      write_T(pbuf0, M->v[j], double, 1);
+      write_T(pbuf0, rank, int, 1);
+    }
+  }
+
+  MPI_Status st;
+  err = MPI_File_write_ordered(file, pbuf, write_size, MPI_BYTE, &st);
+  if (err != 0 && rank == 0)
+    fprintf(stderr, "%s:%d Error opening file %s for writing.\n", __FILE__,
+            __LINE__, fname);
+
+  err += MPI_File_close(&file);
+  MPI_Barrier(comm);
+
+  free(pbuf);
+
+  return err;
+}
+
+#undef write_T
 
 int csr_mat_free(csr_mat M) {
   if (M->col)

@@ -218,8 +218,7 @@ struct csr_mat_ *parrsb_numbering(unsigned int *nelt_, unsigned int *nlevels_,
 
   /* FIXME: If MG, we need both CSR and gs implementation now */
   parRSB_options options = parrsb_default_options;
-  if (options.rsb_algo == 1)
-    options.rsb_laplacian_implementation = 3;
+  options.rsb_laplacian_implementation = 2;
 
   genmap_handle h;
   genmap_init(&h, comm, &options);
@@ -249,4 +248,50 @@ struct csr_mat_ *parrsb_numbering(unsigned int *nelt_, unsigned int *nlevels_,
   comm_free(&c);
 
   return M;
+}
+
+genmap_handle parrsb_numbering_w_handle(unsigned int *nelt, long long *vl,
+                                        double *coord, int nv, MPI_Comm comm) {
+  parRSB_options options = parrsb_default_options;
+  options.rsb_laplacian_implementation = 2;
+
+  genmap_handle h;
+  genmap_init(&h, comm, &options);
+
+  struct comm c;
+  comm_init(&c, comm);
+
+  struct crystal cr;
+  crystal_init(&cr, &c);
+
+  buffer bfr;
+  buffer_init(&bfr, 1024);
+
+  struct array elems;
+  genmap_load_balance(&elems, *nelt, nv, coord, vl, &cr, &bfr);
+
+  genmap_set_elements(h, &elems);
+  genmap_set_nvertices(h, nv);
+
+  struct comm *gc = genmap_global_comm(h);
+  genmap_comm_scan(h, gc);
+
+  h->nlevels = number_elements(&h->comms, &h->level_off, h);
+
+  *nelt = genmap_get_nel(h);
+  ulong *gid = tcalloc(ulong, *nelt);
+  struct rsb_element *e = genmap_get_elements(h);
+  uint i;
+  for (i = 0; i < *nelt; i++)
+    gid[i] = e[i].globalId;
+
+  genmap_laplacian_csr_init(&h->M, gid, h, &c);
+
+  free(gid);
+  array_free(&elems);
+  buffer_free(&bfr);
+  crystal_free(&cr);
+  comm_free(&c);
+
+  return h;
 }

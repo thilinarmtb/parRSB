@@ -31,6 +31,10 @@ struct genmap_handle_private {
   /* CSR implementation */
   csr_mat M;
 
+  int nlevels;
+  unsigned int *level_off;
+  MPI_Comm *comms;
+
   buffer buf;
 
   parRSB_options *options;

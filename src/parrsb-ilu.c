@@ -161,7 +161,7 @@ static int send_outbound_rows(struct array *entries, struct array *rows,
 }
 
 static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
-                      unsigned int *lvl_off) {
+                      int nlevels, unsigned int *lvl_off) {
   const uint rn = M->rn;
   assert(rn > 1);
 
@@ -175,8 +175,15 @@ static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
   uint start = lvl_off[lvl + 1];
   uint end = lvl_off[lvl];
 
-  for (ii = start; ii < end; ii++) { /* Go over number of rows */
+  //printf("nlevels = %d lvl = %d start = %u end = %u\n", nlevels, lvl, start, end);
+
+  ii = start;
+  if (lvl == nlevels - 1)
+    ii = start + 1;
+
+  for (; ii < end; ii++) { /* Go over number of rows */
     i = M->row_id[ii];
+
     /* TODO: Only loop over non-zeros */
     for (kk = M->row_off[ii]; kk < M->row_off[ii + 1] && M->col[kk] < i; kk++) {
       k = M->col[kk];
@@ -207,9 +214,12 @@ static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
 
 static int ilu0_aux(struct csr_mat_ *M, unsigned int nlevels,
                     unsigned int *level_off, MPI_Comm *comms, buffer *buf) {
-  struct csr_mat_ *N = NULL;
+  struct comm cc;
+  comm_init(&cc, comms[0]);
+  //csr_mat_print(M, &cc);
+
   sint i = nlevels - 1;
-  ilu0_level(M, N, i, level_off);
+  ilu0_level(M, NULL, i, nlevels, level_off);
 
   for (i = nlevels - 2; i >= 0; i--) {
     struct comm c;
@@ -225,8 +235,9 @@ static int ilu0_aux(struct csr_mat_ *M, unsigned int nlevels,
 
       /* Do the local ilu */
       if (c.id == p) {
+        struct csr_mat_ *N = NULL;
         csr_mat_setup(&N, &entries, NULL, buf);
-        ilu0_level(M, N, i, level_off);
+        ilu0_level(M, N, i, nlevels, level_off);
         csr_mat_free(N);
       }
 
@@ -236,6 +247,9 @@ static int ilu0_aux(struct csr_mat_ *M, unsigned int nlevels,
 
     comm_free(&c);
   }
+
+  //csr_mat_print(M, &cc);
+  comm_free(&cc);
 
   return 0;
 }

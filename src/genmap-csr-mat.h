@@ -44,6 +44,8 @@ int csr_mat_get_global(double *val, uint *off, csr_mat M, ulong i, ulong j);
 
 int csr_mat_copy(csr_mat D, csr_mat S);
 
+int csr_mat_dump(const char *fname, struct csr_mat_ *M, MPI_Comm comm);
+
 int csr_mat_free(csr_mat M);
 
 #endif

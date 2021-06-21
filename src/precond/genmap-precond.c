@@ -12,6 +12,9 @@ struct precond *precond_setup(int type, genmap_handle h, struct comm *c) {
   } else if (type == 2) {
     p->data = (void *)tmalloc(struct serial_ilu_data, 1);
     serial_ilu_setup(h, c, (struct serial_ilu_data *)p->data);
+  } else if (type == 3) {
+    p->data = (void *)tmalloc(struct parallel_ilu_data, 1);
+    parallel_ilu_setup(h, c, (struct parallel_ilu_data *)p->data);
   }
 
   return p;
@@ -23,6 +26,8 @@ void precond_apply(GenmapScalar *u, GenmapScalar *v, struct precond *p,
     mg_apply(u, v, (struct mg_data *)p->data, buf);
   else if (p->type == 2)
     serial_ilu_apply(u, v, (struct serial_ilu_data *)p->data, buf);
+  else if (p->type == 3)
+    parallel_ilu_apply(u, v, (struct parallel_ilu_data *)p->data, buf);
 }
 
 void precond_check(genmap_handle h, struct comm *c) { mg_check(h, c); }
@@ -31,8 +36,10 @@ int precond_free(struct precond *p) {
   if (p != NULL) {
     if (p->type < 2)
       mg_free((struct mg_data *)p->data);
-    else
+    else if (p->type == 2)
       serial_ilu_free((struct serial_ilu_data *)p->data);
+    else if (p->type == 3)
+      parallel_ilu_free((struct parallel_ilu_data *)p->data);
     free(p);
   }
 

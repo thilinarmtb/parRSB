@@ -84,4 +84,6 @@ double genmap_get_max_rss();
 
 void genmap_print_stack();
 
+genmap_handle parrsb_numbering_w_handle(unsigned int *nelt, long long *vl,
+                                        double *coord, int nv, MPI_Comm comm);
 #endif

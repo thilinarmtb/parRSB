@@ -5,10 +5,11 @@
 int project(genmap_handle h, struct comm *gsc, struct precond *d,
             genmap_vector ri, int max_iter, genmap_vector x) {
   assert(x->size == ri->size);
-  assert(x->size == genmap_get_nel(h));
-
   uint lelt = x->size;
-  GenmapLong nelg = genmap_get_partition_nel(h);
+
+  slong bfr, nelg;
+  nelg = lelt;
+  comm_allreduce(gsc, gs_long, gs_add, &nelg, 1, &bfr);
 
   genmap_vector z0, z, dz, w, p, r;
   genmap_vector_create(&z, lelt);
@@ -32,7 +33,8 @@ int project(genmap_handle h, struct comm *gsc, struct precond *d,
   genmap_vector_copy(z, r);
   genmap_vector_copy(p, z);
 
-  GenmapScalar rz1 = genmap_vector_dot(r, z), buf;
+  GenmapScalar rz1, buf;
+  rz1 = genmap_vector_dot(r, z);
   comm_allreduce(gsc, gs_double, gs_add, &rz1, 1, &buf);
 
   GenmapScalar rr = genmap_vector_dot(r, r);
@@ -64,8 +66,9 @@ int project(genmap_handle h, struct comm *gsc, struct precond *d,
     rr = genmap_vector_dot(r, r);
     comm_allreduce(gsc, gs_double, gs_add, &rr, 1, &buf);
 
-    printf("i = %u, rr = %lf, res_tol = %lf, tol = %lf\n", i, rr, res_tol,
-           tol * tol);
+    if (gsc->id == 0)
+      printf("i = %u, rr = %lf, res_tol = %lf, tol = %lf\n", i, rr, res_tol,
+             tol * tol);
     if (rr < res_tol || rr < tol * tol)
       break;
 

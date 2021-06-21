@@ -3,6 +3,7 @@
 
 static int serial_ilu0(csr_mat M, csr_mat N, struct comm *c) {
   csr_mat_copy(M, N);
+  csr_mat_print(M, c);
 
   const uint rn = M->rn;
   assert(rn > 1);
@@ -12,29 +13,35 @@ static int serial_ilu0(csr_mat M, csr_mat N, struct comm *c) {
   const ulong *col = M->col;
 
   double a_kk, a_kj, a_ik;
-  uint i, j, k, kk;
+  uint i, ii, j, k, kk, ik, ij;
 
-  for (i = 2; i <= rn; i++) { /* Go over number of rows */
-    for (k = 1; k < i; k++) {
-      a_kk = M->diag[k - 1];
+  for (ii = 1; ii < rn; ii++) { /* Go over number of rows */
+    i = ii + 1;
+    for (kk = off[ii]; kk < off[ii + 1] && col[kk] < i; kk++) {
+      k = col[kk];
+      csr_mat_get_global(&a_kk, NULL, M, k, k);
 
-      assert(csr_mat_get_local(&a_ik, &kk, M, i, k) == 0);
+      assert(csr_mat_get_local(&a_ik, &ik, M, i, k) == 0);
       if (fabs(a_ik) < 1e-12)
         continue;
-      a_ik = v[kk] = v[kk] / a_kk;
+      a_ik = v[ik] = v[ik] / a_kk;
 
       /* a_ij = a_ij - a_ik * a_kj */
-      for (kk++; kk < off[i]; kk++) { /* Go over the columns */
-        j = col[kk];
+      for (ij = ik + 1; ij < off[ii + 1]; ij++) { /* Go over the columns */
+        j = col[ij];
         assert(csr_mat_get_local(&a_kj, NULL, M, k, j) == 0);
-        v[kk] = v[kk] - a_ik * a_kj;
+        v[ij] = v[ij] - a_ik * a_kj;
       }
     }
   }
+  if (fabs(v[ij - 1] - 0) < 1e-12)
+    v[ij - 1] = 1.0;
+
+  csr_mat_print(M, c);
 }
 
-static int serial_ilut(csr_mat M, csr_mat N, struct comm *c, GenmapScalar threshold,
-                buffer *buf) {
+static int serial_ilut(csr_mat M, csr_mat N, struct comm *c,
+                       GenmapScalar threshold, buffer *buf) {
   assert(fabs(threshold) < 1.0);
 
   const uint rn = N->rn;
@@ -146,7 +153,8 @@ static int lu_solve(double *x, struct csr_mat_ *A, double *b, buffer *buf) {
   return 0;
 }
 
-int serial_ilu_setup(genmap_handle h, struct comm *c, struct serial_ilu_data *d) {
+int serial_ilu_setup(genmap_handle h, struct comm *c,
+                     struct serial_ilu_data *d) {
   d->M = tmalloc(struct csr_mat_, 1);
 
 #if 1
@@ -158,8 +166,8 @@ int serial_ilu_setup(genmap_handle h, struct comm *c, struct serial_ilu_data *d)
   return 0;
 }
 
-int serial_ilu_apply(GenmapScalar *u, GenmapScalar *rhs, struct serial_ilu_data *d,
-              buffer *buf) {
+int serial_ilu_apply(GenmapScalar *u, GenmapScalar *rhs,
+                     struct serial_ilu_data *d, buffer *buf) {
   return lu_solve(u, d->M, rhs, buf);
 }
 
