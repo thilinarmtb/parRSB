@@ -40,6 +40,7 @@ int setGlobalID(Mesh mesh, struct comm *c) {
       if (points[i].ifSegment)
         count++;
       points[i].globalId = start + count;
+#if 0
       if ((275700 <= points[i].globalId && points[i].globalId <= 275705) ||
           (296005 <= points[i].globalId && points[i].globalId <= 296010)) {
         printf("rank = %d x = %.10e, y = %.10e, z = %.10e, global-id = %ld\n",
@@ -47,6 +48,7 @@ int setGlobalID(Mesh mesh, struct comm *c) {
                points[i].globalId + 1);
         fflush(stdout);
       }
+#endif
     }
   }
 

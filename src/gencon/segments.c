@@ -44,13 +44,16 @@ static int sortSegments(Mesh mesh, struct comm *c, int dim, buffer *bfr) {
     // sort start to end based on dim
     switch (dim) {
     case 0:
-      sarray_sort(struct Point_private, &points[s], e - s, x[0], 3, bfr);
+      sarray_sort_2(struct Point_private, &points[s], e - s, x[0], 3,
+                    sequenceId, 1, bfr);
       break;
     case 1:
-      sarray_sort(struct Point_private, &points[s], e - s, x[1], 3, bfr);
+      sarray_sort_2(struct Point_private, &points[s], e - s, x[1], 3,
+                    sequenceId, 1, bfr);
       break;
     case 2:
-      sarray_sort(struct Point_private, &points[s], e - s, x[2], 3, bfr);
+      sarray_sort_2(struct Point_private, &points[s], e - s, x[2], 3,
+                    sequenceId, 1, bfr);
       break;
     default:
       break;
@@ -255,35 +258,21 @@ int findScheduleAndSort(struct schedule sched[3], Mesh mesh, struct comm *c,
 
 int findSegments(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
                  buffer *bfr) {
-  GenmapScalar tolSquared = tol * tol;
   struct schedule sched[3];
-  sched[0].dim = 0, sched[1].dim = 1, sched[2].dim = 2;
+  sched[0].dim = 0;
+  sched[1].dim = 1;
+  sched[2].dim = 2;
   sort_by_coord(mesh, c, 0, 1, 2, bfr);
-
-  Point points = mesh->elements.ptr;
-  uint nPoints = mesh->elements.n;
-
-#if 0
-  int i;
-  for (i = 0; i < c->np; i++) {
-    if (i == c->id) {
-      printf("id = %d (%.10e,%.10e,%.10e)/(%.10e,%.10e,%.10e)\n", c->id,
-             points[0].x[0], points[0].x[1], points[0].x[2],
-             points[nPoints - 1].x[0], points[nPoints - 1].x[1],
-             points[nPoints - 1].x[2]);
-    }
-    fflush(stdout);
-    comm_barrier(c);
-  }
-#endif
 
   initSegments(mesh, c);
 
-  struct comm nonZeroRanks, dup;
-  int bin = (nPoints > 0);
-  genmap_comm_split(c, bin, c->id, &nonZeroRanks);
-  comm_dup(&dup, &nonZeroRanks);
+  uint nPoints = mesh->elements.n;
+  int bin = (nPoints > 0) ? 1 : 0;
 
+  struct comm nonZeroRanks;
+  genmap_comm_split(c, bin, c->id, &nonZeroRanks);
+
+  GenmapScalar tolSquared = tol * tol;
   int merge = 1;
   int nDim = mesh->nDim;
   int t, d;
@@ -296,25 +285,23 @@ int findSegments(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
         findLocalSegments(mesh, &nonZeroRanks, dim, tolSquared);
 
         slong segments = countSegments(mesh, &nonZeroRanks);
-        int rank = nonZeroRanks.id;
-        if (rank == 0)
+        if (nonZeroRanks.id == 0)
           printf("\tlocglob: %d %d %lld\n", t + 1, dim + 1, segments);
 
         if (merge > 0) {
           mergeSegments(mesh, &nonZeroRanks, bfr);
           merge = 0;
-
-          nPoints = mesh->elements.n;
-          bin = (nPoints > 0);
-
-          comm_free(&nonZeroRanks);
-          genmap_comm_split(&dup, bin, nonZeroRanks.id, &nonZeroRanks);
         }
       }
+
+      nPoints = mesh->elements.n;
+      bin = (nPoints > 0) ? 1 : 0;
+
+      comm_free(&nonZeroRanks);
+      genmap_comm_split(c, bin, c->id, &nonZeroRanks);
     }
   }
 
-  comm_free(&dup);
   comm_free(&nonZeroRanks);
 
   return 0;
