@@ -98,7 +98,7 @@ int parRSB_findConnectivity(long long *vertexid, double *coord, int nelt,
   buffer_init(&bfr, 1024);
 
   sint buf;
-  sint err = findSegments(mesh, &c, tol, verbose, &bfr);
+  sint err = findUniqueVertices(mesh, &c, tol, verbose, &bfr);
   comm_allreduce(&c, gs_int, gs_max, &err, 1, &buf);
   check_error(rank, err, "findSegments");
 

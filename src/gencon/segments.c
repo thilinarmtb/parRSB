@@ -31,7 +31,7 @@ static void initSegments(Mesh mesh, struct comm *c) {
     points[0].ifSegment = 1;
 }
 
-static int sortSegments(Mesh mesh, struct comm *c, int dim, buffer *bfr) {
+static int sortLocalSegments(Mesh mesh, int dim, buffer *bfr) {
   sint nPoints = mesh->elements.n;
   Point points = mesh->elements.ptr;
 
@@ -72,6 +72,10 @@ static int sortSegments(Mesh mesh, struct comm *c, int dim, buffer *bfr) {
   }
 
   return 0;
+}
+
+static int sortSegments(Mesh mesh, struct comm *c, int dim, buffer *bfr) {
+  sortLocalSegments(mesh, dim, bfr);
 }
 
 static int findLocalSegments(Mesh mesh, struct comm *c, int i,
@@ -118,6 +122,11 @@ static int findLocalSegments(Mesh mesh, struct comm *c, int i,
 
   array_free(&arr);
 
+  return 0;
+}
+
+static int findSegments(Mesh mesh, struct comm *c, int i, GenmapScalar tolSquared) {
+  findLocalSegments(mesh, c, i, tolSquared);
   return 0;
 }
 
@@ -201,49 +210,38 @@ slong countSegments(Mesh mesh, int verbose, struct comm *c) {
                   1, bfr);                                                     \
   } while (0)
 
-int findSegments(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
-                 buffer *bfr) {
-  sort_by_coord(mesh, c, 0, 1, 2, bfr);
+int findUniqueVertices(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
+                       buffer *bfr) {
+  struct comm comm_seg;
+  comm_dup(&comm_seg, c);
 
-  initSegments(mesh, c);
-
-  uint nPoints = mesh->elements.n;
-  int bin = (nPoints > 0) ? 1 : 0;
-
-  struct comm nonZeroRanks;
-  genmap_comm_split(c, bin, c->id, &nonZeroRanks);
+  initSegments(mesh, &comm_seg);
 
   GenmapScalar tolSquared = tol * tol;
-  int merge = 1;
   int nDim = mesh->nDim;
+  int merge = 1;
+
   int t, d;
   for (t = 0; t < nDim; t++) {
     for (d = 0; d < nDim; d++) {
-      int dim = d;
+      sortSegments(mesh, &comm_seg, d, bfr);
+      findSegments(mesh, &comm_seg, d, tolSquared);
 
-      if (bin > 0) {
-        sortSegments(mesh, &nonZeroRanks, dim, bfr);
-        findLocalSegments(mesh, &nonZeroRanks, dim, tolSquared);
+      slong n_seg = countSegments(mesh, t == 0 && d == 0, &comm_seg);
+      if (comm_seg.id == 0)
+        printf("\tlocglob: %d %d %lld\n", t + 1, d + 1, n_seg);
 
-        slong segments = countSegments(mesh, t == 0 && d == 0, &nonZeroRanks);
-        if (nonZeroRanks.id == 0)
-          printf("\tlocglob: %d %d %lld\n", t + 1, dim + 1, segments);
-
-        if (merge > 0) {
-          mergeSegments(mesh, &nonZeroRanks, bfr);
-          merge = 0;
-        }
+      if (merge > 0) {
+        mergeSegments(mesh, &comm_seg, bfr);
+        merge = 0;
       }
 
-      comm_free(&nonZeroRanks);
-
-      nPoints = mesh->elements.n;
-      bin = (nPoints > 0) ? 1 : 0;
-      genmap_comm_split(c, bin, c->id, &nonZeroRanks);
+      comm_free(&comm_seg);
+      //genmap_comm_split(c, bin, c->id, &comm_seg);
     }
   }
 
-  comm_free(&nonZeroRanks);
+  comm_free(&comm_seg);
 
   return 0;
 }
