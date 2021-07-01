@@ -8,7 +8,7 @@ static void initSegments(Mesh mesh, struct comm *c) {
   uint nPoints = mesh->elements.n;
   Point points = mesh->elements.ptr;
 
-  // Initialize globalId and ifSegment
+  /* Initialize globalId and ifSegment */
   slong out[2][1], buf[2][1], in[1];
   in[0] = nPoints;
   comm_scan(out, c, gs_long, gs_add, in, 1, buf);
@@ -20,7 +20,7 @@ static void initSegments(Mesh mesh, struct comm *c) {
     points[i].globalId = start + i;
   }
 
-  // First rank with nPoints > 0 set ifSegment = 1
+  /* First rank with nPoints > 0 set ifSegment = 1 */
   sint rank = c->id;
   if (nPoints == 0)
     rank = c->np;
@@ -164,25 +164,24 @@ static int mergeSegments(Mesh mesh, struct comm *c, buffer *bfr) {
   return 0;
 }
 
-slong countSegments(Mesh mesh, struct comm *c) {
+slong countSegments(Mesh mesh, int verbose, struct comm *c) {
   uint nPoints = mesh->elements.n;
   Point points = mesh->elements.ptr;
 
   sint count = 0, i;
   for (i = 0; i < nPoints; i++)
-    if (points[i].ifSegment > 0)
+    if (points[i].ifSegment > 0) {
       count++;
+      if (verbose > 0)
+        printf("nid = %d point = %.10e %.10e %.10e\n", c->id, points[i].x[0],
+               points[i].x[1], points[i].x[2]);
+    }
 
   slong in, buf[2][1];
   in = count;
   comm_allreduce(c, gs_long, gs_add, &in, 1, buf);
   return in;
 }
-
-struct schedule {
-  int dim;
-  slong segments;
-};
 
 #define sort_by_coord(mesh, c, xa, xb, xc, bfr)                                \
   do {                                                                         \
@@ -202,66 +201,8 @@ struct schedule {
                   1, bfr);                                                     \
   } while (0)
 
-#define segments_by_coord(cnt, sched, mesh, c, xa, tolSquared, bfr)            \
-  do {                                                                         \
-    sched[cnt].dim = xa;                                                       \
-    initSegments(mesh, c);                                                     \
-    findLocalSegments(mesh, c, xa, tolSquared);                                \
-    sched[cnt].segments = -countSegments(mesh, c);                             \
-  } while (0)
-
-int findScheduleAndSort(struct schedule sched[3], Mesh mesh, struct comm *c,
-                        GenmapScalar tolSquared, int verbose, buffer *bfr) {
-  sort_by_coord(mesh, c, 0, 1, 2, bfr);
-  segments_by_coord(0, sched, mesh, c, 0, tolSquared, bfr);
-
-  int nDim = mesh->nDim;
-
-  if (nDim == 3) {
-    sort_by_coord(mesh, c, 1, 2, 0, bfr);
-    segments_by_coord(1, sched, mesh, c, 1, tolSquared, bfr);
-
-    sort_by_coord(mesh, c, 2, 0, 1, bfr);
-    segments_by_coord(2, sched, mesh, c, 2, tolSquared, bfr);
-  } else {
-    sort_by_coord(mesh, c, 1, 0, 2, bfr);
-    segments_by_coord(0, sched, mesh, c, 1, tolSquared, bfr);
-  }
-
-  sarray_sort(struct schedule, sched, nDim, segments, 1, bfr);
-
-  if (nDim == 2) {
-    printf("Not implemented.\n");
-    exit(1);
-  } else {
-    switch (sched[0].dim) {
-    case 0:
-      sort_by_coord(mesh, c, 0, 1, 2, bfr);
-      break;
-    case 1:
-      sort_by_coord(mesh, c, 1, 2, 0, bfr);
-      break;
-    case 2:
-      sort_by_coord(mesh, c, 2, 0, 1, bfr);
-      break;
-    default:
-      break;
-    }
-  }
-
-  int i;
-  for (i = 1; i < nDim; i++)
-    sched[i].dim = (sched[0].dim + i) % nDim;
-
-  return 0;
-}
-
 int findSegments(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
                  buffer *bfr) {
-  struct schedule sched[3];
-  sched[0].dim = 0;
-  sched[1].dim = 1;
-  sched[2].dim = 2;
   sort_by_coord(mesh, c, 0, 1, 2, bfr);
 
   initSegments(mesh, c);
@@ -278,13 +219,13 @@ int findSegments(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
   int t, d;
   for (t = 0; t < nDim; t++) {
     for (d = 0; d < nDim; d++) {
-      int dim = sched[d].dim;
+      int dim = d;
 
       if (bin > 0) {
         sortSegments(mesh, &nonZeroRanks, dim, bfr);
         findLocalSegments(mesh, &nonZeroRanks, dim, tolSquared);
 
-        slong segments = countSegments(mesh, &nonZeroRanks);
+        slong segments = countSegments(mesh, t == 0 && d == 0, &nonZeroRanks);
         if (nonZeroRanks.id == 0)
           printf("\tlocglob: %d %d %lld\n", t + 1, dim + 1, segments);
 
@@ -294,10 +235,10 @@ int findSegments(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
         }
       }
 
+      comm_free(&nonZeroRanks);
+
       nPoints = mesh->elements.n;
       bin = (nPoints > 0) ? 1 : 0;
-
-      comm_free(&nonZeroRanks);
       genmap_comm_split(c, bin, c->id, &nonZeroRanks);
     }
   }
