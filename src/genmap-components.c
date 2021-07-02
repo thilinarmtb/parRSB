@@ -222,12 +222,13 @@ void balance_partitions(genmap_handle h, struct comm *lc, int bin,
     slong out[2][1], bfr[2][1];
     comm_scan(out, lc, gs_long, gs_add, &ielems_n, 1, bfr);
     slong start = out[0][0];
-    printf("start = %ld ielemsg = %d send_cnt = %u\n", start, out[1][0], send_cnt);
+    printf("start = %ld ielemsg = %d send_cnt = %u\n", start, out[1][0],
+           send_cnt);
 
     struct interface_element *ptr = ielems.ptr;
     sint psize = (send_cnt + gc->np - lc->np - 1) / (gc->np - lc->np);
     for (e = 0; start + e < send_cnt && e < ielems.n; e++)
-      ptr[e].dest = start_id + (start + e)/psize;
+      ptr[e].dest = start_id + (start + e) / psize;
 
     crystal_init(&cr, lc);
     sarray_transfer(struct interface_element, &ielems, orig, 0, &cr);

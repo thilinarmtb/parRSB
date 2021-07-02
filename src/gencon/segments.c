@@ -45,20 +45,20 @@ static int sendLastElement(struct array *arr, Mesh mesh, struct comm *c) {
 static int sortSegments(Mesh mesh, struct comm *c, int dim, buffer *bfr) {
   /* Parallel sort: first by globalId then by x[dim] */
   switch (dim) {
-    case 0:
-      parallel_sort_2(struct Point_private, &mesh->elements, globalId, 1, x[0],
-                      gs_scalar, bin_sort, 1, c, bfr);
-      break;
-    case 1:
-      parallel_sort_2(struct Point_private, &mesh->elements, globalId, 1, x[1],
-                      gs_scalar, bin_sort, 1, c, bfr);
-      break;
-    case 2:
-      parallel_sort_2(struct Point_private, &mesh->elements, globalId, 1, x[2],
-                      gs_scalar, bin_sort, 1, c, bfr);
-      break;
-    default:
-      break;
+  case 0:
+    parallel_sort_2(struct Point_private, &mesh->elements, globalId, 1, x[0],
+                    gs_scalar, bin_sort, 1, c, bfr);
+    break;
+  case 1:
+    parallel_sort_2(struct Point_private, &mesh->elements, globalId, 1, x[1],
+                    gs_scalar, bin_sort, 1, c, bfr);
+    break;
+  case 2:
+    parallel_sort_2(struct Point_private, &mesh->elements, globalId, 1, x[2],
+                    gs_scalar, bin_sort, 1, c, bfr);
+    break;
+  default:
+    break;
   }
 
   /* Identify the starting points of segments after sort */
@@ -191,7 +191,6 @@ slong countSegments(Mesh mesh, int verbose, struct comm *c) {
 static int findBin(Mesh mesh, struct comm *c) {
   uint nPoints = mesh->elements.n;
   Point points = mesh->elements.ptr;
-
 
   slong buf[2][1], out[2][1];
   sint in = (nPoints > 0) ? points[0].ifSegment : 0;

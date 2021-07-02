@@ -9,7 +9,8 @@
 #define check_error(id, err, msg)                                              \
   do {                                                                         \
     if (err > 0) {                                                             \
-      if (id == 0) printf("\n Error: %s\n", msg);                              \
+      if (id == 0)                                                             \
+        printf("\n Error: %s\n", msg);                                         \
       buffer_free(&bfr);                                                       \
       mesh_free(mesh);                                                         \
       comm_free(&c);                                                           \
