@@ -221,18 +221,18 @@ static int setProc(Mesh mesh, sint rankg, uint index, int inc_proc,
 
   comm_allreduce(c, gs_int, gs_add, np, 2, buf);
 
-  sint low_size = (out[1][0] + np[0] - 1)/np[0];
-  sint high_size = (out[1][1] + np[1] - 1)/np[1];
+  sint low_size = (out[1][0] + np[0] - 1) / np[0];
+  sint high_size = (out[1][1] + np[1] - 1) / np[1];
   uint i;
 
   for (i = 0; i < size[0]; i++) {
     points[i].globalId = out[0][0] + i;
-    points[i].proc = (out[0][0] + i)/low_size;
+    points[i].proc = (out[0][0] + i) / low_size;
   }
 
   for (i = size[0]; i < size[1]; i++) {
     points[i].globalId = out[0][1] + i;
-    points[i].proc = np[0] + (out[0][1] + i)/high_size;
+    points[i].proc = np[0] + (out[0][1] + i) / high_size;
   }
 
   return 0;
@@ -259,10 +259,12 @@ static int rearrangeSegments(Mesh mesh, struct comm *c, buffer *bfr) {
     uint i, index;
     for (i = 0; i < nPoints; i++) {
       if (points[i].ifSegment > 0) {
-        double frac0 = fabs((start + i + 0.0)/nelg - (seg.id + 0.0)/seg.np);
-        if (seg.id == 0) frac0 = DBL_MAX;
-        double frac1 = fabs((start + i + 0.0)/nelg - (seg.id + 1.0)/seg.np);
-        if (seg.id == seg.np - 1) frac1 = DBL_MAX;
+        double frac0 = fabs((start + i + 0.0) / nelg - (seg.id + 0.0) / seg.np);
+        if (seg.id == 0)
+          frac0 = DBL_MAX;
+        double frac1 = fabs((start + i + 0.0) / nelg - (seg.id + 1.0) / seg.np);
+        if (seg.id == seg.np - 1)
+          frac1 = DBL_MAX;
 
         if (frac0 < min) {
           inc_proc = 0;
