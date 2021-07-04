@@ -191,18 +191,65 @@ slong countSegments(Mesh mesh, struct comm *c) {
   return in;
 }
 
-static int rearrangeSegments(Mesh mesh, struct comm *c) {
-  struct comm seg;
-  comm_init(&seg, c);
+static int setProc(Mesh mesh, sint rankg, uint index, int inc_proc,
+                   struct comm *c) {
+  uint nPoints = mesh->elements.n;
+  Point points = mesh->elements.ptr;
 
-  while (seg.np > 1 || countSegments(mesh, &seg) > 1) {
+  slong size[2] = {0};
+  if (c->id < rankg)
+    size[0] = nPoints;
+  if (c->id == rankg) {
+    size[0] = index;
+    size[1] = nPoints - index;
+  }
+  if (c->id > rankg)
+    size[1] = nPoints;
+
+  slong out[2][2], buf[2][2];
+  comm_scan(out, c, gs_long, gs_add, size, 2, buf);
+
+  sint np[2] = {0};
+  if (c->id < rankg)
+    np[0] = 1;
+  if (c->id == rankg) {
+    np[0] = inc_proc;
+    np[1] = 1 - inc_proc;
+  }
+  if (c->id > rankg)
+    np[1] = 1;
+
+  comm_allreduce(c, gs_int, gs_add, np, 2, buf);
+
+  sint low_size = (out[1][0] + np[0] - 1)/np[0];
+  sint high_size = (out[1][1] + np[1] - 1)/np[1];
+  uint i;
+
+  for (i = 0; i < size[0]; i++) {
+    points[i].globalId = out[0][0] + i;
+    points[i].proc = (out[0][0] + i)/low_size;
+  }
+
+  for (i = size[0]; i < size[1]; i++) {
+    points[i].globalId = out[0][1] + i;
+    points[i].proc = np[0] + (out[0][1] + i)/high_size;
+  }
+
+  return 0;
+}
+
+static int rearrangeSegments(Mesh mesh, struct comm *c, buffer *bfr) {
+  struct comm seg;
+  comm_dup(&seg, c);
+
+  while (seg.np > 1 && countSegments(mesh, &seg) > 1) {
     uint nPoints = mesh->elements.n;
     Point points = mesh->elements.ptr;
 
     /* comm_scan */
     slong out[2][1], buf[2][1], in[1];
     in[0] = nPoints;
-    comm_scan(out, c, gs_long, gs_add, in, 1, buf);
+    comm_scan(out, &seg, gs_long, gs_add, in, 1, buf);
     slong start = out[0][0];
     slong nelg = out[1][0];
 
@@ -212,8 +259,11 @@ static int rearrangeSegments(Mesh mesh, struct comm *c) {
     uint i, index;
     for (i = 0; i < nPoints; i++) {
       if (points[i].ifSegment > 0) {
-        double frac0 = fabs((start + i)/nelg - (c->id + 0.0)/c->np);
-        double frac1 = fabs((start + i)/nelg - (c->id + 1.0)/c->np);
+        double frac0 = fabs((start + i + 0.0)/nelg - (seg.id + 0.0)/seg.np);
+        if (seg.id == 0) frac0 = DBL_MAX;
+        double frac1 = fabs((start + i + 0.0)/nelg - (seg.id + 1.0)/seg.np);
+        if (seg.id == seg.np - 1) frac1 = DBL_MAX;
+
         if (frac0 < min) {
           inc_proc = 0;
           min = frac0;
@@ -229,22 +279,38 @@ static int rearrangeSegments(Mesh mesh, struct comm *c) {
 
     double dbuf[2];
     double ming = min;
-    comm_allreduce(c, gs_double, gs_min, &ming, 1, dbuf);
+    comm_allreduce(&seg, gs_double, gs_min, &ming, 1, dbuf);
 
     sint rankg = -1;
     if (fabs(ming - min) < 1e-15)
-      rankg = c->id + inc_proc;
-    comm_allreduce(c, gs_int, gs_max, &rankg, 1, buf);
+      rankg = seg.id;
+    comm_allreduce(&seg, gs_int, gs_max, &rankg, 1, buf);
+
+    setProc(mesh, rankg, index, inc_proc, &seg);
 
     int bin = 1;
-    if (c->id < rankg)
+    if (seg.id < rankg)
+      bin = 0;
+    if (seg.id == rankg && inc_proc == 1)
       bin = 0;
 
-    /* Transfer and split */
+    struct comm new;
+    genmap_comm_split(&seg, bin, seg.id, &new);
+    comm_free(&seg);
+    comm_dup(&seg, &new);
+    comm_free(&new);
+
+    struct crystal cr;
+    crystal_init(&cr, &seg);
+    sarray_transfer(struct Point_private, &mesh->elements, proc, 0, &cr);
+    crystal_free(&cr);
+
+    parallel_sort(struct Point_private, &mesh->elements, globalId, gs_long,
+                  bin_sort, 1, &seg, bfr);
   }
 
   comm_free(c);
-  comm_init(c, &seg);
+  comm_dup(c, &seg);
   comm_free(&seg);
 }
 
@@ -254,7 +320,7 @@ int findUniqueVertices(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
   int nDim = mesh->nDim;
 
   struct comm seg;
-  comm_init(&seg, c);
+  comm_dup(&seg, c);
 
   int t, d;
   for (t = 0; t < nDim; t++) {
@@ -266,7 +332,7 @@ int findUniqueVertices(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
       if (c->id == 0)
         printf("\tlocglob: %d %d %lld\n", t + 1, d + 1, n_seg);
 
-      rearrangeSegments(mesh, &seg);
+      rearrangeSegments(mesh, &seg, bfr);
     }
   }
 
