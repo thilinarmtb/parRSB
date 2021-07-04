@@ -4,13 +4,15 @@
 #include <gencon-impl.h>
 #include <sort.h>
 
-static void initSegments(Mesh mesh, struct comm *c) {
+static void initSegment(Mesh mesh, struct comm *c) {
   uint nPoints = mesh->elements.n;
   Point points = mesh->elements.ptr;
 
   uint i;
-  for (i = 0; i < nPoints; i++)
+  for (i = 0; i < nPoints; i++) {
     points[i].ifSegment = 0;
+    points[i].globalId = 1;
+  }
 
   /* First rank with nPoints > 0 set ifSegment = 1 */
   sint rank = c->id;
@@ -24,7 +26,7 @@ static void initSegments(Mesh mesh, struct comm *c) {
     points[0].ifSegment = 1;
 }
 
-static int sendLastElement(struct array *arr, Mesh mesh, struct comm *c) {
+static int sendLastPoint(struct array *arr, Mesh mesh, struct comm *c) {
   Point pts = mesh->elements.ptr;
   sint npts = mesh->elements.n;
 
@@ -43,49 +45,29 @@ static int sendLastElement(struct array *arr, Mesh mesh, struct comm *c) {
 }
 
 static int sortSegments(Mesh mesh, struct comm *c, int dim, buffer *bfr) {
-  /* Parallel sort: first by globalId then by x[dim] */
-  switch (dim) {
-  case 0:
-    parallel_sort_2(struct Point_private, &mesh->elements, globalId, 1, x[0],
-                    gs_scalar, bin_sort, 1, c, bfr);
-    break;
-  case 1:
-    parallel_sort_2(struct Point_private, &mesh->elements, globalId, 1, x[1],
-                    gs_scalar, bin_sort, 1, c, bfr);
-    break;
-  case 2:
-    parallel_sort_2(struct Point_private, &mesh->elements, globalId, 1, x[2],
-                    gs_scalar, bin_sort, 1, c, bfr);
-    break;
-  default:
-    break;
+  if (c->np > 1) {
+    /* Parallel sort -- we haven't localized the problem yet */
+    switch (dim) {
+    case 0:
+      parallel_sort(struct Point_private, &mesh->elements, x[0], gs_scalar,
+                    bin_sort, 1, c, bfr);
+      break;
+    case 1:
+      parallel_sort(struct Point_private, &mesh->elements, x[1], gs_scalar,
+                    bin_sort, 1, c, bfr);
+      break;
+    case 2:
+      parallel_sort(struct Point_private, &mesh->elements, x[2], gs_scalar,
+                    bin_sort, 1, c, bfr);
+      break;
+    default:
+      break;
+    }
+
+    initSegment(mesh, c);
+  } else {
+    /* Local sort: Segments are local */
   }
-
-  /* Identify the starting points of segments after sort */
-  struct Point_private *pnt = mesh->elements.ptr;
-  pnt->ifSegment = 1;
-
-  struct array arr;
-  sendLastElement(&arr, mesh, c);
-
-  if (c->id > 0) {
-    struct Point_private *pnt1 = arr.ptr;
-    if (pnt->globalId == pnt1->globalId)
-      pnt->ifSegment = 0;
-  }
-
-  uint npts = mesh->elements.n;
-  ulong prev = pnt[0].globalId;
-  uint i;
-  for (i = 1; i < npts; i++) {
-    if (pnt[i].globalId != prev) {
-      pnt[i].ifSegment = 1;
-      prev = pnt[i].globalId;
-    } else
-      pnt[i].ifSegment = 0;
-  }
-
-  array_free(&arr);
 
   return 0;
 }
@@ -107,7 +89,7 @@ static int findSegments(Mesh mesh, struct comm *c, int i,
   }
 
   struct array arr;
-  sendLastElement(&arr, mesh, c);
+  sendLastPoint(&arr, mesh, c);
 
   if (c->id > 0) {
     struct Point_private *lastp = arr.ptr;
@@ -167,38 +149,6 @@ static int mergeSegments(Mesh mesh, struct comm *c, buffer *bfr) {
 }
 #endif
 
-slong countSegments(Mesh mesh, int verbose, struct comm *c) {
-  uint nPoints = mesh->elements.n;
-  Point points = mesh->elements.ptr;
-
-  sint count = 0, i;
-  for (i = 0; i < nPoints; i++) {
-    if (points[i].ifSegment > 0) {
-      count++;
-      if (verbose > 0)
-        printf("nid = %d point = %.10e %.10e %.10e\n", c->id, points[i].x[0],
-               points[i].x[1], points[i].x[2]);
-    }
-  }
-
-  slong buf[2][1];
-  slong in = count;
-  comm_allreduce(c, gs_long, gs_add, &in, 1, buf);
-
-  return in;
-}
-
-static int findBin(Mesh mesh, struct comm *c) {
-  uint nPoints = mesh->elements.n;
-  Point points = mesh->elements.ptr;
-
-  slong buf[2][1], out[2][1];
-  sint in = (nPoints > 0) ? points[0].ifSegment : 0;
-  comm_scan(out, c, gs_int, gs_add, &in, 1, buf);
-
-  return out[0][0] + in;
-}
-
 int numberSegments(Mesh mesh, struct comm *c) {
   uint nPoints = mesh->elements.n;
   Point points = mesh->elements.ptr;
@@ -223,28 +173,72 @@ int numberSegments(Mesh mesh, struct comm *c) {
   return 0;
 }
 
+slong countSegments(Mesh mesh, struct comm *c) {
+  uint nPoints = mesh->elements.n;
+  Point points = mesh->elements.ptr;
+
+  sint count = 0, i;
+  for (i = 0; i < nPoints; i++) {
+    if (points[i].ifSegment > 0) {
+      count++;
+    }
+  }
+
+  slong buf[2][1];
+  slong in = count;
+  comm_allreduce(c, gs_long, gs_add, &in, 1, buf);
+
+  return in;
+}
+
+static int rearrangeSegments(Mesh mesh, struct comm *c) {
+  struct comm seg;
+  comm_init(&seg, c);
+
+  while (seg.np > 1 || countSegments(mesh, &seg) > 1) {
+    uint nPoints = mesh->elements.n;
+    Point points = mesh->elements.ptr;
+
+    /* comm_scan */
+
+    uint index;
+    double min = DBL_MAX;
+    uint i;
+    for (i = 0; i < nPoints; i++) {
+    }
+
+    /* split and transfer */
+  }
+
+  comm_free(c);
+  comm_init(c, &seg);
+  comm_free(&seg);
+}
+
 int findUniqueVertices(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
                        buffer *bfr) {
-  initSegments(mesh, c);
-
   GenmapScalar tolSquared = tol * tol;
   int nDim = mesh->nDim;
-  int merge = 1;
+
+  struct comm seg;
+  comm_init(&seg, c);
 
   int t, d;
   for (t = 0; t < nDim; t++) {
     for (d = 0; d < nDim; d++) {
+      sortSegments(mesh, &seg, d, bfr);
+      findSegments(mesh, &seg, d, tolSquared);
       numberSegments(mesh, c);
 
-      sortSegments(mesh, c, d, bfr);
-
-      findSegments(mesh, c, d, tolSquared);
-
-      slong n_seg = countSegments(mesh, t == 0 && d == 0, c);
+      slong n_seg = countSegments(mesh, c);
       if (c->id == 0)
         printf("\tlocglob: %d %d %lld\n", t + 1, d + 1, n_seg);
+
+      rearrangeSegments(mesh, &seg);
     }
   }
+
+  comm_free(&seg);
 
   return 0;
 }
