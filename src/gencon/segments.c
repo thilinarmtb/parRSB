@@ -44,7 +44,7 @@ static int sendLastPoint(struct array *arr, Mesh mesh, struct comm *c) {
   return 0;
 }
 
-static int sortSegmentsLocal(Mesh mesh, struct comm *c, int dim, buffer *bfr) {
+static int sortSegmentsLocal(Mesh mesh, int dim, buffer *bfr) {
   sint nPoints = mesh->elements.n;
   Point points = mesh->elements.ptr;
 
@@ -107,7 +107,7 @@ static int sortSegments(Mesh mesh, struct comm *c, int dim, buffer *bfr) {
     initSegment(mesh, c);
   } else {
     /* Local sort: Segments are local */
-    sortSegmentsLocal(mesh, c, dim, bfr);
+    sortSegmentsLocal(mesh, dim, bfr);
   }
 
   return 0;
@@ -147,7 +147,7 @@ static int findSegments(Mesh mesh, struct comm *c, int i,
   return 0;
 }
 
-slong countSegments(Mesh mesh, struct comm *c) {
+slong countSegments(Mesh mesh, int verbose, struct comm *c) {
   uint nPoints = mesh->elements.n;
   Point points = mesh->elements.ptr;
 
@@ -155,6 +155,8 @@ slong countSegments(Mesh mesh, struct comm *c) {
   for (i = 0; i < nPoints; i++) {
     if (points[i].ifSegment > 0) {
       count++;
+      if (verbose > 0)
+        printf("ifseg: %d %d\n", c->id, i);
     }
   }
 
@@ -183,6 +185,12 @@ static int setProc(Mesh mesh, sint rankg, uint index, int inc_proc,
   slong out[2][2], buf[2][2];
   comm_scan(out, c, gs_long, gs_add, size, 2, buf);
 
+#if 1
+  if (c->id == 0)
+    printf("size[0] = %lld, size[1] = %lld\n", out[1][0], out[1][1]);
+  fflush(stdout);
+#endif
+
   sint np[2] = {0};
   if (c->id < rankg)
     np[0] = 1;
@@ -195,6 +203,12 @@ static int setProc(Mesh mesh, sint rankg, uint index, int inc_proc,
 
   comm_allreduce(c, gs_int, gs_add, np, 2, buf);
 
+#if 1
+  if (c->id == 0)
+    printf("np[0] = %lld, np[1] = %lld\n", np[0], np[1]);
+  fflush(stdout);
+#endif
+
   sint low_size = (out[1][0] + np[0] - 1) / np[0];
   sint high_size = (out[1][1] + np[1] - 1) / np[1];
 
@@ -205,15 +219,18 @@ static int setProc(Mesh mesh, sint rankg, uint index, int inc_proc,
   }
 
   for (i = size[0]; i < size[0] + size[1]; i++) {
-    points[i].globalId = out[0][1] + i;
-    points[i].proc = np[0] + (out[0][1] + i) / high_size;
+    points[i].globalId = out[0][1] + i - size[0];
+    points[i].proc = np[0] + (out[0][1] + i - size[0]) / high_size;
   }
 
   return 0;
 }
 
 static int rearrangeSegments(Mesh mesh, struct comm *seg, buffer *bfr) {
-  while (seg->np > 1 && countSegments(mesh, seg) > 1) {
+  struct comm c;
+  comm_dup(&c, seg);
+
+  while (seg->np > 1 && countSegments(mesh, 0, seg) > 1) {
     uint nPoints = mesh->elements.n;
     Point points = mesh->elements.ptr;
 
@@ -262,11 +279,23 @@ static int rearrangeSegments(Mesh mesh, struct comm *seg, buffer *bfr) {
 
     setProc(mesh, rankg, index, inc_proc, seg);
 
+#if 0
+    if (seg->id == rankg)
+      printf("id: %d index: %u gid: %lld\n", rankg, index,
+             points[index].globalId);
+    fflush(stdout);
+#endif
+
     int bin = 1;
     if (seg->id < rankg)
       bin = 0;
     if (seg->id == rankg && inc_proc == 1)
       bin = 0;
+
+    struct crystal cr;
+    crystal_init(&cr, seg);
+    sarray_transfer(struct Point_private, &mesh->elements, proc, 0, &cr);
+    crystal_free(&cr);
 
     struct comm new;
     genmap_comm_split(seg, bin, seg->id, &new);
@@ -274,14 +303,28 @@ static int rearrangeSegments(Mesh mesh, struct comm *seg, buffer *bfr) {
     comm_dup(seg, &new);
     comm_free(&new);
 
-    struct crystal cr;
-    crystal_init(&cr, seg);
-    sarray_transfer(struct Point_private, &mesh->elements, proc, 0, &cr);
-    crystal_free(&cr);
-
     parallel_sort(struct Point_private, &mesh->elements, globalId, gs_long,
                   bin_sort, 1, seg, bfr);
+
+#if 0
+    Point pnt = mesh->elements.ptr;
+    printf("id: %d n: %u\n", c.id, mesh->elements.n);
+    fflush(stdout);
+    if (seg->id == 0)
+      printf("id: %d ifseg: %d gid: %lld\n", c.id, pnt[0].ifSegment,
+             pnt[0].globalId);
+    fflush(stdout);
+#endif
+
+#if 0
+      sarray_sort(struct Point_private, mesh->elements.ptr, mesh->elements.n,
+                  globalId, 1, bfr);
+#endif
   }
+
+  comm_barrier(&c);
+
+  comm_free(&c);
 
   return 0;
 }
@@ -302,11 +345,28 @@ int findUniqueVertices(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
       sortSegments(mesh, &seg, d, bfr);
       findSegments(mesh, &seg, d, tolSquared);
 
-      slong n_seg = countSegments(mesh, c);
+      slong n_pts = mesh->elements.n;
+      slong buf[2];
+      comm_allreduce(c, gs_long, gs_add, &n_pts, 1, buf);
+
+      slong n_seg = countSegments(mesh, 0, c);
       if (c->id == 0)
-        printf("\tlocglob: %d %d %lld\n", t + 1, d + 1, n_seg);
+        printf("locglob: %d %d %lld %u\n", t + 1, d + 1, n_seg, n_pts);
 
       rearrangeSegments(mesh, &seg, bfr);
+
+#if 0
+      n_seg = countSegments(mesh, 0, &seg);
+      n_pts = mesh->elements.n;
+      if (seg.id == 0) {
+        printf("\t%d %d locglob: %d %d %lld %u\n", seg.id, seg.np, t + 1,
+               d + 1, n_seg, n_pts);
+        Point pts = mesh->elements.ptr;
+        assert(pts[0].ifSegment == 1);
+     }
+#endif
+
+     comm_barrier(c);
     }
   }
 
