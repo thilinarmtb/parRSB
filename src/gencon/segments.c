@@ -147,7 +147,6 @@ static int mergeSegments(Mesh mesh, struct comm *c, buffer *bfr) {
 
   return 0;
 }
-#endif
 
 int numberSegments(Mesh mesh, struct comm *c) {
   uint nPoints = mesh->elements.n;
@@ -172,6 +171,7 @@ int numberSegments(Mesh mesh, struct comm *c) {
 
   return 0;
 }
+#endif
 
 slong countSegments(Mesh mesh, struct comm *c) {
   uint nPoints = mesh->elements.n;
@@ -200,14 +200,47 @@ static int rearrangeSegments(Mesh mesh, struct comm *c) {
     Point points = mesh->elements.ptr;
 
     /* comm_scan */
+    slong out[2][1], buf[2][1], in[1];
+    in[0] = nPoints;
+    comm_scan(out, c, gs_long, gs_add, in, 1, buf);
+    slong start = out[0][0];
+    slong nelg = out[1][0];
 
-    uint index;
     double min = DBL_MAX;
-    uint i;
+    int inc_proc;
+
+    uint i, index;
     for (i = 0; i < nPoints; i++) {
+      if (points[i].ifSegment > 0) {
+        double frac0 = fabs((start + i)/nelg - (c->id + 0.0)/c->np);
+        double frac1 = fabs((start + i)/nelg - (c->id + 1.0)/c->np);
+        if (frac0 < min) {
+          inc_proc = 0;
+          min = frac0;
+          index = i;
+        }
+        if (frac1 < min) {
+          inc_proc = 1;
+          min = frac1;
+          index = i;
+        }
+      }
     }
 
-    /* split and transfer */
+    double dbuf[2];
+    double ming = min;
+    comm_allreduce(c, gs_double, gs_min, &ming, 1, dbuf);
+
+    sint rankg = -1;
+    if (fabs(ming - min) < 1e-15)
+      rankg = c->id + inc_proc;
+    comm_allreduce(c, gs_int, gs_max, &rankg, 1, buf);
+
+    int bin = 1;
+    if (c->id < rankg)
+      bin = 0;
+
+    /* Transfer and split */
   }
 
   comm_free(c);
@@ -228,7 +261,6 @@ int findUniqueVertices(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
     for (d = 0; d < nDim; d++) {
       sortSegments(mesh, &seg, d, bfr);
       findSegments(mesh, &seg, d, tolSquared);
-      numberSegments(mesh, c);
 
       slong n_seg = countSegments(mesh, c);
       if (c->id == 0)
