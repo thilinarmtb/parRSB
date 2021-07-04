@@ -51,38 +51,38 @@ static int sortSegments(Mesh mesh, struct comm *c, int dim, buffer *bfr) {
   sint s = 0, e;
   while (s < nPoints) {
     // find the length of the segment
-         for (e = s + 1; e < nPoints && points[e].ifSegment == 0; e++)
-               ;
-    
-                   // sort start to end based on dim
-                       switch (dim) {
-                           case 0:
-                                 sarray_sort(struct Point_private, &points[s], e - s, x[0], 3, bfr);
-                                       break;
-                                           case 1:
-                                                 sarray_sort(struct Point_private, &points[s], e - s, x[1], 3, bfr);
-                                                       break;
-                                                           case 2:
-                                                                 sarray_sort(struct Point_private, &points[s], e - s, x[2], 3, bfr);
-                                                                       break;
-                                                                           default:
-                                                                                 break;
-                                                                                     }
-    
-                                                                                         sint i, sum = 0;
-                                                                                             for (i = s; i < e; i++) {
-                                                                                                   sum += points[i].ifSegment;
-                                                                                                         points[i].ifSegment = 0;
-                                                                                                             }
-    
-                                                                                                                 if (sum > 0)
-                                                                                                                       points[s].ifSegment = 1;
-    
-                                                                                                                           s = e;
-                                                                                                                             }
-    
-                                                                                                                               return 0;
-                                                                                                                               }
+    for (e = s + 1; e < nPoints && points[e].ifSegment == 0; e++)
+      ;
+
+    // sort start to end based on dim
+    switch (dim) {
+    case 0:
+      sarray_sort(struct Point_private, &points[s], e - s, x[0], 3, bfr);
+      break;
+    case 1:
+      sarray_sort(struct Point_private, &points[s], e - s, x[1], 3, bfr);
+      break;
+    case 2:
+      sarray_sort(struct Point_private, &points[s], e - s, x[2], 3, bfr);
+      break;
+    default:
+      break;
+    }
+
+    sint i, sum = 0;
+    for (i = s; i < e; i++) {
+      sum += points[i].ifSegment;
+      points[i].ifSegment = 0;
+    }
+
+    if (sum > 0)
+      points[s].ifSegment = 1;
+
+    s = e;
+  }
+
+  return 0;
+}
 
 static int sortSegments(Mesh mesh, struct comm *c, int dim, buffer *bfr) {
   if (c->np > 1) {
