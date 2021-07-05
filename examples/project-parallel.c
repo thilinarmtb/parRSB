@@ -17,7 +17,7 @@ static int project_ilu(genmap_handle h, unsigned int lelt) {
 
   uint i;
   for (i = 0; i < lelt; i++)
-    //init->data[i] = out[0][0] + i + 1;
+    // init->data[i] = out[0][0] + i + 1;
     init->data[i] = h->M->row_id[i];
 
   genmap_vector_ortho_one(gc, init, out[1][0]);

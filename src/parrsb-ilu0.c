@@ -175,7 +175,8 @@ static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
   uint start = lvl_off[lvl + 1];
   uint end = lvl_off[lvl];
 
-  //printf("nlevels = %d lvl = %d start = %u end = %u\n", nlevels, lvl, start, end);
+  // printf("nlevels = %d lvl = %d start = %u end = %u\n", nlevels, lvl, start,
+  // end);
 
   ii = start;
   if (lvl == nlevels - 1)
@@ -216,7 +217,7 @@ static int ilu0_aux(struct csr_mat_ *M, unsigned int nlevels,
                     unsigned int *level_off, MPI_Comm *comms, buffer *buf) {
   struct comm cc;
   comm_init(&cc, comms[0]);
-  //csr_mat_print(M, &cc);
+  // csr_mat_print(M, &cc);
 
   sint i = nlevels - 1;
   ilu0_level(M, NULL, i, nlevels, level_off);
@@ -248,7 +249,7 @@ static int ilu0_aux(struct csr_mat_ *M, unsigned int nlevels,
     comm_free(&c);
   }
 
-  //csr_mat_print(M, &cc);
+  // csr_mat_print(M, &cc);
   comm_free(&cc);
 
   return 0;
