@@ -116,7 +116,7 @@ int parRSB_findConnectivity(long long *vertexid, double *coord, int nelt,
   comm_allreduce(&c, gs_int, gs_max, &err, 1, &buf);
   check_error(err);
 
-  // Copy output
+  /* Copy output */
   Point ptr = mesh->elements.ptr;
   for (i = 0; i < nelt * nvertex; i++)
     vertexid[i] = ptr[i].globalId + 1;

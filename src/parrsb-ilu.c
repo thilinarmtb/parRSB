@@ -1,265 +1,297 @@
+#include <parRSB.h>
 #include <stdio.h>
 
 #include <genmap-impl.h>
 #include <genmap-sort.h>
 
-#include <parRSB.h>
+static int number_elements_aux(uint **level_off_, sint nlevel, uint nelt,
+                               struct rsb_element *elems, struct comm *gc) {
 
-struct row_info {
-  ulong gid;
-  uint dest;
-  uint owner;
-  uint proc;
-};
+  sint bfr;
+  comm_allreduce(gc, gs_int, gs_max, &nlevel, 1, &bfr);
 
-struct csr_entry {
-  ulong r, c;
-  uint proc;
-  GenmapScalar v;
-};
+  slong *start = tcalloc(slong, nlevel);
+  sint e;
+  for (e = 0; e < nelt; e++)
+    start[elems[e].level]++;
 
-/* TODO: Do a binary search */
-static int find_gid(ulong id, ulong *gid, uint n) {
+  uint *level_off = *level_off_ = tcalloc(uint, nlevel + 1);
+  slong current = 0;
+  for (e = nlevel - 1; e >= 0; e--) {
+    current += start[e];
+    level_off[e + 1] = current - start[e];
+  }
+  level_off[0] = current;
+
+  slong *out = tcalloc(slong, 2 * nlevel);
+  slong *buf = tcalloc(slong, 2 * nlevel);
+  comm_scan(out, gc, gs_long, gs_add, start, nlevel, buf);
+
+  current = 0;
+  for (e = 2 * nlevel - 1; e >= nlevel; e--) {
+    current += out[e];
+    out[e] = current - out[e];
+  }
+
+  for (e = 0; e < nelt; e++)
+    elems[e].globalId = ++out[elems[e].level] + out[nlevel + elems[e].level];
+
+  free(start);
+  free(out);
+  free(buf);
+
+  return 0;
+}
+
+static slong id_separator_levels(int level, uint nelt, int nv,
+                                 struct rsb_element *elems, int bin,
+                                 struct comm *lc, buffer *buf,
+                                 struct comm *gc) {
+  sint np = lc->np;
+  sint id = lc->id;
+
+  if (lc->np == 1)
+    return 0;
+
+  uint n = nelt * nv;
+  slong *ids = tcalloc(slong, n);
+  sint *interface = tcalloc(sint, n);
+
+  uint e;
+  int v;
+  for (e = 0; e < nelt; e++)
+    for (v = 0; v < nv; v++)
+      ids[e * nv + v] = elems[e].vertices[v];
+
+  struct gs_data *gsh = gs_setup(ids, n, lc, 0, gs_pairwise, 0);
+
+  if (bin == 0) {
+    for (e = 0; e < nelt; e++) {
+      if (elems[e].level < 0)
+        for (v = 0; v < nv; v++)
+          interface[e * nv + v] = 1;
+      else
+        for (v = 0; v < nv; v++)
+          interface[e * nv + v] = 0;
+    }
+  } else {
+    for (e = 0; e < n; e++)
+      interface[e] = 0;
+  }
+
+  gs(interface, gs_int, gs_add, 0, gsh, buf);
+
+  if (bin == 1) {
+    for (e = 0; e < nelt; e++) {
+      if (elems[e].level < 0) { /* Not numbered before */
+        for (v = 0; v < nv; v++)
+          if (interface[e * nv + v] > 0) {
+            elems[e].level = level;
+            break;
+          }
+      } else { /* Previously numbered */
+        for (v = 0; v < nv; v++)
+          interface[e * nv + v] = 0;
+      }
+    }
+  } else {
+    for (e = 0; e < n; e++)
+      interface[e] = 0;
+  }
+
+  gs(interface, gs_int, gs_add, 0, gsh, buf);
+
+  if (bin == 0) {
+    for (e = 0; e < nelt; e++) {
+      if (elems[e].level < 0) { /* Not numbered before */
+        for (v = 0; v < nv; v++)
+          if (interface[e * nv + v] > 0) {
+            elems[e].level = level;
+            break;
+          }
+      }
+    }
+  }
+
+  gs_free(gsh);
+  free(ids);
+  free(interface);
+}
+
+static int number_elements(MPI_Comm **comms_, uint **level_off,
+                           genmap_handle h) {
+  int max_iter = 50;
+  int max_pass = 50;
+
+  struct comm *lc = h->local;
+  struct comm *gc = h->global;
+
+  genmap_number_faces_and_edges(h, gc);
+  genmap_comm_scan(h, gc);
+
+  struct rsb_element *e = genmap_get_elements(h);
+  uint nelt = genmap_get_nel(h);
+
+  int nv = h->nv;
+  int ndim = (nv == 8) ? 3 : 2;
+  int level = 0;
+
+  int nlevels = log2(gc->np) + 2;
+  MPI_Comm *comms = *comms_ = tcalloc(MPI_Comm, nlevels);
+
+  while (lc->np > 1) {
+    /* Run RCB, RIB pre-step or just sort by global id */
+    if (h->options->rsb_prepartition == 1) // RCB
+      rcb(lc, h->elements, ndim, &h->buf);
+    else if (h->options->rsb_prepartition == 2) // RIB
+      rib(lc, h->elements, ndim, &h->buf);
+
+    /* Run fiedler */
+    int ipass = 0, iter;
+    do {
+      genmap_vector ivec;
+      genmap_init_vector(&ivec, ipass == 0, lc, h);
+
+      GenmapFiedler(h, lc, max_iter, ivec);
+
+      genmap_destroy_vector(ivec);
+    } while (++ipass < max_pass && iter == max_iter);
+
+    /* Sort by Fiedler vector */
+    parallel_sort(struct rsb_element, h->elements, fiedler, gs_double, 0, 1, lc,
+                  &h->buf);
+
+    /* Bisect */
+    int bin = 1;
+    if (lc->id < (lc->np + 1) / 2)
+      bin = 0;
+    repair_partitions(h, bin, level, lc, gc);
+
+    nelt = genmap_get_nel(h);
+    e = genmap_get_elements(h);
+    id_separator_levels(level, nelt, nv, e, bin, lc, &h->buf, gc);
+
+    MPI_Comm_dup(lc->c, &comms[level]);
+
+    struct comm tc;
+    genmap_comm_split(lc, bin, lc->id, &tc);
+    comm_free(lc);
+    comm_dup(lc, &tc);
+    comm_free(&tc);
+
+    genmap_comm_scan(h, lc);
+
+    level++;
+  }
+  MPI_Comm_dup(lc->c, &comms[level]);
+
+  e = genmap_get_elements(h);
+  nelt = genmap_get_nel(h);
   uint i;
-  for (i = 0; i < n; i++)
-    if (gid[i] == id)
-      return 1;
+  for (i = 0; i < nelt; i++) {
+    e[i].globalId = 0;
+    if (e[i].level < 0)
+      e[i].level = level;
+  }
 
-  return 0;
+  number_elements_aux(level_off, level + 1, nelt, e, gc);
+  return level + 1;
 }
 
-static struct array *find_outbound_rows(struct array *rows, int p, int level,
-                                        unsigned int *level_off,
-                                        struct csr_mat_ *M, struct comm *c,
-                                        buffer *buf) {
-  uint rn = M->rn;
-  ulong *col = M->col;
-
-  struct array rows_aux;
-  array_init(struct row_info, &rows_aux, 10);
-
-  struct row_info ri;
-  ri.dest = c->id;
-
-  uint s = level_off[level + 1];
-  uint e = level_off[level];
-
-  uint i, j;
-  for (i = s; i < e; i++) {
-    ulong id = M->row_id[i];
-    for (j = M->row_off[i]; j < M->row_off[i + 1] && col[j] <= id; j++) {
-      ri.gid = col[j];
-      ri.proc = col[j] % c->np;
-      ri.owner = find_gid(col[j], M->row_id, rn);
-      array_cat(struct row_info, &rows_aux, &ri, 1);
-    }
-  }
-
-  /* Remove local duplicates in rows_aux */
-  uint n = rows_aux.n;
-  array_init(struct row_info, rows, n);
-  if (n > 0) {
-    sarray_sort(struct row_info, rows_aux.ptr, rows_aux.n, gid, 1, buf);
-
-    struct row_info *ptr = rows_aux.ptr;
-    array_cat(struct row_info, rows, &ptr[0], 1);
-    slong cur_gid = ptr[0].gid;
-
-    for (i = 1; i < rows_aux.n; i++) {
-      if (ptr[i].gid != cur_gid) {
-        array_cat(struct row_info, rows, &ptr[i], 1);
-        cur_gid = ptr[i].gid;
-      }
-    }
-  }
-  array_free(&rows_aux);
+struct csr_mat_ *parrsb_numbering(unsigned int *nelt_, unsigned int *nlevels_,
+                                  unsigned int **level_off, MPI_Comm **comms,
+                                  long long *vl, double *coord, int nv,
+                                  MPI_Comm comm) {
+  struct comm c;
+  comm_init(&c, comm);
 
   struct crystal cr;
-  crystal_init(&cr, c);
-  sarray_transfer(struct row_info, rows, proc, 0, &cr);
-  n = rows->n;
+  crystal_init(&cr, &c);
 
-  if (n > 0) {
-    sarray_sort(struct row_info, rows->ptr, n, gid, 1, buf);
-    struct row_info *ptr = rows->ptr;
+  buffer bfr;
+  buffer_init(&bfr, 1024);
 
-    uint cur_idx = 0;
-    slong cur_gid = ptr[0].gid;
-    sint cur_owner = ptr[0].owner > 0 ? ptr[0].dest : -1;
+  /* Load balance input data */
+  uint nelt = *nelt_;
+  struct array elems;
+  genmap_load_balance(&elems, nelt, nv, coord, vl, &cr, &bfr);
 
-    for (i = 1; i < n; i++) {
-      if (ptr[i].gid != cur_gid) {
-        assert(cur_owner >= 0);
-        for (j = cur_idx; j < i; j++)
-          ptr[j].proc = cur_owner;
-        cur_gid = ptr[i].gid;
-        cur_idx = i;
-        cur_owner = -1;
-      }
-      if (ptr[i].owner > 0)
-        cur_owner = ptr[i].dest;
-    }
-    assert(cur_owner >= 0);
-    for (j = cur_idx; j < n; j++)
-      ptr[j].proc = cur_owner;
-  }
+  /* FIXME: If MG, we need both CSR and gs implementation now */
+  parRSB_options options = parrsb_default_options;
+  options.rsb_laplacian_implementation = 2;
 
-  sarray_transfer(struct row_info, rows, proc, 0, &cr);
-  n = rows->n;
+  genmap_handle h;
+  genmap_init(&h, comm, &options);
 
-  array_init(struct row_info, &rows_aux, n);
-  array_cat(struct row_info, &rows_aux, rows->ptr, n);
-  array_free(rows);
-  array_init(struct row_info, rows, 10);
+  genmap_set_elements(h, &elems);
+  genmap_set_nvertices(h, nv);
+  genmap_comm_scan(h, genmap_global_comm(h));
 
-  /* Get rid of sends to own processor */
-  if (n > 0) {
-    struct row_info *ptr = rows_aux.ptr;
-    for (i = 0; i < n; i++) {
-      if (ptr[i].dest == p)
-        array_cat(struct row_info, rows, &ptr[i], 1);
-    }
-  }
+  int nlevels = *nlevels_ = number_elements(comms, level_off, h);
+  nelt = *nelt_ = genmap_get_nel(h);
 
-  array_free(&rows_aux);
+  /* TODO get rid of gid */
+  ulong *gid = tcalloc(ulong, nelt);
+  struct rsb_element *e = genmap_get_elements(h);
+  uint i;
+  for (i = 0; i < nelt; i++)
+    gid[i] = e[i].globalId;
+
+  struct csr_mat_ *M = NULL;
+  genmap_laplacian_csr_init(&M, gid, h, &c);
+
+  free(gid);
+  genmap_finalize(h);
+  array_free(&elems);
+  buffer_free(&bfr);
   crystal_free(&cr);
+  comm_free(&c);
 
-  return rows;
+  return M;
 }
 
-static int send_outbound_rows(struct array *entries, struct array *rows,
-                              struct csr_mat_ *M, struct comm *c, buffer *buf) {
-  sarray_sort_2(struct row_info, rows->ptr, rows->n, gid, 1, dest, 0, buf);
-  struct row_info *ptr = rows->ptr;
-  uint n = rows->n;
+genmap_handle parrsb_numbering_w_handle(unsigned int *nelt, long long *vl,
+                                        double *coord, int nv, MPI_Comm comm) {
+  parRSB_options options = parrsb_default_options;
+  options.rsb_laplacian_implementation = 2;
 
-  array_init(struct csr_entry, entries, 10);
+  genmap_handle h;
+  genmap_init(&h, comm, &options);
 
-  struct csr_entry t;
-  uint i, j, s;
-  for (i = s = 0; i < n; i++) {
-    ulong gid = ptr[i].gid;
-    while (s < M->rn && M->row_id[s] < gid)
-      s++;
-    assert(M->row_id[s] == gid);
-
-    t.r = gid;
-    t.proc = ptr[i].dest;
-    for (j = M->row_off[s]; j < M->row_off[s + 1]; j++) {
-      t.c = M->col[j];
-      t.v = M->v[j];
-      array_cat(struct csr_entry, entries, &t, 1);
-    }
-  }
+  struct comm c;
+  comm_init(&c, comm);
 
   struct crystal cr;
-  crystal_init(&cr, c);
-  sarray_transfer(struct csr_entry, entries, proc, 1, &cr);
+  crystal_init(&cr, &c);
+
+  buffer bfr;
+  buffer_init(&bfr, 1024);
+
+  struct array elems;
+  genmap_load_balance(&elems, *nelt, nv, coord, vl, &cr, &bfr);
+
+  genmap_set_elements(h, &elems);
+  genmap_set_nvertices(h, nv);
+
+  struct comm *gc = genmap_global_comm(h);
+  genmap_comm_scan(h, gc);
+
+  h->nlevels = number_elements(&h->comms, &h->level_off, h);
+
+  *nelt = genmap_get_nel(h);
+  ulong *gid = tcalloc(ulong, *nelt);
+  struct rsb_element *e = genmap_get_elements(h);
+  uint i;
+  for (i = 0; i < *nelt; i++)
+    gid[i] = e[i].globalId;
+
+  genmap_laplacian_csr_init(&h->M, gid, h, &c);
+
+  free(gid);
+  array_free(&elems);
+  buffer_free(&bfr);
   crystal_free(&cr);
+  comm_free(&c);
 
-  return 0;
-}
-
-static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
-                      int nlevels, unsigned int *lvl_off) {
-  const uint rn = M->rn;
-  assert(rn > 1);
-
-  const uint *off = M->row_off;
-  double *v = M->v;
-  const ulong *col = M->col;
-
-  double a_kk, a_kj, a_ik;
-  uint i, ii, j, k, kk, ik, ij;
-
-  uint start = lvl_off[lvl + 1];
-  uint end = lvl_off[lvl];
-
-  //printf("nlevels = %d lvl = %d start = %u end = %u\n", nlevels, lvl, start, end);
-
-  ii = start;
-  if (lvl == nlevels - 1)
-    ii = start + 1;
-
-  for (; ii < end; ii++) { /* Go over number of rows */
-    i = M->row_id[ii];
-
-    /* TODO: Only loop over non-zeros */
-    for (kk = M->row_off[ii]; kk < M->row_off[ii + 1] && M->col[kk] < i; kk++) {
-      k = M->col[kk];
-      if (csr_mat_get_global(&a_kk, NULL, M, k, k) != 0)
-        assert(csr_mat_get_global(&a_kk, NULL, N, k, k) == 0);
-      if (fabs(a_kk) < 1e-12)
-        continue;
-
-      assert(csr_mat_get_local(&a_ik, &ik, M, ii + 1, k) == 0);
-      if (fabs(a_ik) < 1e-12)
-        continue;
-
-      /* a_ik = a_ik / a_kk */
-      a_ik = v[ik] = v[ik] / a_kk;
-
-      /* a_ij = a_ij - a_ik * a_kj */
-      for (ij = ik + 1; ij < off[ii + 1]; ij++) { /* Go over the columns */
-        j = col[ij];
-        if (csr_mat_get_global(&a_kj, NULL, M, k, j) != 0)
-          assert(csr_mat_get_global(&a_kj, NULL, N, k, j) == 0);
-        v[ij] = v[ij] - a_ik * a_kj;
-      }
-    }
-  }
-
-  return 0;
-}
-
-static int ilu0_aux(struct csr_mat_ *M, unsigned int nlevels,
-                    unsigned int *level_off, MPI_Comm *comms, buffer *buf) {
-  struct comm cc;
-  comm_init(&cc, comms[0]);
-  //csr_mat_print(M, &cc);
-
-  sint i = nlevels - 1;
-  ilu0_level(M, NULL, i, nlevels, level_off);
-
-  for (i = nlevels - 2; i >= 0; i--) {
-    struct comm c;
-    comm_init(&c, comms[i]);
-
-    /* Do ILU serially among the processors in the current level */
-    int p;
-    for (p = 0; p < c.np; p++) {
-      /* Receive rows from other processors */
-      struct array entries, rows;
-      find_outbound_rows(&rows, p, i, level_off, M, &c, buf);
-      send_outbound_rows(&entries, &rows, M, &c, buf);
-
-      /* Do the local ilu */
-      if (c.id == p) {
-        struct csr_mat_ *N = NULL;
-        csr_mat_setup(&N, &entries, NULL, buf);
-        ilu0_level(M, N, i, nlevels, level_off);
-        csr_mat_free(N);
-      }
-
-      array_free(&entries);
-      array_free(&rows);
-    }
-
-    comm_free(&c);
-  }
-
-  //csr_mat_print(M, &cc);
-  comm_free(&cc);
-
-  return 0;
-}
-
-void parrsb_ilu0(unsigned int nlevels, unsigned int *level_off, MPI_Comm *comms,
-                 struct csr_mat_ *M) {
-  buffer buf;
-  buffer_init(&buf, 1024);
-
-  ilu0_aux(M, nlevels, level_off, comms, &buf);
-
-  buffer_free(&buf);
+  return h;
 }

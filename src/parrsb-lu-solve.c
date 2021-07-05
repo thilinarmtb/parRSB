@@ -278,8 +278,8 @@ static int fw_solve_level(double *y, struct csr_mat_ *A, double *b,
       // printf("level = %d row = %ld p = %d b[i] = %lf, v=%lf x = %lf y[i] = %lf\n",
       //        level, A->row_id[i], p, b[i], A->v[j], x, y[i]);
     }
-    printf("forward level = %d row = %ld p = %d b[i] = %lf, y[i] = %lf\n",
-           level, A->row_id[i], p, b[i], y[i]);
+    //printf("forward level = %d row = %ld p = %d b[i] = %lf, y[i] = %lf\n",
+    //       level, A->row_id[i], p, b[i], y[i]);
   }
 
   return 0;
@@ -302,8 +302,8 @@ static int bw_solve_level(double *x, struct csr_mat_ *A, double *y,
           A->v[j] * get_rhs(A->col[j], A->rn, A->row_id, x, entries, level, p);
     if (fabs(A->v[j] - 0) > 1e-12)
       x[i] /= A->v[j];
-    printf("backward level = %d row = %ld p = %d y[i] = %lf, x[i] = %lf\n",
-           level, A->row_id[i], p, y[i], x[i]);
+    //printf("backward level = %d row = %ld p = %d y[i] = %lf, x[i] = %lf\n",
+    //       level, A->row_id[i], p, y[i], x[i]);
   }
 
   return 0;
