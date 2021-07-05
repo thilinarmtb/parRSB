@@ -363,10 +363,10 @@ int findUniqueVertices(Mesh mesh, struct comm *c, GenmapScalar tol, int verbose,
                d + 1, n_seg, n_pts);
         Point pts = mesh->elements.ptr;
         assert(pts[0].ifSegment == 1);
-     }
+      }
 #endif
 
-     comm_barrier(c);
+      comm_barrier(c);
     }
   }
 
