@@ -7,7 +7,7 @@ int parallel_ilu_setup(genmap_handle h, struct comm *c,
   csr_mat_copy(d->M, h->M);
   d->h = h;
 
-  parrsb_ilu0(d->h->nlevels, d->h->level_off, d->h->comms, d->M);
+  parrsb_ilu0(d->h->nlevels, d->h->level_off, d->h->comms, d->M, h->global->c);
 
   return 0;
 }

@@ -6,11 +6,11 @@
 #define FNAME(x) x
 #endif
 
-#if defined(GENMAP_BLAS)
-
 #define FDGETRF FNAME(dgetrf)
-void dgetrf_(int *M, int *N, double *A, int *lda, int *IPIV, int *INFO);
 #define FDGETRI FNAME(dgetri)
+
+#if defined(GENMAP_BLAS)
+void dgetrf_(int *M, int *N, double *A, int *lda, int *IPIV, int *INFO);
 void dgetri_(int *N, double *A, int *lda, int *IPIV, double *WORK, int *lwork,
              int *INFO);
 
@@ -32,10 +32,11 @@ void matrix_inverse(int N, double *A) {
   free(ipiv);
   free(work);
 }
+#else
+void matrix_inverse(int N, double *A) {}
+#endif // GENMAP_BLAS
 
 #undef FDGETRF
 #undef FDGETRI
-
-#endif // GENMAP_BLAS
 
 #undef FNAME

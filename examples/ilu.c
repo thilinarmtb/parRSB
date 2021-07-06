@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
   struct csr_mat_ *R = parrsb_numbering(&nelt, &nlevels, &level_off, &comms, vl,
                                         coord, nv, MPI_COMM_WORLD);
 
-  parrsb_ilu0(nlevels, level_off, comms, R);
+  parrsb_ilu0(nlevels, level_off, comms, R, MPI_COMM_WORLD);
 
   if (comms != NULL) {
     int i;

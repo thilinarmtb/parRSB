@@ -54,7 +54,8 @@ static struct array *find_outbound_rows(struct array *rows, int p, int fw,
         ri.proc = col[j] % c->np;
         ri.owner = find_gid(col[j], M->row_id, rn);
         array_cat(struct row_info, &rows_aux, &ri, 1);
-        //printf("p = %d level = %d row = %ld id = %ld\n", p, level, id, col[j]);
+        // printf("p = %d level = %d row = %ld id = %ld\n", p, level, id,
+        // col[j]);
       }
     }
   else
@@ -66,7 +67,8 @@ static struct array *find_outbound_rows(struct array *rows, int p, int fw,
         ri.proc = col[j] % c->np;
         ri.owner = find_gid(col[j], M->row_id, rn);
         array_cat(struct row_info, &rows_aux, &ri, 1);
-        //printf("p = %d level = %d row = %ld id = %ld\n", p, level, id, col[j]);
+        // printf("p = %d level = %d row = %ld id = %ld\n", p, level, id,
+        // col[j]);
       }
     }
 
@@ -205,7 +207,8 @@ static void concat_outbound_rows(struct array *all, struct rhs_entry *ptr,
     ptr0[i].old = 1;
   for (i = 0; i < n; i++) {
     ptr[i].old = 0;
-    //printf("p = %d level = %d r = %ld, v = %lf\n", p, level, ptr[i].r, ptr[i].v);
+    // printf("p = %d level = %d r = %ld, v = %lf\n", p, level, ptr[i].r,
+    // ptr[i].v);
   }
 
   struct array temp;
@@ -275,11 +278,12 @@ static int fw_solve_level(double *y, struct csr_mat_ *A, double *b,
          j++) {
       double x = get_rhs(A->col[j], A->rn, A->row_id, y, entries, level, p);
       y[i] -= A->v[j] * x;
-      // printf("level = %d row = %ld p = %d b[i] = %lf, v=%lf x = %lf y[i] = %lf\n",
+      // printf("level = %d row = %ld p = %d b[i] = %lf, v=%lf x = %lf y[i] =
+      // %lf\n",
       //        level, A->row_id[i], p, b[i], A->v[j], x, y[i]);
     }
-    printf("forward level = %d row = %ld p = %d b[i] = %lf, y[i] = %lf\n",
-           level, A->row_id[i], p, b[i], y[i]);
+    // printf("forward level = %d row = %ld p = %d b[i] = %lf, y[i] = %lf\n",
+    //        level, A->row_id[i], p, b[i], y[i]);
   }
 
   return 0;
@@ -302,8 +306,8 @@ static int bw_solve_level(double *x, struct csr_mat_ *A, double *y,
           A->v[j] * get_rhs(A->col[j], A->rn, A->row_id, x, entries, level, p);
     if (fabs(A->v[j] - 0) > 1e-12)
       x[i] /= A->v[j];
-    printf("backward level = %d row = %ld p = %d y[i] = %lf, x[i] = %lf\n",
-           level, A->row_id[i], p, y[i], x[i]);
+    // printf("backward level = %d row = %ld p = %d y[i] = %lf, x[i] = %lf\n",
+    //        level, A->row_id[i], p, y[i], x[i]);
   }
 
   return 0;

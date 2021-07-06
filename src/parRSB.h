@@ -62,7 +62,7 @@ struct csr_mat_ *parrsb_numbering(unsigned int *nelt, unsigned int *nlevels,
                                   MPI_Comm comm);
 
 void parrsb_ilu0(unsigned int nlevels, unsigned int *level_off, MPI_Comm *comms,
-                 struct csr_mat_ *M);
+                 struct csr_mat_ *M, MPI_Comm world);
 
 void parrsb_lu_solve(double *x, struct csr_mat_ *M, double *b,
                      unsigned int nlevels, unsigned int *level_off,

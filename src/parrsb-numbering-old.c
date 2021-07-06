@@ -198,6 +198,7 @@ static int number_elements(MPI_Comm **comms_, uint **level_off,
   return level + 1;
 }
 
+#if 0
 struct csr_mat_ *parrsb_numbering(unsigned int *nelt_, unsigned int *nlevels_,
                                   unsigned int **level_off, MPI_Comm **comms,
                                   long long *vl, double *coord, int nv,
@@ -230,7 +231,6 @@ struct csr_mat_ *parrsb_numbering(unsigned int *nelt_, unsigned int *nlevels_,
   int nlevels = *nlevels_ = number_elements(comms, level_off, h);
   nelt = *nelt_ = genmap_get_nel(h);
 
-  /* TODO get rid of gid */
   ulong *gid = tcalloc(ulong, nelt);
   struct rsb_element *e = genmap_get_elements(h);
   uint i;
@@ -295,3 +295,4 @@ genmap_handle parrsb_numbering_w_handle(unsigned int *nelt, long long *vl,
 
   return h;
 }
+#endif
