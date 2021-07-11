@@ -1,194 +1,149 @@
-#include <math.h>
-#include <stdio.h>
-#include <time.h>
 #include <limits.h>
+#include <math.h>
 
 #include <genmap-impl.h>
 //
-//TODO: use a separate function to generate init vector
+// TODO: use a separate function to generate init vector
 //
-int GenmapFiedlerRQI(GenmapHandle h,GenmapComm c,int maxIter,int global)
-{
-  GenmapInt lelt = GenmapGetNLocalElements(h);
-  GenmapVector initVec; GenmapCreateVector(&initVec,lelt);
+int GenmapFiedlerRQI(genmap_handle h, struct comm *gsc, int max_iter,
+                     int global) {
+  GenmapInt lelt = genmap_get_nel(h);
+  genmap_vector initVec;
+  genmap_vector_create(&initVec, lelt);
 
-  GenmapElements elements = GenmapGetElements(h);
-
+  struct rsb_element *elements = genmap_get_elements(h);
   GenmapInt i;
-  if(global>0){
-#if defined(GENMAP_PAUL)
-    for(i = 0;  i < lelt; i++) {
-      initVec->data[i] = GenmapGetLocalStartIndex(h) + i + 1;
-    }
-#else
-    for(i = 0;  i < lelt; i++) {
-      initVec->data[i] = (GenmapScalar) elements[i].globalId;
-    }
-#endif
-  }else{
-    for(i = 0;  i < lelt; i++) {
+  if (global > 0) {
+    for (i = 0; i < lelt; i++)
+      initVec->data[i] = genmap_get_local_start_index(h) + i + 1;
+  } else {
+    for (i = 0; i < lelt; i++)
       initVec->data[i] = elements[i].fiedler;
-    }
   }
 
-  GenmapOrthogonalizebyOneVector(h,c,initVec,GenmapGetNGlobalElements(h));
-  GenmapScalar rtr=GenmapDotVector(initVec,initVec);
-  GenmapGop(c,&rtr,1,GENMAP_SCALAR,GENMAP_SUM);
-  GenmapScalar rni=1.0/sqrt(rtr);
-  GenmapScaleVector(initVec,initVec,rni);
- 
-  struct comm *gsc=&c->gsc;
+  genmap_vector_ortho_one(gsc, initVec, genmap_get_partition_nel(h));
 
-  metric_tic(gsc,LAPLACIANSETUP);
-  GenmapInitLaplacian(h,c);
-  metric_toc(gsc,LAPLACIANSETUP);
+  GenmapScalar norm = genmap_vector_dot(initVec, initVec), normi;
+  comm_allreduce(gsc, gs_double, gs_add, &norm, 1, &normi);
+  normi = 1.0 / sqrt(norm);
+  genmap_vector_scale(initVec, initVec, normi);
 
-  metric_tic(gsc,PRECONSETUP);
-  mgData d; mgSetup(c,c->M,&d); d->h=h;
-  metric_toc(gsc,PRECONSETUP);
+  metric_tic(gsc, LAPLACIANSETUP);
+  GenmapInitLaplacian(h, gsc);
+  metric_toc(gsc, LAPLACIANSETUP);
 
-  GenmapVector y; GenmapCreateZerosVector(&y,lelt);
-  metric_tic(gsc,RQI);
-  int iter=rqi(h,c,d,initVec,maxIter,0,y);
-  metric_toc(gsc,RQI);
+  metric_tic(gsc, PRECONDSETUP);
+  mgData d;
+  mgSetup(h, gsc, h->M, &d);
+  metric_toc(gsc, PRECONDSETUP);
+
+  genmap_vector y;
+  genmap_vector_create_zeros(&y, lelt);
+
+  metric_tic(gsc, RQI);
+  int iter = rqi(h, gsc, d, initVec, max_iter, y);
+  metric_toc(gsc, RQI);
+  metric_acc(NRQI, iter);
 
   mgFree(d);
 
-  GenmapScalar lNorm = 0;
-  for(i = 0; i < lelt; i++)
-    lNorm+=y->data[i]*y->data[i];
-  GenmapGop(c,&lNorm,1,GENMAP_SCALAR,GENMAP_SUM);
+  norm = 0;
+  for (i = 0; i < lelt; i++)
+    norm += y->data[i] * y->data[i];
+  comm_allreduce(gsc, gs_double, gs_add, &norm, 1, &normi);
 
-  GenmapScaleVector(y,y,1./sqrt(lNorm));
-  for(i = 0; i < lelt; i++)
-    elements[i].fiedler=y->data[i];
+  genmap_vector_scale(y, y, 1. / sqrt(norm));
+  for (i = 0; i < lelt; i++)
+    elements[i].fiedler = y->data[i];
 
   GenmapDestroyVector(y);
+  GenmapDestroyVector(initVec);
 
   return iter;
 }
 
-int GenmapFiedlerLanczos(GenmapHandle h,GenmapComm c,int maxIter,
-  int global)
-{
-  GenmapInt lelt = GenmapGetNLocalElements(h);
-  GenmapVector initVec, alphaVec, betaVec;
+int GenmapFiedlerLanczos(genmap_handle h, struct comm *gsc, int max_iter,
+                         int global) {
+  GenmapInt lelt = genmap_get_nel(h);
+  genmap_vector initVec, alphaVec, betaVec;
 
-  GenmapCreateVector(&initVec, GenmapGetNLocalElements(h));
-  GenmapElements elements = GenmapGetElements(h);
+  genmap_vector_create(&initVec, genmap_get_nel(h));
+  struct rsb_element *elements = genmap_get_elements(h);
 
   GenmapInt i;
-#if defined(GENMAP_PAUL)
-  if(global>0){
-    for(i = 0;  i < lelt; i++) {
-      initVec->data[i] = GenmapGetLocalStartIndex(h) + i + 1;
-    }
-  }else{
-    for(i = 0;  i < lelt; i++) {
+  if (global > 0) {
+    for (i = 0; i < lelt; i++)
+      initVec->data[i] = genmap_get_local_start_index(h) + i + 1;
+  } else {
+    for (i = 0; i < lelt; i++)
       initVec->data[i] = elements[i].fiedler;
-    }
   }
-#else
-  if(global>0){
-    for(i = 0;  i < lelt; i++) {
-      initVec->data[i] = (GenmapScalar) elements[i].globalId;
-    }
-  }else{
-    for(i = 0;  i < lelt; i++) {
-      initVec->data[i] = elements[i].fiedler;
-    }
-  }
-#endif
 
-  GenmapCreateVector(&alphaVec,maxIter);
-  GenmapCreateVector(&betaVec,maxIter-1);
-  GenmapVector *q = NULL;
+  genmap_vector_create(&alphaVec, max_iter);
+  genmap_vector_create(&betaVec, max_iter - 1);
+  genmap_vector *q = NULL;
 
-  GenmapOrthogonalizebyOneVector(h,c,initVec,GenmapGetNGlobalElements(h));
-  GenmapScalar rtr = GenmapDotVector(initVec, initVec);
-  GenmapGop(c, &rtr, 1, GENMAP_SCALAR, GENMAP_SUM);
-  GenmapScalar rni = 1.0 / sqrt(rtr);
-  GenmapScaleVector(initVec, initVec, rni);
+  genmap_vector_ortho_one(gsc, initVec, genmap_get_partition_nel(h));
+  GenmapScalar rtr = genmap_vector_dot(initVec, initVec), rni;
+  comm_allreduce(gsc, gs_double, gs_add, &rtr, 1, &rni);
+  rni = 1.0 / sqrt(rtr);
+  genmap_vector_scale(initVec, initVec, rni);
 
-#if defined(GENMAP_PAUL)
-  int iter=GenmapLanczosLegendary(h,c,initVec,maxIter,&q,
-    alphaVec,betaVec);
-#else
-  int iter=GenmapLanczos(h,c,initVec,maxIter,&q,alphaVec,betaVec);
-#endif
+  int iter;
+  metric_tic(gsc, LANCZOS);
+  iter =
+      GenmapLanczosLegendary(h, gsc, initVec, max_iter, &q, alphaVec, betaVec);
+  metric_toc(gsc, LANCZOS);
+  metric_acc(NLANCZOS, iter);
 
-  GenmapVector evLanczos, evTriDiag;
-  GenmapCreateVector(&evTriDiag, iter);
+  genmap_vector evLanczos, evTriDiag;
+  genmap_vector_create(&evTriDiag, iter);
 
-#if defined(GENMAP_PAUL)
   /* Use TQLI and find the minimum eigenvalue and associated vector */
-  GenmapVector *eVectors, eValues;
+  genmap_vector *eVectors, eValues;
+  metric_tic(gsc, TQLI);
   GenmapTQLI(h, alphaVec, betaVec, &eVectors, &eValues);
+  metric_toc(gsc, TQLI);
 
   GenmapScalar eValMin = fabs(eValues->data[0]);
   GenmapInt eValMinI = 0;
-  for(i = 1; i < iter; i++) {
-    if(fabs(eValues->data[i]) < eValMin) {
+  for (i = 1; i < iter; i++) {
+    if (fabs(eValues->data[i]) < eValMin) {
       eValMin = fabs(eValues->data[i]);
       eValMinI = i;
     }
   }
-  GenmapCopyVector(evTriDiag, eVectors[eValMinI]);
-#else
-  GenmapVector init;
-  GenmapCreateVector(&init, iter);
-  for(int i = 0; i < iter; i++) {
-    init->data[i] = i + 1.0;
-  }
-  GenmapScalar avg = 0.5 * iter * (1.0 + iter) / iter;
-  for(int i = 0; i < iter; i++) {
-    init->data[i] -= avg;
-  }
-  GenmapInvPowerIter(evTriDiag, alphaVec, betaVec, init, 100);
-  GenmapDestroyVector(init);
-#endif
+  genmap_vector_copy(evTriDiag, eVectors[eValMinI]);
 
   GenmapInt j;
-  GenmapCreateZerosVector(&evLanczos, lelt);
-  for(i = 0; i < lelt; i++) {
-    for(j = 0; j < iter; j++) {
+  genmap_vector_create_zeros(&evLanczos, lelt);
+  for (i = 0; i < lelt; i++) {
+    for (j = 0; j < iter; j++)
       evLanczos->data[i] += q[j]->data[i] * evTriDiag->data[j];
-    }
   }
 
-  GenmapScalar lNorm = 0;
-  for(i = 0; i < lelt; i++) {
-    lNorm += evLanczos->data[i] * evLanczos->data[i];
-  }
+  GenmapScalar norm = 0, normi;
+  for (i = 0; i < lelt; i++)
+    norm += evLanczos->data[i] * evLanczos->data[i];
 
-  GenmapGop(c, &lNorm, 1, GENMAP_SCALAR, GENMAP_SUM);
-  GenmapScaleVector(evLanczos, evLanczos, 1. / sqrt(lNorm));
-  for(i = 0; i < lelt; i++) {
+  comm_allreduce(gsc, gs_double, gs_add, &norm, 1, &normi);
+  genmap_vector_scale(evLanczos, evLanczos, 1. / sqrt(norm));
+  for (i = 0; i < lelt; i++)
     elements[i].fiedler = evLanczos->data[i];
-  }
 
   GenmapDestroyVector(initVec);
   GenmapDestroyVector(alphaVec);
   GenmapDestroyVector(betaVec);
   GenmapDestroyVector(evLanczos);
   GenmapDestroyVector(evTriDiag);
-#if defined(GENMAP_PAUL)
-  GenmapDestroyVector(eValues);
-  for(i = 0; i < iter; i++) {
-    GenmapDestroyVector(eVectors[i]);
-  }
-  GenmapFree(eVectors);
-#endif
 
-#if defined(GENMAP_PAUL)
-  for(i = 0; i < iter + 1; i++) {
+  GenmapDestroyVector(eValues);
+  for (i = 0; i < iter; i++)
+    GenmapDestroyVector(eVectors[i]);
+  GenmapFree(eVectors);
+
+  for (i = 0; i < iter + 1; i++)
     GenmapDestroyVector(q[i]);
-  }
-#else
-  for(i = 0; i < iter; i++) {
-    GenmapDestroyVector(q[i]);
-  }
-#endif
   GenmapFree(q);
 
   return iter;

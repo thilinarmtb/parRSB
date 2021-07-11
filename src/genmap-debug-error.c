@@ -36,10 +36,9 @@ double GenmapGetMaxRss() {
 #endif
 }
 
-int log2ll(long long n) {
-  int k = 0;
-  while (n > 1)
-    n /= 2, k++;
+void genmap_exit_error(genmap_handle h) {
+  genmap_comm c = genmap_global_comm(h);
+  int rank = genmap_comm_rank(c);
 
-  return k;
+  genmap_finalize(h);
 }

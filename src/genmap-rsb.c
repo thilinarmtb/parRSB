@@ -1,98 +1,114 @@
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <time.h>
-#include <limits.h>
 
 #include <genmap-impl.h>
+#include <sort.h>
 
-void GenmapRSB(GenmapHandle h,int verbose){
-  int maxIter=50;
-  int npass  =50;
+static int check_convergence(struct comm *gc, int max_pass, int max_iter) {
+  int max_levels = log2ll(gc->np);
 
-  GenmapInt i;
-  GenmapElements e = GenmapGetElements(h);
-  GenmapScan(h, GenmapGetLocalComm(h));
-  for(i = 0; i < GenmapGetNLocalElements(h); i++) {
-    e[i].globalId =GenmapGetLocalStartIndex(h)+i+1;
-    e[i].globalId0=GenmapGetLocalStartIndex(h)+i+1;
-  }
+  int i;
+  for (i = 0; i < max_levels; i++) {
+    sint converged = 1;
+    int val = (int)metric_get_value(i, NFIEDLER);
+    if (val >= max_pass * max_iter)
+      converged = 0;
 
-  GenmapComm global_c=GenmapGetGlobalComm(h);
-  GenmapComm local_c =GenmapGetLocalComm(h);
-  int rank=GenmapCommRank(global_c);
+    sint ibfr;
+    comm_allreduce(gc, gs_int, gs_min, &converged, 1, &ibfr);
 
-  if(rank == 0 && h->dbgLevel > 0)
-    printf("running RSB ");
-  fflush(stdout);
+    double dbfr;
+    double final = (double)metric_get_value(i, LANCZOSTOLFINAL);
+    comm_allreduce(gc, gs_double, gs_min, &final, 1, &dbfr);
 
-  crystal_init(&(h->cr), &(h->local->gsc));
-  buffer buf0 = null_buffer;
+    double target = (double)metric_get_value(i, LANCZOSTOLTARGET);
 
-  int nve =h->nv;
-  int ndim=(nve==8)?3:2;
-  int level=0;
-
-  metric_init(); // init metrics
-
-  while(GenmapCommSize(GenmapGetLocalComm(h)) > 1){
-    GenmapComm local_c=GenmapGetLocalComm(h);
-    struct comm *gsc=&local_c->gsc;
-    GenmapInt np=gsc->np;
-
-    metric_tic(gsc,RSB);
-
-#if defined(GENMAP_PAUL)
-    int global=1;
-#else
-    int global=(np==GenmapCommSize(GenmapGetGlobalComm(h)));
-#endif
-
-    int ipass=0,iter;
-    do{
-      metric_tic(gsc,FIEDLER);
-#if defined(GENMAP_LANCZOS)
-      iter=GenmapFiedlerLanczos(h,local_c,maxIter,global);
-#elif defined(GENMAP_RQI)
-      iter=GenmapFiedlerRQI(h,local_c,maxIter,global);
-#endif
-      metric_toc(gsc,FIEDLER);
-      metric_acc(NFIEDLER,iter);
-
-      global=0;
-    }while(++ipass<npass && iter==maxIter);
-
-    GenmapBinSort(h, GENMAP_FIEDLER, &buf0);
-    metric_toc(gsc,RSB);
-
-    GenmapInt id=GenmapCommRank(local_c);
-    int bin=1; if(id<(np+1)/2) bin=0;
-    GenmapSplitComm(h,&local_c,bin);
-    GenmapSetLocalComm(h,local_c);
-
-#if defined(GENMAP_PAUL)
-    GenmapBinSort(h,GENMAP_GLOBALID,&buf0);
-#endif
-
-    level++;
-    metric_push_level();
-  }
-
-  sint converged=1,buf;
-  for(i=0; i<metric_get_levels(); i++){
-    int val=(int)metric_get_value(i,NFIEDLER);
-    if(val>=npass*maxIter){
-      converged=0;
-      break;
+    if (converged == 0 && gc->id == 0) {
+      printf("\tWarning: Partitioner only reached a tolerance of %lf given %lf "
+             "after %d x %d iterations in Level=%d!\n",
+             final, target, max_pass, max_iter, i);
+      fflush(stdout);
     }
   }
-  comm_allreduce(&global_c->gsc,gs_int,gs_min,&converged,1,&buf);// min
-  if(converged==0 && GenmapCommRank(global_c)==0){
-    printf("WARNING: Lanczos failed to converge during partitioning!");
+}
+
+int genmap_rsb(genmap_handle h) {
+  int verbose = h->options->debug_level > 1;
+  int max_iter = 50;
+  int max_pass = 50;
+
+  struct comm *lc = h->local;
+  struct comm *gc = h->global;
+
+  genmap_comm_scan(h, lc);
+
+  uint nelt = genmap_get_nel(h);
+  struct rsb_element *e = genmap_get_elements(h);
+  GenmapInt i;
+  for (i = 0; i < nelt; i++)
+    e[i].globalId0 = genmap_get_local_start_index(h) + i + 1;
+
+  int nv = h->nv;
+  int ndim = (nv == 8) ? 3 : 2;
+
+  int np = gc->np;
+  int level = 0;
+
+  while ((np = lc->np) > 1) {
+    int global = 1;
+
+    /* Run RCB, RIB pre-step or just sort by global id */
+    if (h->options->rsb_prepartition == 1) { // RCB
+      metric_tic(lc, RCB);
+      rcb(lc, h->elements, ndim, &h->buf);
+      metric_toc(lc, RCB);
+    } else if (h->options->rsb_prepartition == 2) { // RIB
+      metric_tic(lc, RCB);
+      rib(lc, h->elements, ndim, &h->buf);
+      metric_toc(lc, RCB);
+    } else {
+      parallel_sort(struct rsb_element, h->elements, globalId0, gs_long, 0, 1,
+                    lc, &h->buf);
+    }
+
+    /* Initialize the laplacian */
+    metric_tic(lc, WEIGHTEDLAPLACIANSETUP);
+    GenmapInitLaplacianWeighted(h, lc);
+    metric_toc(lc, WEIGHTEDLAPLACIANSETUP);
+
+    /* Run fiedler */
+    metric_tic(lc, FIEDLER);
+    int ipass = 0, iter;
+    do {
+      if (h->options->rsb_algo == 0)
+        iter = GenmapFiedlerLanczos(h, lc, max_iter, global);
+      else if (h->options->rsb_algo == 1)
+        iter = GenmapFiedlerRQI(h, lc, max_iter, global);
+      metric_acc(NFIEDLER, iter);
+      global = 0;
+    } while (++ipass < max_pass && iter == max_iter);
+    metric_toc(lc, FIEDLER);
+
+    /* Sort by Fiedler vector */
+    metric_tic(lc, FIEDLERSORT);
+    parallel_sort(struct rsb_element, h->elements, fiedler, gs_double, 0, 1, lc,
+                  &h->buf);
+    metric_toc(lc, FIEDLERSORT);
+
+    /* Bisect */
+    double t = comm_time();
+    split_and_repair_partitions(h, lc, level, gc);
+    t = comm_time() - t;
+    metric_acc(BISECTANDREPAIR, t);
+
+    genmap_comm_scan(h, lc);
+    metric_push_level();
+    level++;
   }
 
-  //metric_print(&global_c->gsc);
-  metric_finalize();
+  check_convergence(gc, max_pass, max_iter);
 
-  crystal_free(&(h->cr));
-  buffer_free(&buf0);
+  return 0;
 }

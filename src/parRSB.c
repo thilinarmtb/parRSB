@@ -1,154 +1,148 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 #include <time.h>
 
 #include <genmap-impl.h>
 #include <parRSB.h>
 
-#define MAXNV 8 /* maximum number of vertices per element */
-typedef struct {
-  int proc;
-  GenmapLong id;
-  int part;
-  long long vtx[MAXNV];
-} elm_data;
+parRSB_options parrsb_default_options = {0, -1, 0, 0, 0, 1, 1};
 
-void fparRSB_partMesh(int *part,long long *vtx,int *nel,int *nve,
-  int *options,int *comm,int *err)
-{
+void fparRSB_partMesh(int *part, int *seq, long long *vtx, double *coord,
+                      int *nel, int *nv, int *options, int *comm, int *err) {
   *err = 1;
-  GenmapCommExternal c;
-  c = MPI_Comm_f2c(*comm);
-  *err = parRSB_partMesh(part, vtx, *nel, *nve, options, c);
+  comm_ext c = MPI_Comm_f2c(*comm);
+  // TODO: Convert int options to parRSB_options instead of default options
+  parRSB_options opt = parrsb_default_options;
+  *err = parRSB_partMesh(part, seq, vtx, coord, *nel, *nv, &opt, c);
 }
 
-int parRSB_partMesh(int *part,long long *vtx,int nel,int nve,
-  int *options,MPI_Comm comm)
-{
-  int rank,size;
-  MPI_Comm_rank(comm,&rank);
-  MPI_Comm_size(comm,&size);
+/*
+ * part = [nel], out,
+ * seq = [nel], out,
+ * vtx = [nel x nv], in,
+ * coord = [nel x nv x ndim], in,
+ * nel = in,
+ * nv = in,
+ * options = in/out */
+int parRSB_partMesh(int *part, int *seq, long long *vtx, double *coord, int nel,
+                    int nv, parRSB_options *options, MPI_Comm comm) {
+  struct comm c;
+  comm_init(&c, comm);
 
-  /* load balance input data */
-  GenmapLong nelg;
-  GenmapLong nell = nel;
-  MPI_Allreduce(&nell,&nelg,1,MPI_LONG_LONG_INT,MPI_SUM,comm);
-  GenmapLong nstar = nelg/size;
-  if(nstar == 0) nstar = 1;
+  int rank = c.id;
+  int size = c.np;
 
-  GenmapLong nelg_start;
-  MPI_Scan(&nell,&nelg_start,1,MPI_LONG_LONG_INT,MPI_SUM,comm);
-  nelg_start-=nel;
+  if (rank == 0)
+    printf("running parRSB ...\n");
+  fflush(stdout);
+
+  comm_barrier(&c);
+  double time0 = comm_time();
+
+  struct crystal cr;
+  crystal_init(&cr, &c);
+
+  buffer bfr;
+  buffer_init(&bfr, 1024);
 
   struct array eList;
-  elm_data *data;
 
-  array_init(elm_data,&eList,nel), eList.n=nel;
-  int e, n;
-  for(data=eList.ptr,e=0; e<nel; ++e) {
-    data[e].id=nelg_start+(e+1);
-    const GenmapLong eg=data[e].id;
+  /* Load balance input data */
+  genmap_load_balance(&eList, nel, nv, coord, vtx, &cr, &bfr);
 
-    data[e].proc=(int) ((eg-1)/nstar);
-    if(eg>size*nstar) data[e].proc= (eg%size)-1; 
+  double time1 = comm_time();
+  comm_barrier(&c);
+  double time2 = comm_time();
 
-    for(n=0; n<nve; ++n) {
-      data[e].vtx[n]=vtx[e*nve+n];
-    }
-  }
+  /* Run RSB now */
+  comm_ext comm_rsb;
+#ifdef MPI
+  MPI_Comm_split(c.c, nel > 0, rank, &comm_rsb);
+#endif
 
-  struct comm c; comm_init(&c,comm);
-  struct crystal cr; crystal_init(&cr,&c);
-  buffer buf; buffer_init(&buf, 1024);
+  // TODO: Move this into another file
+  if (nel > 0) {
+    metric_init();
 
-  sarray_transfer(elm_data,&eList,proc,1,&cr);
-  data=eList.ptr;
-  nel =eList.n;
+    genmap_handle h;
+    genmap_init(&h, comm_rsb, options);
 
-  sarray_sort(elm_data,data,(unsigned int)nel,id,TYPE_LONG,&buf);
+    genmap_set_elements(h, &eList);
+    genmap_comm_scan(h, genmap_global_comm(h));
+    genmap_set_nvertices(h, nv);
 
-  MPI_Comm commRSB;
-  MPI_Comm_split(comm, nel>0, rank, &commRSB);
+    GenmapLong nelg = genmap_get_partition_nel(h);
+    GenmapInt id = genmap_comm_rank(genmap_global_comm(h));
+    GenmapInt size_ = genmap_comm_size(genmap_global_comm(h));
 
-  if(nel>0) {
-    double time0 = comm_time();
-    GenmapHandle h;
-    GenmapInit(&h, commRSB);
-
-    if(options[0] != 0) {
-      h->dbgLevel = options[1];
-      h->printStat = options[2];
-    }
-
-    GenmapSetNLocalElements(h, (GenmapInt)nel);
-    GenmapScan(h, GenmapGetGlobalComm(h));
-    GenmapSetNVertices(h, nve);
-
-    GenmapLong nelg = GenmapGetNGlobalElements(h);
-    GenmapInt id = GenmapCommRank(GenmapGetGlobalComm(h));
-    GenmapInt size_ = GenmapCommSize(GenmapGetGlobalComm(h));
-    if((GenmapLong)size_ > nelg) {
-      if(id == 0)
+    if (size_ > nelg) {
+      if (id == 0) {
         printf("Total number of elements is smaller than the "
-          "number of processors.\n"
-          "Run with smaller number of processors.\n");
+               "number of processors.\n"
+               "Run with smaller number of processors.\n");
+      }
+      // This is wrong
       return 1;
     }
-    GenmapElements e = GenmapGetElements(h);
-    GenmapLong start = GenmapGetLocalStartIndex(h);
 
-    GenmapInt i, j;
-    for(i = 0; i < nel; i++) {
-      e[i].origin = id;
-      for(j = 0; j < nve; j++) {
-        e[i].vertices[j] = data[i].vtx[j];
-      }
+    switch (options->global_partitioner) {
+    case 0:
+      genmap_rsb(h);
+      break;
+    case 1:
+      genmap_rcb(h);
+      break;
+    case 2:
+      genmap_rib(h);
+      break;
+    default:
+      break;
     }
 
-    GenmapRSB(h,h->dbgLevel>1);
+    genmap_finalize(h);
 
-    e = GenmapGetElements(h);
-    for(j = 0; j < GenmapGetNLocalElements(h); j++) {
-      e[j].proc = GenmapCommRank(GenmapGetGlobalComm(h));
+    if (options->print_timing_info > 0)
+      metric_print(&c);
+    metric_finalize();
+  }
+
+#ifdef MPI
+  MPI_Comm_free(&comm_rsb);
+#endif
+
+  double time3 = comm_time();
+  comm_barrier(&c);
+  double time4 = comm_time();
+
+  genmap_restore_original(part, seq, &cr, &eList, &bfr);
+
+  double time5 = comm_time();
+  comm_barrier(&c);
+  double time = comm_time() - time0;
+
+  /* Report time and finish */
+  if (rank == 0)
+    printf(" finished in %g s\n", time);
+
+  if (options->print_timing_info > 0) {
+    double min[3], max[3], sum[3], buf[3];
+    min[0] = max[0] = sum[0] = time1 - time0;
+    min[1] = max[1] = sum[1] = time3 - time2;
+    min[2] = max[2] = sum[2] = time5 - time4;
+    comm_allreduce(&c, gs_double, gs_min, min, 3, buf); // min
+    comm_allreduce(&c, gs_double, gs_max, max, 3, buf); // max
+    comm_allreduce(&c, gs_double, gs_add, sum, 3, buf); // sum
+    if (rank == 0) {
+      printf("LOADBALANCE : %g/%g/%g\n", min[0], max[0], sum[0] / c.np);
+      printf("RSB         : %g/%g/%g\n", min[1], max[1], sum[1] / c.np);
+      printf("RESTORE     : %g/%g/%g\n", min[2], max[2], sum[2] / c.np);
     }
-
-    GenmapCrystalInit(h, GenmapGetGlobalComm(h));
-    GenmapCrystalTransfer(h, GENMAP_ORIGIN);
-    GenmapCrystalFinalize(h);
-
-    assert(GenmapGetNLocalElements(h) == nel);
-
-    e = GenmapGetElements(h);
-    sarray_sort(struct GenmapElement_private,e,(unsigned int)nel,globalId,
-                TYPE_LONG, &buf);
-
-    for(i = 0; i < nel; i++) {
-      data[i].part = e[i].proc;
-    }
-
-    if(id == 0 && h->dbgLevel > 0)
-      printf(" finished in %lfs\n", comm_time() - time0);
-
-    GenmapFinalize(h);
     fflush(stdout);
   }
 
-  MPI_Comm_free(&commRSB);
-
-  /* restore original input */
-  sarray_transfer(elm_data,&eList,proc,0,&cr);
-  data=eList.ptr;
-  nel =eList.n;
-  sarray_sort(elm_data,data,(unsigned int)nel,id,TYPE_LONG,&buf);
-  MPI_Barrier(comm);
-
-  for(e = 0; e < nel; e++) {
-    part[e]=data[e].part;
-  }
-
   array_free(&eList);
-  buffer_free(&buf);
+  buffer_free(&bfr);
   crystal_free(&cr);
   comm_free(&c);
 

@@ -1,44 +1,45 @@
+## General build parameters ##
 DEBUG ?= 0
-PAUL ?= 1
-CC ?= mpicc
-CFLAGS ?= -O2
-## ALGO=0 (Lanczos),1 (RQI),2 (FMG)
-ALGO ?= 0
 MPI ?= 1
+CC ?= mpicc
+CFLAGS ?= -g -O0
+UNDERSCORE ?= 1
+BLAS ?= 0
+BLASDIR ?=
+BLASFLAGS ?= -lblas -llapack
 
-MKFILEPATH =$(abspath $(lastword $(MAKEFILE_LIST)))
-SRCROOT_  ?=$(patsubst %/,%,$(dir $(MKFILEPATH)))
-SRCROOT    =$(realpath $(SRCROOT_))
+## Don't touch what follows ##
+MKFILEPATH = $(abspath $(lastword $(MAKEFILE_LIST)))
+SRCROOT_ ?= $(patsubst %/,%,$(dir $(MKFILEPATH)))
+SRCROOT = $(realpath $(SRCROOT_))
 
-GSLIBDIR=$(GSLIBPATH)
+BUILDDIR = $(SRCROOT)/build
 
-SRCDIR    =$(SRCROOT)/src
-SORTDIR   =$(SRCROOT)/src/sort
-PRECONDDIR=$(SRCROOT)/src/precond
-GENCONDIR =$(SRCROOT)/src/gencon
-BUILDDIR  =$(SRCROOT)/build
-EXAMPLEDIR=$(SRCROOT)/examples
-TESTDIR   =$(SRCROOT)/tests
+SRCDIR = $(SRCROOT)/src
+SRCS = $(wildcard $(SRCDIR)/*.c)
+SRCOBJS = $(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%.o,$(SRCS))
 
-TARGET=parRSB
-LIB=$(BUILDDIR)/lib/lib$(TARGET).a
+SORTDIR = $(SRCROOT)/src/sort
+SORTSRCS = $(wildcard $(SORTDIR)/*.c)
+SRCOBJS += $(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%.o,$(SORTSRCS))
 
-INCFLAGS=-I$(SRCDIR) -I$(SORTDIR) -I$(PRECONDDIR) -I$(GENCONDIR) -I$(GSLIBDIR)/include
-LDFLAGS:=-L$(BUILDDIR)/lib -l$(TARGET) -L $(GSLIBDIR)/lib -lgs -lm
+PRECONDDIR = $(SRCROOT)/src/precond
+PRECONDSRCS = $(wildcard $(PRECONDDIR)/*.c)
+SRCOBJS += $(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%.o,$(PRECONDSRCS))
 
-SRCS       =$(wildcard $(SRCDIR)/*.c)
-SORTSRCS   =$(wildcard $(SORTDIR)/*.c)
-PRECONDSRCS=$(wildcard $(PRECONDDIR)/*.c)
-GENCONSRCS =$(wildcard $(GENCONDIR)/*.c)
-TESTSRCS   =$(wildcard $(TESTDIR)/*.c)
-EXAMPLESRCS=$(wildcard $(EXAMPLEDIR)/*.c)
+GENCONDIR = $(SRCROOT)/src/gencon
+GENCONSRCS = $(wildcard $(GENCONDIR)/*.c)
+SRCOBJS += $(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%.o,$(GENCONSRCS))
 
-SRCOBJS =$(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%.o,$(SRCS))
-SRCOBJS+=$(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%.o,$(SORTSRCS))
-SRCOBJS+=$(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%.o,$(PRECONDSRCS))
-SRCOBJS+=$(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%.o,$(GENCONSRCS))
-TESTOBJS=$(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%,$(TESTSRCS))
-EXAMPLEOBJS=$(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%,$(EXAMPLESRCS))
+EXAMPLEDIR = $(SRCROOT)/examples
+EXAMPLESRCS = $(wildcard $(EXAMPLEDIR)/*.c)
+EXAMPLEOBJS = $(patsubst $(SRCROOT)/%.c,$(BUILDDIR)/%,$(EXAMPLESRCS))
+
+TARGET = parRSB
+LIB = $(BUILDDIR)/lib/lib$(TARGET).a
+
+INCFLAGS = -I$(SRCDIR) -I$(SORTDIR) -I$(PRECONDDIR) -I$(GENCONDIR) -I$(GSLIBPATH)/include
+LDFLAGS = -L$(BUILDDIR)/lib -l$(TARGET) -L$(GSLIBPATH)/lib -lgs -lm
 
 PP=
 
@@ -46,14 +47,16 @@ ifneq ($(DEBUG),0)
   PP += -g -DGENMAP_DEBUG
 endif
 
-ifeq ($(ALGO),0)
-  PP += -DGENMAP_LANCZOS
-else ifeq ($(ALGO),1)
-  PP += -DGENMAP_RQI
+ifneq ($(UNDERSCORE),0)
+  PP += -DGENMAP_UNDERSCORE
 endif
 
-ifneq ($(PAUL),0)
-  PP += -DGENMAP_PAUL
+ifneq ($(BLAS),0)
+  PP += -DGENMAP_BLAS
+  ifneq ($(BLASDIR),)
+    LDFLAGS+= -L$(BLASDIR)
+  endif
+  LDFLAGS += $(BLASFLAGS)
 endif
 
 ifneq ($(MPI),0)
@@ -62,14 +65,17 @@ endif
 
 INSTALLDIR=
 ifneq (,$(strip $(DESTDIR)))
-	INSTALLDIR=$(realpath $(DESTDIR))
+  INSTALLDIR = $(realpath $(DESTDIR))
 endif
 
-.PHONY: default
-default: check lib install
-
 .PHONY: all
-all: check lib tests examples install
+all: check lib examples install
+
+.PHONY: check
+check:
+ifeq ($(GSLIBPATH),)
+  $(error Specify GSLIBPATH=<path to gslib>/build)
+endif
 
 .PHONY: install
 install: lib
@@ -77,7 +83,8 @@ ifneq ($(INSTALLDIR),)
 	@mkdir -p $(INSTALLDIR)/lib 2>/dev/null
 	@cp -v $(LIB) $(INSTALLDIR)/lib 2>/dev/null
 	@mkdir -p $(INSTALLDIR)/include 2>/dev/null
-	@cp $(SRCDIR)/*.h $(SORTDIR)/*.h $(PRECONDDIR)/*.h $(INSTALLDIR)/include 2>/dev/null
+	@cp $(SRCDIR)/*.h $(SORTDIR)/*.h $(PRECONDDIR)/*.h \
+		$(INSTALLDIR)/include 2>/dev/null
 endif
 
 .PHONY: lib
@@ -85,12 +92,6 @@ lib: $(SRCOBJS)
 	@mkdir -p $(BUILDDIR)/lib
 	@$(AR) cr $(LIB) $(SRCOBJS)
 	@ranlib $(LIB)
-
-.PHONY: check
-check: 
-ifeq ($(GSLIBPATH),)
-  $(error Specify GSLIBPATH=<path to gslib>/build)
-endif
 
 $(BUILDDIR)/src/%.o: $(SRCROOT)/src/%.c
 	$(CC) $(CFLAGS) $(PP) $(INCFLAGS) -c $< -o $@
@@ -101,17 +102,13 @@ examples: install $(EXAMPLEOBJS)
 $(BUILDDIR)/examples/%: $(SRCROOT)/examples/%.c
 	$(CC) $(CFLAGS) $(PP) $(INCFLAGS) $< -o $@ $(LDFLAGS)
 
-.PHONY: tests
-tests: install $(TESTOBJS)
-	@cp $(TESTDIR)/run-tests.sh $(BUILDDIR)/tests/
-	@cd $(BUILDDIR)/tests && ./run-tests.sh
-
-$(BUILDDIR)/tests/%: $(SRCROOT)/tests/%.c
-	$(CC) $(CFLAGS) $(PP) $(INCFLAGS) $< -o $@ $(LDFLAGS)
-
 .PHONY: clean
 clean:
-	@rm -rf $(BUILDDIR) $(EXAMPLE) $(EXAMPLE).o
+	@rm -rf $(BUILDDIR)
+
+.PHONY: format
+format:
+	find . -iname *.h -o -iname *.c | xargs clang-format -i
 
 print-%:
 	$(info [ variable name]: $*)
@@ -124,5 +121,4 @@ print-%:
 $(shell mkdir -p $(BUILDDIR)/src/sort)
 $(shell mkdir -p $(BUILDDIR)/src/precond)
 $(shell mkdir -p $(BUILDDIR)/src/gencon)
-$(shell mkdir -p $(BUILDDIR)/tests)
 $(shell mkdir -p $(BUILDDIR)/examples)
