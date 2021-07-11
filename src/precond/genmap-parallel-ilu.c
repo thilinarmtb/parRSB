@@ -14,7 +14,8 @@ int parallel_ilu_setup(genmap_handle h, struct comm *c,
 
 int parallel_ilu_apply(GenmapScalar *u, GenmapScalar *rhs,
                        struct parallel_ilu_data *d, buffer *buf) {
-  parrsb_lu_solve(u, d->M, rhs, d->h->nlevels, d->h->level_off, d->h->comms);
+  parrsb_lu_solve(u, d->M, rhs, d->h->nlevels, d->h->level_off, d->h->comms,
+                  d->h->global->c);
   return 0;
 }
 

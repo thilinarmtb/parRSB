@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
   for (i = 0; i < M->rn; i++)
     b[i] = i + 1;
 
-  parrsb_lu_solve(x, M, b, nlevels, level_off, comms);
+  parrsb_lu_solve(x, M, b, nlevels, level_off, comms, MPI_COMM_WORLD);
 
   if (x != NULL)
     free(x);

@@ -322,7 +322,7 @@ static int find_gid(ulong id, ulong *gid, uint n) {
 }
 
 static int find_dependent_procs(uint **offsets_, uint **procs_,
-                                struct csr_mat_ *M, struct comm *c,
+                                struct csr_mat_ *M, struct comm *c, int fw,
                                 buffer *buf) {
   uint rn = M->rn;
   ulong *col = M->col;
@@ -333,14 +333,27 @@ static int find_dependent_procs(uint **offsets_, uint **procs_,
   struct row_info ri;
   ri.dest = c->id;
 
-  uint i, j;
-  for (i = 0; i < rn; i++) {
-    ulong id = M->row_id[i];
-    for (j = M->row_off[i]; j < M->row_off[i + 1] && col[j] <= id; j++) {
-      ri.gid = col[j];
-      ri.proc = col[j] % c->np;
-      ri.owner = find_gid(col[j], M->row_id, rn);
-      array_cat(struct row_info, &rows, &ri, 1);
+  sint i, j;
+  if (fw == 1) {
+    for (i = 0; i < rn; i++) {
+      ulong id = M->row_id[i];
+      for (j = M->row_off[i]; j < M->row_off[i + 1] && col[j] <= id; j++) {
+        ri.gid = col[j];
+        ri.proc = col[j] % c->np;
+        ri.owner = find_gid(col[j], M->row_id, rn);
+        array_cat(struct row_info, &rows, &ri, 1);
+      }
+    }
+  } else {
+    for (i = 0; i < rn; i++) {
+      ulong id = M->row_id[i];
+      for (j = M->row_off[i + 1] - 1; j >= (sint)M->row_off[i] && col[j] >= id;
+           j--) {
+        ri.gid = col[j];
+        ri.proc = col[j] % c->np;
+        ri.owner = find_gid(col[j], M->row_id, rn);
+        array_cat(struct row_info, &rows, &ri, 1);
+      }
     }
   }
 
@@ -355,7 +368,7 @@ static int find_dependent_procs(uint **offsets_, uint **procs_,
     sarray_sort(struct row_info, ptr, n, gid, 1, buf);
 
     uint cur_idx = 0;
-    int cur_owner = ptr[0].owner;
+    int cur_owner = ptr[0].owner > 0 ? 1 : 0;
 
     for (i = 1; i < n; i++) {
       if (ptr[i].gid != ptr[cur_idx].gid) {
@@ -388,7 +401,6 @@ static int find_dependent_procs(uint **offsets_, uint **procs_,
 
     for (i = 1; i < n; i++) {
       if (ptr[i].gid != ptr[cur_idx].gid) {
-        assert(cur_proc >= 0);
         for (j = cur_idx; j < i; j++)
           ptr[j].proc = cur_proc;
         cur_idx = i;
@@ -397,7 +409,6 @@ static int find_dependent_procs(uint **offsets_, uint **procs_,
         cur_proc = ptr[i].dest;
       }
     }
-    assert(cur_proc >= 0);
     for (j = cur_idx; j < n; j++)
       ptr[j].proc = cur_proc;
   }
@@ -423,8 +434,6 @@ static int find_dependent_procs(uint **offsets_, uint **procs_,
   }
   ngid++;
   offsets[ngid] = n;
-
-  assert(ngid == M->rn);
 
   array_free(&rows);
   array_free(&rows_compact);
@@ -478,15 +487,14 @@ static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
   for (; ii < end; ii++) { /* Go over number of rows */
     i = M->row_id[ii];
 
-    /* TODO: Only loop over non-zeros */
     for (kk = M->row_off[ii]; kk < M->row_off[ii + 1] && M->col[kk] < i; kk++) {
       k = M->col[kk];
       if (csr_mat_get_global(&a_kk, NULL, M, k, k) != 0)
-        assert(csr_mat_get_global(&a_kk, NULL, N, k, k) == 0);
+        csr_mat_get_global(&a_kk, NULL, N, k, k);
       if (fabs(a_kk) < 1e-12)
         continue;
 
-      assert(csr_mat_get_local(&a_ik, &ik, M, ii + 1, k) == 0);
+      csr_mat_get_local(&a_ik, &ik, M, ii + 1, k);
       if (fabs(a_ik) < 1e-12)
         continue;
 
@@ -497,7 +505,7 @@ static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
       for (ij = ik + 1; ij < off[ii + 1]; ij++) { /* Go over the columns */
         j = col[ij];
         if (csr_mat_get_global(&a_kj, NULL, M, k, j) != 0)
-          assert(csr_mat_get_global(&a_kj, NULL, N, k, j) == 0);
+          csr_mat_get_global(&a_kj, NULL, N, k, j);
         v[ij] = v[ij] - a_ik * a_kj;
       }
     }
@@ -512,7 +520,7 @@ static int ilu0_aux(uint nlevels, uint *level_off, MPI_Comm *comms,
   crystal_init(&cr, gc);
 
   uint *offsets, *procs;
-  find_dependent_procs(&offsets, &procs, M, gc, buf);
+  find_dependent_procs(&offsets, &procs, M, gc, 1, buf);
 
   struct array rows_ext;
   array_init(struct csr_entry, &rows_ext, 10);
@@ -577,3 +585,229 @@ void parrsb_ilu0(unsigned int nlevels, unsigned int *level_off, MPI_Comm *comms,
 /*
  * LU-solve
  */
+
+struct rhs_entry {
+  ulong r;
+  uint proc;
+  GenmapScalar v;
+};
+
+/* TODO: Use binary search */
+static int get_rhs_ext(double *x, ulong gid, struct array *rhs) {
+  int found = 0;
+
+  struct rhs_entry *ptr = rhs->ptr;
+  uint i;
+  for (i = 0; i < rhs->n; i++)
+    if (ptr[i].r == gid) {
+      *x = ptr[i].v;
+      found = 1;
+    }
+
+  return found == 1 ? 0 : 1;
+}
+
+static int get_rhs(double *x, ulong gid, ulong *ids, int level,
+                   unsigned int *level_off, double *y) {
+  int found = 0;
+
+  uint s = level_off[level + 1];
+  uint e = level_off[level];
+  uint i;
+  for (i = s; i < e; i++)
+    if (gid == ids[i]) {
+      *x = y[i];
+      found = 1;
+      break;
+    }
+
+  return found == 1 ? 0 : 1;
+}
+
+static int append_dependent_rhs(struct array *rhs, int level, uint *level_off,
+                                uint *offsets, uint *procs, double *y,
+                                ulong *row_id, buffer *buf) {
+  uint s = level_off[level + 1];
+  uint e = level_off[level];
+
+  struct rhs_entry t;
+  uint i, p;
+  for (i = s; i < e; i++) {
+    t.r = row_id[i];
+    t.v = y[i];
+    for (p = offsets[i]; p < offsets[i + 1]; p++) {
+      t.proc = procs[p];
+      array_cat(struct rhs_entry, rhs, &t, 1);
+    }
+  }
+
+  return 0;
+}
+
+static int fw_solve_level(double *y, struct csr_mat_ *A, double *b,
+                          struct array *rhs, int level, unsigned int *level_off,
+                          struct comm *gc) {
+  /* Forward substitution with L - Lower matrix (diagonal = all 1s)
+   * L(Ux) = L(y) = b */
+  double r;
+  sint i, j;
+  for (i = level_off[level + 1]; i < level_off[level]; i++) {
+    y[i] = b[i];
+    ulong id = A->row_id[i];
+    /* Remove the dot product: L[i, j] * y[j], j < i */
+    for (j = A->row_off[i]; j < A->row_off[i + 1] && A->col[j] < id; j++) {
+      if (get_rhs(&r, A->col[j], A->row_id, level, level_off, y) != 0)
+        get_rhs_ext(&r, A->col[j], rhs);
+      y[i] -= A->v[j] * r;
+    }
+    // printf("0: id = %lld b[%d] = %lf y[%d] = %lf\n", id, i, b[i], i, y[i]);
+    // fflush(stdout);
+  }
+
+  return 0;
+}
+
+static int fw_solve_aux(double *y, struct csr_mat_ *A, double *b, int nlevels,
+                        unsigned int *level_off, MPI_Comm *comms,
+                        struct comm *gc, struct crystal *cr, buffer *buf) {
+  uint *offsets, *procs;
+  find_dependent_procs(&offsets, &procs, A, gc, 1, buf);
+
+  struct array rhs_ext;
+  array_init(struct rhs_entry, &rhs_ext, 10);
+
+  int i;
+  for (i = nlevels - 1; i >= 0; i--) {
+    int active = (level_off[i + 1] != level_off[i]) ? 1 : 0;
+
+    sint np = 0;
+    struct comm c;
+    if (active) {
+      comm_init(&c, comms[i]);
+      np = c.np;
+    }
+
+    sint bfr;
+    comm_allreduce(gc, gs_int, gs_max, &np, 1, &bfr);
+
+    /* Do LU solve in serial among the processors in the current level */
+    int p;
+    for (p = 0; p < np; p++) {
+      if (c.id == p && active) {
+        fw_solve_level(y, A, b, &rhs_ext, i, level_off, gc);
+        append_dependent_rhs(&rhs_ext, i, level_off, offsets, procs, y,
+                             A->row_id, buf);
+      }
+
+      sarray_transfer(struct rhs_entry, &rhs_ext, proc, 0, cr);
+    }
+
+    if (active)
+      comm_free(&c);
+  }
+
+  if (offsets != NULL)
+    free(offsets);
+  if (procs != NULL)
+    free(procs);
+
+  array_free(&rhs_ext);
+
+  return 0;
+}
+
+static int bw_solve_level(double *x, struct csr_mat_ *A, double *y,
+                          struct array *rhs, int level, unsigned int *level_off,
+                          struct comm *gc) {
+  /* Back substitution with U, Ux = y */
+  double r;
+  sint i, j;
+  for (i = (sint)level_off[level] - 1; i >= (sint)level_off[level + 1]; i--) {
+    x[i] = y[i];
+    ulong id = A->row_id[i];
+    /* Remove the dot product: L[i, j] * x[j], j > i */
+    for (j = A->row_off[i + 1] - 1; j >= (sint)A->row_off[i] && A->col[j] > id;
+         j--) {
+      if (get_rhs(&r, A->col[j], A->row_id, level, level_off, x) != 0)
+        get_rhs_ext(&r, A->col[j], rhs);
+      x[i] -= A->v[j] * r;
+    }
+    if (fabs(A->v[j]) > 1e-10)
+      x[i] /= A->v[j];
+    // printf("1: id = %lld y[%d] = %lf x[%d] = %lf\n", id, i, y[i], i, x[i]);
+    // fflush(stdout);
+  }
+
+  return 0;
+}
+
+static int bw_solve_aux(double *y, struct csr_mat_ *A, double *b, int nlevels,
+                        unsigned int *level_off, MPI_Comm *comms,
+                        struct comm *gc, struct crystal *cr, buffer *buf) {
+  uint *offsets, *procs;
+  find_dependent_procs(&offsets, &procs, A, gc, 0, buf);
+
+  struct array rhs_ext;
+  array_init(struct rhs_entry, &rhs_ext, 10);
+
+  int i;
+  for (i = 0; i < nlevels; i++) {
+    int active = (level_off[i + 1] != level_off[i]) ? 1 : 0;
+
+    sint np = 0;
+    struct comm c;
+    if (active) {
+      comm_init(&c, comms[i]);
+      np = c.np;
+    }
+
+    sint bfr;
+    comm_allreduce(gc, gs_int, gs_max, &np, 1, &bfr);
+
+    /* Do LU solve in serial among the processors in the current level */
+    int p;
+    for (p = np - 1; p >= 0; p--) {
+      if (c.id == p && active) {
+        bw_solve_level(y, A, b, &rhs_ext, i, level_off, gc);
+        append_dependent_rhs(&rhs_ext, i, level_off, offsets, procs, y,
+                             A->row_id, buf);
+      }
+
+      sarray_transfer(struct rhs_entry, &rhs_ext, proc, 0, cr);
+    }
+
+    if (active)
+      comm_free(&c);
+  }
+
+  if (offsets != NULL)
+    free(offsets);
+  if (procs != NULL)
+    free(procs);
+
+  array_free(&rhs_ext);
+
+  return 0;
+}
+
+void parrsb_lu_solve(double *x, struct csr_mat_ *M, double *b,
+                     unsigned int nlevels, unsigned int *level_off,
+                     MPI_Comm *comms, MPI_Comm world) {
+  buffer buf;
+  buffer_init(&buf, 1024);
+
+  struct comm gc;
+  comm_init(&gc, world);
+
+  struct crystal cr;
+  crystal_init(&cr, &gc);
+
+  double *y = tcalloc(double, M->rn);
+  fw_solve_aux(y, M, b, nlevels, level_off, comms, &gc, &cr, &buf);
+  bw_solve_aux(x, M, y, nlevels, level_off, comms, &gc, &cr, &buf);
+  free(y);
+
+  crystal_free(&cr);
+  comm_free(&gc);
+  buffer_free(&buf);
+}

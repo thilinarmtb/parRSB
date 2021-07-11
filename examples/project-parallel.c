@@ -17,7 +17,6 @@ static int project_ilu(genmap_handle h, unsigned int lelt) {
 
   uint i;
   for (i = 0; i < lelt; i++)
-    // init->data[i] = out[0][0] + i + 1;
     init->data[i] = h->M->row_id[i];
 
   genmap_vector_ortho_one(gc, init, out[1][0]);
@@ -81,8 +80,6 @@ int main(int argc, char *argv[]) {
 
   genmap_handle h =
       parrsb_numbering_w_handle(&nelt, vl, coord, nv, MPI_COMM_WORLD);
-
-  csr_mat_dump("Reordered.dump", h->M, MPI_COMM_WORLD);
 
   parRSB_options options = parrsb_default_options;
   options.rsb_laplacian_implementation = 2;

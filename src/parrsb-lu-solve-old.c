@@ -381,6 +381,7 @@ static int lu_solve_aux(double *x, struct csr_mat_ *A, double *b, int nlevels,
   return 0;
 }
 
+#if 0
 void parrsb_lu_solve(double *x, struct csr_mat_ *M, double *b,
                      unsigned int nlevels, unsigned int *level_off,
                      MPI_Comm *comms) {
@@ -390,3 +391,4 @@ void parrsb_lu_solve(double *x, struct csr_mat_ *M, double *b,
   lu_solve_aux(x, M, b, nlevels, level_off, comms, &buf);
   buffer_free(&buf);
 }
+#endif

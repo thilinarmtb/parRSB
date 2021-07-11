@@ -66,5 +66,5 @@ void parrsb_ilu0(unsigned int nlevels, unsigned int *level_off, MPI_Comm *comms,
 
 void parrsb_lu_solve(double *x, struct csr_mat_ *M, double *b,
                      unsigned int nlevels, unsigned int *level_off,
-                     MPI_Comm *comms);
+                     MPI_Comm *comms, MPI_Comm world);
 #endif
