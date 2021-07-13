@@ -312,11 +312,15 @@ struct csr_entry {
 };
 
 /* TODO: Do a binary search */
-static int find_gid(ulong id, ulong *gid, uint n) {
+static int find_key_idx(uint *idx, ulong id, ulong *gid, uint n) {
   uint i;
-  for (i = 0; i < n; i++)
-    if (gid[i] == id)
+  for (i = 0; i < n; i++) {
+    if (gid[i] == id) {
+      if (idx != NULL)
+        *idx = i;
       return 1;
+    }
+  }
 
   return 0;
 }
@@ -340,7 +344,7 @@ static int find_dependent_procs(uint **offsets_, uint **procs_,
       for (j = M->row_off[i]; j < M->row_off[i + 1] && col[j] <= id; j++) {
         ri.gid = col[j];
         ri.proc = col[j] % c->np;
-        ri.owner = find_gid(col[j], M->row_id, rn);
+        ri.owner = find_key_idx(NULL, col[j], M->row_id, rn);
         array_cat(struct row_info, &rows, &ri, 1);
       }
     }
@@ -351,7 +355,7 @@ static int find_dependent_procs(uint **offsets_, uint **procs_,
            j--) {
         ri.gid = col[j];
         ri.proc = col[j] % c->np;
-        ri.owner = find_gid(col[j], M->row_id, rn);
+        ri.owner = find_key_idx(NULL, col[j], M->row_id, rn);
         array_cat(struct row_info, &rows, &ri, 1);
       }
     }
@@ -468,33 +472,34 @@ static int append_dependent_rows(struct array *entries, int level,
 }
 
 static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
-                      int nlevels, unsigned int *lvl_off) {
+                      int nlevels, unsigned int *loff) {
   const uint rn = M->rn;
-  const uint *off = M->row_off;
-  double *v = M->v;
+  const uint *roff = M->row_off;
   const ulong *col = M->col;
+  double *v = M->v;
+  const ulong *rid = M->row_id;
 
   double a_kk, a_kj, a_ik;
-  uint i, li, k, lk, ik, ij;
+  uint li, k, lk, ik, ij, idx_k;
 
-  uint start = lvl_off[lvl + 1];
-  uint end = lvl_off[lvl];
+  struct csr_mat_ *A;
 
-  li = start;
+  /* Go over number of rows */
+  li = loff[lvl + 1];
   if (lvl == nlevels - 1)
-    li = start + 1;
+    li++;
 
-  for (; li < end; li++) { /* Go over number of rows */
-    i = M->row_id[li];
-    for (lk = M->row_off[li]; lk < M->row_off[li + 1] && M->col[lk] < i; lk++) {
+  for (; li < loff[lvl]; li++) {
+    for (lk = roff[li]; lk < roff[li + 1] && col[lk] < rid[li]; lk++) {
       k = M->col[lk];
-      int owner = find_gid(k, M->row_id, M->rn);
-
-      if (owner != 0)
-        csr_mat_get_global(&a_kk, NULL, M, k, k);
+      if (find_key_idx(&idx_k, k, rid, rn) == 1)
+        A = M;
+      else if (find_key_idx(&idx_k, k, N->row_id, N->rn) == 1)
+        A = N;
       else
-        csr_mat_get_global(&a_kk, NULL, N, k, k);
+        return 1;
 
+      csr_mat_get_global(&a_kk, NULL, A, k, k);
       if (fabs(a_kk) < 1e-10)
         continue;
 
@@ -504,18 +509,11 @@ static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
 
       /* a_ik = a_ik / a_kk */
       a_ik = v[ik] = v[ik] / a_kk;
-
       /* Go over the columns: a_ij = a_ij - a_ik * a_kj */
-      if (owner != 0)
-        for (ij = ik + 1; ij < off[li + 1]; ij++) {
-          csr_mat_get_global(&a_kj, NULL, M, k, col[ij]);
-          v[ij] = v[ij] - a_ik * a_kj;
-        }
-      else
-        for (ij = ik + 1; ij < off[li + 1]; ij++) {
-          csr_mat_get_global(&a_kj, NULL, N, k, col[ij]);
-          v[ij] = v[ij] - a_ik * a_kj;
-        }
+      for (ij = ik + 1; ij < roff[li + 1]; ij++) {
+        csr_mat_get_global(&a_kj, NULL, A, k, col[ij]);
+        v[ij] = v[ij] - a_ik * a_kj;
+      }
     }
   }
 
@@ -646,7 +644,7 @@ static int update_w(struct array *w, double wk, ulong k, struct csr_mat_ *M,
     }
   }
 
-  return found == 0 ? 1: 0;
+  return found == 0 ? 1 : 0;
 }
 
 static int ilut_level(struct csr_mat_ *M, struct csr_mat_ *U, int lvl,
