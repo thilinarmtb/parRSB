@@ -475,39 +475,47 @@ static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
   const ulong *col = M->col;
 
   double a_kk, a_kj, a_ik;
-  uint i, ii, j, k, kk, ik, ij;
+  uint i, li, k, lk, ik, ij;
 
   uint start = lvl_off[lvl + 1];
   uint end = lvl_off[lvl];
 
-  ii = start;
+  li = start;
   if (lvl == nlevels - 1)
-    ii = start + 1;
+    li = start + 1;
 
-  for (; ii < end; ii++) { /* Go over number of rows */
-    i = M->row_id[ii];
+  for (; li < end; li++) { /* Go over number of rows */
+    i = M->row_id[li];
+    for (lk = M->row_off[li]; lk < M->row_off[li + 1] && M->col[lk] < i; lk++) {
+      k = M->col[lk];
+      int owner = find_gid(k, M->row_id, M->rn);
 
-    for (kk = M->row_off[ii]; kk < M->row_off[ii + 1] && M->col[kk] < i; kk++) {
-      k = M->col[kk];
-      if (csr_mat_get_global(&a_kk, NULL, M, k, k) != 0)
+      if (owner != 0)
+        csr_mat_get_global(&a_kk, NULL, M, k, k);
+      else
         csr_mat_get_global(&a_kk, NULL, N, k, k);
-      if (fabs(a_kk) < 1e-12)
+
+      if (fabs(a_kk) < 1e-10)
         continue;
 
-      csr_mat_get_local(&a_ik, &ik, M, ii + 1, k);
-      if (fabs(a_ik) < 1e-12)
+      csr_mat_get_local(&a_ik, &ik, M, li + 1, k);
+      if (fabs(a_ik) < 1e-10)
         continue;
 
       /* a_ik = a_ik / a_kk */
       a_ik = v[ik] = v[ik] / a_kk;
 
-      /* a_ij = a_ij - a_ik * a_kj */
-      for (ij = ik + 1; ij < off[ii + 1]; ij++) { /* Go over the columns */
-        j = col[ij];
-        if (csr_mat_get_global(&a_kj, NULL, M, k, j) != 0)
-          csr_mat_get_global(&a_kj, NULL, N, k, j);
-        v[ij] = v[ij] - a_ik * a_kj;
-      }
+      /* Go over the columns: a_ij = a_ij - a_ik * a_kj */
+      if (owner != 0)
+        for (ij = ik + 1; ij < off[li + 1]; ij++) {
+          csr_mat_get_global(&a_kj, NULL, M, k, col[ij]);
+          v[ij] = v[ij] - a_ik * a_kj;
+        }
+      else
+        for (ij = ik + 1; ij < off[li + 1]; ij++) {
+          csr_mat_get_global(&a_kj, NULL, N, k, col[ij]);
+          v[ij] = v[ij] - a_ik * a_kj;
+        }
     }
   }
 
