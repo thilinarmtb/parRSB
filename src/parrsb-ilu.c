@@ -583,9 +583,190 @@ void parrsb_ilu0(unsigned int nlevels, unsigned int *level_off, MPI_Comm *comms,
 }
 
 /*
+ * ILUT
+ */
+static int update_w(struct array *w, double wk, ulong k, struct csr_mat_ *M,
+                    struct csr_mat_ *N, buffer *buf) {
+  /* Find k in M and then in N, do a binary search */
+  int found = 0;
+  struct csr_mat_ *U;
+
+  uint i;
+  for (i = 0; i < M->rn; i++) {
+    if (k == M->row_id[i]) {
+      found = 1;
+      U = M;
+      break;
+    }
+  }
+
+  if (found == 0) {
+    for (i = 0; i < N->rn; i++)
+      if (k == N->row_id[i]) {
+        found = 1;
+        U = N;
+        break;
+      }
+  }
+
+  /* Update w */
+  if (found == 1) {
+    sarray_sort(struct csr_entry, w->ptr, w->n, c, 1, buf);
+
+    uint s = U->row_off[i];
+    uint e = U->row_off[i + 1];
+
+    struct csr_entry t;
+    t.r = k;
+
+    uint ai = 0;
+    struct csr_entry *ptr = w->ptr;
+
+    for (i = s; i < e; i++) {
+      t.c = U->col[i];
+      t.v = -wk * U->v[i];
+      while (ai < w->n && ptr[ai].c < t.c)
+        ai++;
+      if (ai < w->n && ptr[ai].c == t.c)
+        ptr[ai].v += t.v;
+      else {
+        array_cat(struct csr_entry, w, &t, 1);
+        sarray_sort(struct csr_entry, w->ptr, w->n, c, 1, buf);
+        ai = 0;
+        ptr = w->ptr;
+      }
+    }
+  }
+
+  return found == 0 ? 1: 0;
+}
+
+static int ilut_level(struct csr_mat_ *M, struct csr_mat_ *U, int lvl,
+                      int nlevels, unsigned int *lvl_off, buffer *buf) {
+  const uint rn = M->rn;
+  const uint *off = M->row_off;
+  double *v = M->v;
+  const ulong *col = M->col;
+
+  double a_kk, a_kj, a_ik;
+  uint i, ii, j, k, kk, ik, ij;
+
+  uint start = lvl_off[lvl + 1];
+  uint end = lvl_off[lvl];
+
+  double tau = 0.1, taui;
+  double norm;
+  double wk;
+
+  struct csr_entry t;
+
+  struct array w;
+  array_init(struct csr_entry, &w, 10);
+
+  /* Go over number of rows */
+  for (ii = start; ii < end; ii++) {
+    /* Initialize w and calculate norm of row i */
+    w.n = 0;
+    i = t.r = M->row_id[ii];
+
+    norm = 0.0;
+    for (kk = M->row_off[ii]; kk < M->row_off[ii + 1]; kk++) {
+      t.c = M->col[kk];
+      t.v = M->v[kk];
+      norm += t.v * t.v;
+      array_cat(struct csr_entry, &w, &t, 1);
+    }
+    norm = sqrt(norm);
+    taui = norm * tau;
+
+    for (kk = M->row_off[ii]; kk < M->row_off[ii + 1] && M->col[kk] < i; kk++) {
+      k = M->col[kk];
+      if (csr_mat_get_global(&a_kk, NULL, M, k, k) != 0)
+        csr_mat_get_global(&a_kk, NULL, U, k, k);
+      if (fabs(a_kk) < 1e-10)
+        continue;
+
+      wk = fabs(M->v[kk]) / a_kk;
+      if (wk >= taui)
+        update_w(&w, wk, k, M, U, buf); /* w = w - w_k * u_{k,*} */
+    }
+    /* Apply dropping rule to w */
+  }
+
+  return 0;
+}
+
+static int ilut_aux(uint nlevels, uint *level_off, MPI_Comm *comms,
+                    struct csr_mat_ *M, struct comm *gc, buffer *buf) {
+  struct crystal cr;
+  crystal_init(&cr, gc);
+
+  uint *offsets, *procs;
+  find_dependent_procs(&offsets, &procs, M, gc, 1, buf);
+
+  struct array rows_ext;
+  array_init(struct csr_entry, &rows_ext, 10);
+
+  int i;
+  for (i = nlevels - 1; i >= 0; i--) {
+    int active = (level_off[i + 1] != level_off[i]) ? 1 : 0;
+
+    sint np = 0;
+    struct comm c;
+    if (active) {
+      comm_init(&c, comms[i]);
+      np = c.np;
+    }
+
+    sint bfr;
+    comm_allreduce(gc, gs_int, gs_max, &np, 1, &bfr);
+
+    int p;
+    for (p = 0; p < np; p++) {
+      /* Do the local ilu */
+      if (c.id == p && active) {
+        struct csr_mat_ *N = NULL;
+        csr_mat_setup(&N, &rows_ext, NULL, buf);
+        ilut_level(M, N, i, nlevels, level_off, buf);
+        csr_mat_free(N);
+        append_dependent_rows(&rows_ext, i, level_off, offsets, procs, M, buf);
+      }
+
+      sarray_transfer(struct csr_entry, &rows_ext, proc, 0, &cr);
+    }
+
+    if (active)
+      comm_free(&c);
+  }
+
+  if (offsets != NULL)
+    free(offsets);
+  if (procs != NULL)
+    free(procs);
+
+  array_free(&rows_ext);
+  crystal_free(&cr);
+
+  return 0;
+}
+
+void parrsb_ilut(unsigned int nlevels, unsigned int *level_off, MPI_Comm *comms,
+                 struct csr_mat_ *M, MPI_Comm world) {
+  buffer buf;
+  buffer_init(&buf, 1024);
+
+  struct comm gc;
+  comm_init(&gc, world);
+
+  ilut_aux(nlevels, level_off, comms, M, &gc, &buf);
+
+  comm_free(&gc);
+  buffer_free(&buf);
+}
+
+/*
  * LU-solve
  */
-
 struct rhs_entry {
   ulong r;
   uint proc;
