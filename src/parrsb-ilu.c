@@ -487,9 +487,9 @@ static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
     li++;
 
   for (; li < loff[lvl]; li++) {
-    uint lk;
-    for (lk = roff[li]; lk < roff[li + 1] && col[lk] < rid[li]; lk++) {
-      ulong k = M->col[lk];
+    uint ki;
+    for (ki = roff[li]; ki < roff[li + 1] && col[ki] < rid[li]; ki++) {
+      ulong k = M->col[ki];
       uint k_idx;
       if (find_key_idx(&k_idx, k, rid, rn) == 1)
         A = M;
@@ -601,55 +601,35 @@ struct row_entry {
   GenmapScalar v;
 };
 
-static int update_w(struct array *w, double wk, ulong k, struct csr_mat_ *M,
-                    struct csr_mat_ *N, buffer *buf) {
-  /* Find k in M and then in N, do a binary search */
+static int update_w(struct array *w, double wk, ulong k, struct csr_mat_ *U,
+                    buffer *buf) {
   int found = 0;
-  struct csr_mat_ *U;
-
   uint i;
-  for (i = 0; i < M->rn; i++) {
-    if (k == M->row_id[i]) {
+  for (i = 0; i < U->rn; i++)
+    if (k == U->row_id[i]) {
       found = 1;
-      U = M;
       break;
     }
-  }
 
-  if (found == 0) {
-    for (i = 0; i < N->rn; i++)
-      if (k == N->row_id[i]) {
-        found = 1;
-        U = N;
-        break;
-      }
-  }
-
-  /* Update w */
   if (found == 1) {
-    sarray_sort(struct csr_entry, w->ptr, w->n, c, 1, buf);
+    /* This is not necessary */
+    sarray_sort(struct row_entry, w->ptr, w->n, c, 1, buf);
 
-    uint s = U->row_off[i];
-    uint e = U->row_off[i + 1];
-
-    struct csr_entry t;
-    t.r = k;
-
-    uint ai = 0;
-    struct csr_entry *ptr = w->ptr;
-
-    for (i = s; i < e; i++) {
+    struct row_entry t;
+    struct row_entry *wp = w->ptr;
+    uint wi = 0;
+    for (i = U->row_off[i]; i < U->row_off[i + 1]; i++) {
       t.c = U->col[i];
       t.v = -wk * U->v[i];
-      while (ai < w->n && ptr[ai].c < t.c)
-        ai++;
-      if (ai < w->n && ptr[ai].c == t.c)
-        ptr[ai].v += t.v;
+      while (wi < w->n && wp[wi].c < t.c)
+        wi++;
+      if (wi < w->n && wp[wi].c == t.c)
+        wp[wi].v += t.v;
       else {
-        array_cat(struct csr_entry, w, &t, 1);
-        sarray_sort(struct csr_entry, w->ptr, w->n, c, 1, buf);
-        ai = 0;
-        ptr = w->ptr;
+        array_cat(struct row_entry, w, &t, 1);
+        sarray_sort(struct row_entry, w->ptr, w->n, c, 1, buf);
+        wi = 0;
+        wp = w->ptr;
       }
     }
   }
@@ -665,53 +645,44 @@ static int ilut_level(struct csr_mat_ *M, struct csr_mat_ *U, int lvl,
   double *v = M->v;
   const ulong *rid = M->row_id;
 
-  double a_kk, a_kj, a_ik;
-  uint li, k, lk, ik, ij;
-
-  struct csr_mat_ *A;
-
-  double tau = 0.1, tau_i;
-  double norm;
-
   struct row_entry t;
+  double tau = 0.1;
+
   struct array w;
   array_init(struct row_entry, &w, 10);
 
   /* Go over number of rows */
+  uint li;
   for (li = loff[lvl + 1]; li < loff[lvl]; li++) {
     /* Initialize w and calculate norm of row i */
     w.n = 0;
-    norm = 0.0;
-    for (lk = roff[li]; lk < roff[li + 1]; lk++) {
-      t.c = col[lk];
-      t.v = v[lk];
+    double norm = 0.0;
+    uint wi;
+    for (wi = roff[li]; wi < roff[li + 1]; wi++) {
+      t.c = col[wi];
+      t.v = v[wi];
       norm += t.v * t.v;
       array_cat(struct csr_entry, &w, &t, 1);
     }
     norm = sqrt(norm);
-    tau_i = norm * tau;
+    double tau_i = norm * tau;
 
-    uint wi = 0;
     struct row_entry *wp = w.ptr;
     for (wi = 0; wi < w.n; wi++) {
-      double wk = wp[wi].v;
       ulong k = wp[wi].c;
 
-      uint k_idx;
-      if (find_key_idx(&k_idx, k, rid, rn) == 1)
-        A = M;
-      else if (find_key_idx(&k_idx, k, U->row_id, U->rn) == 1)
-        A = U;
-      else
-        return 1;
-
+    double a_kk = 1.0;
+#if 0
       csr_mat_get_global(&a_kk, NULL, A, k, k);
       if (fabs(a_kk) < 1e-10)
         continue;
+#endif
 
+      /* Apply dropping rule to wk */
+      double wk = wp[wi].v;
       wk = fabs(wk) / a_kk;
       if (wk >= tau_i)
-        update_w(&w, wk, k, M, U, buf); /* w = w - w_k * u_{k,*} */
+        update_w(&w, wk, k, U, buf); /* w = w - w_k * u_{k,*} */
     }
     /* Apply dropping rule to w */
   }
