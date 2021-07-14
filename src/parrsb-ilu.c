@@ -648,19 +648,17 @@ static int update_w(struct array *w, double wk, ulong k, struct csr_mat_ *M,
 }
 
 static int ilut_level(struct csr_mat_ *M, struct csr_mat_ *U, int lvl,
-                      int nlevels, unsigned int *lvl_off, buffer *buf) {
+                      int nlevels, unsigned int *loff, buffer *buf) {
   const uint rn = M->rn;
-  const uint *off = M->row_off;
-  double *v = M->v;
+  const uint *roff = M->row_off;
   const ulong *col = M->col;
+  double *v = M->v;
+  const ulong *rid = M->row_id;
 
   double a_kk, a_kj, a_ik;
-  uint i, ii, j, k, kk, ik, ij;
+  uint li, k, lk, ik, ij;
 
-  uint start = lvl_off[lvl + 1];
-  uint end = lvl_off[lvl];
-
-  double tau = 0.1, taui;
+  double tau = 0.1, tau_i;
   double norm;
   double wk;
 
@@ -670,30 +668,29 @@ static int ilut_level(struct csr_mat_ *M, struct csr_mat_ *U, int lvl,
   array_init(struct csr_entry, &w, 10);
 
   /* Go over number of rows */
-  for (ii = start; ii < end; ii++) {
+  for (li = loff[lvl + 1]; li < loff[lvl]; li++) {
     /* Initialize w and calculate norm of row i */
     w.n = 0;
-    i = t.r = M->row_id[ii];
-
+    t.r = rid[li];
     norm = 0.0;
-    for (kk = M->row_off[ii]; kk < M->row_off[ii + 1]; kk++) {
-      t.c = M->col[kk];
-      t.v = M->v[kk];
+    for (lk = roff[li]; lk < roff[li + 1]; lk++) {
+      t.c = col[lk];
+      t.v = v[lk];
       norm += t.v * t.v;
       array_cat(struct csr_entry, &w, &t, 1);
     }
     norm = sqrt(norm);
-    taui = norm * tau;
+    tau_i = norm * tau;
 
-    for (kk = M->row_off[ii]; kk < M->row_off[ii + 1] && M->col[kk] < i; kk++) {
-      k = M->col[kk];
+    for (lk = roff[li]; lk < roff[li + 1] && col[lk] < rid[li]; lk++) {
+      k = col[lk];
       if (csr_mat_get_global(&a_kk, NULL, M, k, k) != 0)
         csr_mat_get_global(&a_kk, NULL, U, k, k);
       if (fabs(a_kk) < 1e-10)
         continue;
 
-      wk = fabs(M->v[kk]) / a_kk;
-      if (wk >= taui)
+      wk = fabs(v[lk]) / a_kk;
+      if (wk >= tau_i)
         update_w(&w, wk, k, M, U, buf); /* w = w - w_k * u_{k,*} */
     }
     /* Apply dropping rule to w */
