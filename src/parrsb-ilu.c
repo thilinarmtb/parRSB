@@ -479,30 +479,32 @@ static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
   double *v = M->v;
   const ulong *rid = M->row_id;
 
-  double a_kk, a_kj, a_ik;
-  uint li, k, lk, ik, ij, idx_k;
-
   struct csr_mat_ *A;
 
   /* Go over number of rows */
-  li = loff[lvl + 1];
+  uint li = loff[lvl + 1];
   if (lvl == nlevels - 1)
     li++;
 
   for (; li < loff[lvl]; li++) {
+    uint lk;
     for (lk = roff[li]; lk < roff[li + 1] && col[lk] < rid[li]; lk++) {
-      k = M->col[lk];
-      if (find_key_idx(&idx_k, k, rid, rn) == 1)
+      ulong k = M->col[lk];
+      uint k_idx;
+      if (find_key_idx(&k_idx, k, rid, rn) == 1)
         A = M;
-      else if (find_key_idx(&idx_k, k, N->row_id, N->rn) == 1)
+      else if (find_key_idx(&k_idx, k, N->row_id, N->rn) == 1)
         A = N;
       else
         return 1;
 
+      double a_kk;
       csr_mat_get_global(&a_kk, NULL, A, k, k);
       if (fabs(a_kk) < 1e-10)
         continue;
 
+      double a_ik;
+      uint ik;
       csr_mat_get_local(&a_ik, &ik, M, li + 1, k);
       if (fabs(a_ik) < 1e-10)
         continue;
@@ -510,7 +512,9 @@ static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
       /* a_ik = a_ik / a_kk */
       a_ik = v[ik] = v[ik] / a_kk;
       /* Go over the columns: a_ij = a_ij - a_ik * a_kj */
+      uint ij;
       for (ij = ik + 1; ij < roff[li + 1]; ij++) {
+        double a_kj;
         csr_mat_get_global(&a_kj, NULL, A, k, col[ij]);
         v[ij] = v[ij] - a_ik * a_kj;
       }
@@ -591,6 +595,12 @@ void parrsb_ilu0(unsigned int nlevels, unsigned int *level_off, MPI_Comm *comms,
 /*
  * ILUT
  */
+struct row_entry {
+  ulong c;
+  uint proc;
+  GenmapScalar v;
+};
+
 static int update_w(struct array *w, double wk, ulong k, struct csr_mat_ *M,
                     struct csr_mat_ *N, buffer *buf) {
   /* Find k in M and then in N, do a binary search */
@@ -658,20 +668,19 @@ static int ilut_level(struct csr_mat_ *M, struct csr_mat_ *U, int lvl,
   double a_kk, a_kj, a_ik;
   uint li, k, lk, ik, ij;
 
+  struct csr_mat_ *A;
+
   double tau = 0.1, tau_i;
   double norm;
-  double wk;
 
-  struct csr_entry t;
-
+  struct row_entry t;
   struct array w;
-  array_init(struct csr_entry, &w, 10);
+  array_init(struct row_entry, &w, 10);
 
   /* Go over number of rows */
   for (li = loff[lvl + 1]; li < loff[lvl]; li++) {
     /* Initialize w and calculate norm of row i */
     w.n = 0;
-    t.r = rid[li];
     norm = 0.0;
     for (lk = roff[li]; lk < roff[li + 1]; lk++) {
       t.c = col[lk];
@@ -682,19 +691,32 @@ static int ilut_level(struct csr_mat_ *M, struct csr_mat_ *U, int lvl,
     norm = sqrt(norm);
     tau_i = norm * tau;
 
-    for (lk = roff[li]; lk < roff[li + 1] && col[lk] < rid[li]; lk++) {
-      k = col[lk];
-      if (csr_mat_get_global(&a_kk, NULL, M, k, k) != 0)
-        csr_mat_get_global(&a_kk, NULL, U, k, k);
+    uint wi = 0;
+    struct row_entry *wp = w.ptr;
+    for (wi = 0; wi < w.n; wi++) {
+      double wk = wp[wi].v;
+      ulong k = wp[wi].c;
+
+      uint k_idx;
+      if (find_key_idx(&k_idx, k, rid, rn) == 1)
+        A = M;
+      else if (find_key_idx(&k_idx, k, U->row_id, U->rn) == 1)
+        A = U;
+      else
+        return 1;
+
+      csr_mat_get_global(&a_kk, NULL, A, k, k);
       if (fabs(a_kk) < 1e-10)
         continue;
 
-      wk = fabs(v[lk]) / a_kk;
+      wk = fabs(wk) / a_kk;
       if (wk >= tau_i)
         update_w(&w, wk, k, M, U, buf); /* w = w - w_k * u_{k,*} */
     }
     /* Apply dropping rule to w */
   }
+
+  array_free(&w);
 
   return 0;
 }
