@@ -325,6 +325,22 @@ static int find_key_idx(uint *idx, ulong id, ulong *gid, uint n) {
   return 0;
 }
 
+static int find_ij(double *a_ij, const ulong i, const ulong j,
+                   const struct array *ext) {
+  struct csr_entry *ptr = ext->ptr;
+  uint n;
+  for (n = 0; n < ext->n; n++) {
+    if (ptr[n].r == i && ptr[n].c == j) {
+      *a_ij = ptr[n].v;
+      return 1;
+    }
+  }
+  *a_ij = 0.0;
+
+  return 0;
+}
+
+
 static int find_dependent_procs(uint **offsets_, uint **procs_,
                                 struct csr_mat_ *M, struct comm *c, int fw,
                                 buffer *buf) {
@@ -451,9 +467,6 @@ static int append_dependent_rows(struct array *entries, int level,
   uint s = level_off[level + 1];
   uint e = level_off[level];
 
-  uint rn = M->rn;
-  ulong *col = M->col;
-
   struct csr_entry t;
   uint i, j, p;
   for (i = s; i < e; i++) {
@@ -471,7 +484,37 @@ static int append_dependent_rows(struct array *entries, int level,
   return 0;
 }
 
-static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
+static int get_row(struct array *row, const ulong rid, struct csr_mat_ *M,
+                   struct array *ext) {
+  row->n = 0;
+
+  struct csr_entry t;
+  uint i, j;
+  for (i = 0; i < M->rn; i++) {
+    if (rid == M->row_id[i]) {
+      t.r = M->row_id[i];
+      for (j = M->row_off[i]; j < M->row_off[i + 1]; j++) {
+        t.c = M->col[j];
+        t.v = M->v[j];
+        array_cat(struct csr_entry, row, &t, 1);
+      }
+      return 1;
+    }
+  }
+
+  struct csr_entry *ptr = ext->ptr;
+  for (i = 0; i < ext->n; i++) {
+    if (ptr[i].r == rid) {
+      for (j = i; j < ext->n && ptr[j].r == rid; j++)
+        array_cat(struct csr_entry, row, &ptr[j], 1);
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+static int ilu0_level(struct csr_mat_ *M, struct array *ext, int lvl,
                       int nlevels, unsigned int *loff) {
   const uint rn = M->rn;
   const uint *roff = M->row_off;
@@ -479,7 +522,8 @@ static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
   double *v = M->v;
   const ulong *rid = M->row_id;
 
-  struct csr_mat_ *A;
+  struct array row;
+  array_init(struct csr_entry, &row, 10);
 
   /* Go over number of rows */
   uint li = loff[lvl + 1];
@@ -487,39 +531,29 @@ static int ilu0_level(struct csr_mat_ *M, struct csr_mat_ *N, int lvl,
     li++;
 
   for (; li < loff[lvl]; li++) {
-    uint ki;
-    for (ki = roff[li]; ki < roff[li + 1] && col[ki] < rid[li]; ki++) {
-      ulong k = M->col[ki];
-      uint k_idx;
-      if (find_key_idx(&k_idx, k, rid, rn) == 1)
-        A = M;
-      else if (find_key_idx(&k_idx, k, N->row_id, N->rn) == 1)
-        A = N;
-      else
-        return 1;
+    uint ik;
+    for (ik = roff[li]; ik < roff[li + 1] && col[ik] < rid[li]; ik++) {
+      ulong k = M->col[ik];
+      if (get_row(&row, k, M, ext) == 0)
+        assert(0);
 
       double a_kk;
-      csr_mat_get_global(&a_kk, NULL, A, k, k);
-      if (fabs(a_kk) < 1e-10)
-        continue;
-
-      double a_ik;
-      uint ik;
-      csr_mat_get_local(&a_ik, &ik, M, li + 1, k);
-      if (fabs(a_ik) < 1e-10)
-        continue;
+      if (find_ij(&a_kk, k, k, &row) == 0)
+        assert(0);
 
       /* a_ik = a_ik / a_kk */
-      a_ik = v[ik] = v[ik] / a_kk;
+      double a_ik = v[ik] = v[ik] / a_kk;
       /* Go over the columns: a_ij = a_ij - a_ik * a_kj */
       uint ij;
       for (ij = ik + 1; ij < roff[li + 1]; ij++) {
         double a_kj;
-        csr_mat_get_global(&a_kj, NULL, A, k, col[ij]);
+        find_ij(&a_kj, k, col[ij], &row);
         v[ij] = v[ij] - a_ik * a_kj;
       }
     }
   }
+
+  array_free(&row);
 
   return 0;
 }
@@ -553,14 +587,13 @@ static int ilu0_aux(uint nlevels, uint *level_off, MPI_Comm *comms,
     for (p = 0; p < np; p++) {
       /* Do the local ilu */
       if (c.id == p && active) {
-        struct csr_mat_ *N = NULL;
-        csr_mat_setup(&N, &rows_ext, NULL, buf);
-        ilu0_level(M, N, i, nlevels, level_off);
-        csr_mat_free(N);
+        ilu0_level(M, &rows_ext, i, nlevels, level_off);
         append_dependent_rows(&rows_ext, i, level_off, offsets, procs, M, buf);
       }
 
       sarray_transfer(struct csr_entry, &rows_ext, proc, 0, &cr);
+      sarray_sort_2(struct csr_entry, rows_ext.ptr, rows_ext.n, r, 1, c, 1,
+                    buf);
     }
 
     if (active)
