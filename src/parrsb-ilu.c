@@ -573,14 +573,12 @@ static int ilu0_aux(uint nlevels, uint *level_off, MPI_Comm *comms,
   for (i = nlevels - 1; i >= 0; i--) {
     int active = (level_off[i + 1] != level_off[i]) ? 1 : 0;
 
-    sint np = 0;
     struct comm c;
-    if (active) {
+    if (active)
       comm_init(&c, comms[i]);
-      np = c.np;
-    }
 
     sint bfr;
+    sint np = (active == 1) ? c.np : 0;
     comm_allreduce(gc, gs_int, gs_max, &np, 1, &bfr);
 
     int p;
@@ -590,12 +588,10 @@ static int ilu0_aux(uint nlevels, uint *level_off, MPI_Comm *comms,
         ilu0_level(M, &rows_ext, i, nlevels, level_off);
         append_dependent_rows(&rows_ext, i, level_off, offsets, procs, M, buf);
       }
-
       sarray_transfer(struct csr_entry, &rows_ext, proc, 0, &cr);
       sarray_sort_2(struct csr_entry, rows_ext.ptr, rows_ext.n, r, 1, c, 1,
                     buf);
     }
-
     if (active)
       comm_free(&c);
   }
@@ -634,85 +630,74 @@ struct row_entry {
   GenmapScalar v;
 };
 
-static int update_w(struct array *w, double wk, ulong k, struct array * ext,
-                    buffer *buf) {
-  int found = 0;
-#if 0
-  uint i;
-  for (i = 0; i < U->rn; i++)
-    if (k == U->row_id[i]) {
-      found = 1;
-      break;
-    }
-
-  if (found == 1) {
-    struct row_entry t;
-    struct row_entry *wp = w->ptr;
-    uint wi = 0;
-    for (i = U->row_off[i]; i < U->row_off[i + 1]; i++) {
-      t.c = U->col[i];
-      t.v = -wk * U->v[i];
-      while (wi < w->n && wp[wi].c < t.c)
-        wi++;
-      if (wi < w->n && wp[wi].c == t.c)
-        wp[wi].v += t.v;
-      else {
-        array_cat(struct row_entry, w, &t, 1);
-        sarray_sort(struct row_entry, w->ptr, w->n, c, 1, buf);
-        wi = 0;
-        wp = w->ptr;
-      }
-    }
+static int update_row(struct array *w, double wk, struct array *u) {
+  struct csr_entry *wp = w->ptr;
+  struct csr_entry *up = u->ptr;
+  uint wi = 0;
+  uint ui = 0;
+  for (wi = 0; wi < w->n; wi++) {
   }
-#endif
-  return found == 0 ? 1 : 0;
 }
 
-static int ilut_level(struct array *lu, struct csr_mat_ *M, int lvl,
-                      int nlevels, unsigned int *loff, buffer *buf) {
+static int ilut_level(struct array *lu, struct csr_mat_ *M, struct array *ext,
+                      int lvl, int nlevels, unsigned int *loff, buffer *buf) {
   const uint rn = M->rn;
   const uint *roff = M->row_off;
   const ulong *col = M->col;
   double *v = M->v;
   const ulong *rid = M->row_id;
 
-  struct row_entry t;
   double tau = 0.1;
+  struct csr_entry t;
 
-  struct array w;
-  array_init(struct row_entry, &w, 10);
+  struct array u, w, r;
+  array_init(struct csr_entry, &u, 10);
+  array_init(struct csr_entry, &w, 10);
+  array_init(struct csr_entry, &r, 10);
 
   /* Go over number of rows */
   uint li;
   for (li = loff[lvl + 1]; li < loff[lvl]; li++) {
     /* Initialize w and calculate norm of row i */
-    w.n = 0;
     double norm = 0.0;
-    uint wi;
-    for (wi = roff[li]; wi < roff[li + 1]; wi++) {
-      t.c = col[wi];
-      t.v = v[wi];
-      norm += t.v * t.v;
-      array_cat(struct csr_entry, &w, &t, 1);
-    }
-    norm = sqrt(norm);
-    double tau_i = norm * tau;
+    uint ij;
+    for (ij = M->row_off[li]; ij < M->row_off[li + 1]; ij++)
+      norm += M->v[ij] * M->v[ij];
+    double tau_i = sqrt(norm) * tau;
 
-    struct row_entry *wp = w.ptr;
+#if 0
+    w.n = 0;
+    t.r = M->row_id[li];
+    for (ij = M->row_off[li]; ij < M->row_off[li + 1]; ij++) {
+      if (fabs(M->v[ij].v) >= tau_i) {
+        t.c = M->col[ij];
+        t.v = M->v[ij];
+        array_cat(struct csr_entry, &w, &t, 1);
+      }
+    }
+#else
+    get_row(&w, M->row_id[li], M, ext);
+#endif
+    r.n = 0;
+    array_cat(struct csr_entry, &r, &w, w.n);
+
+    uint wi;
+    struct csr_entry *wp = w.ptr;
     for (wi = 0; wi < w.n; wi++) {
       ulong k = wp[wi].c;
+      if (get_row(&u, k, M, ext) == 0)
+        assert(0);
 
-      double a_kk = 1.0;
-#if 0
-      csr_mat_get_global(&a_kk, NULL, A, k, k);
-      if (fabs(a_kk) < 1e-10)
-        continue;
-#endif
+      double a_kk;
+      if (find_ij(&a_kk, k, k, &u) == 0)
+        assert(0);
 
       /* Apply dropping rule to wk */
-      double wk = fabs(wp[wi].v) / a_kk;
-      if (wk >= tau_i)
-        update_w(&w, wk, k, lu, buf); /* w = w - w_k * u_{k,*} */
+      double wk = wp[wi].v / a_kk;
+      if (fabs(wk) >= tau_i) /* w = w - w_k * u_{k,*} */
+        update_row(&r, wk, &u);
+      else
+        wp[wi].v = 0.0;
     }
     /* Apply dropping rule to w */
     for (wi = 0; wi < w.n; wi++) {
@@ -721,7 +706,9 @@ static int ilut_level(struct array *lu, struct csr_mat_ *M, int lvl,
     }
   }
 
+  array_free(&r);
   array_free(&w);
+  array_free(&u);
 
   return 0;
 }
@@ -742,27 +729,25 @@ static int ilut_aux(uint nlevels, uint *level_off, MPI_Comm *comms,
   for (i = nlevels - 1; i >= 0; i--) {
     int active = (level_off[i + 1] != level_off[i]) ? 1 : 0;
 
-    sint np = 0;
     struct comm c;
-    if (active) {
+    if (active)
       comm_init(&c, comms[i]);
-      np = c.np;
-    }
 
     sint bfr;
+    sint np = (active == 1) ? c.np : 0;
     comm_allreduce(gc, gs_int, gs_max, &np, 1, &bfr);
 
     int p;
     for (p = 0; p < np; p++) {
       /* Do the local ilu */
       if (c.id == p && active) {
-        ilut_level(&lu, M, i, nlevels, level_off, buf);
+        ilut_level(&lu, M, &rows_ext, i, nlevels, level_off, buf);
         // append_dependent_rows(&rows_ext, i, level_off, offsets, procs, M, buf);
       }
       sarray_transfer(struct csr_entry, &rows_ext, proc, 0, &cr);
-      sarray_sort(struct csr_entry, rows_ext.ptr, rows_ext.n, c, 1, buf);
+      sarray_sort_2(struct csr_entry, rows_ext.ptr, rows_ext.n, r, 1, c, 1,
+                    buf);
     }
-
     if (active)
       comm_free(&c);
   }
