@@ -16,7 +16,7 @@ extern "C" {
 #endif
 
 //==============================================================================
-// Partitioning
+// Partitioning and reordering
 //
 typedef struct {
   // General options
@@ -48,6 +48,13 @@ int parrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
 #define fparrsb_part_mesh FORTRAN_UNPREFIXED(fparrsb_partmesh, FPARRSB_PARTMESH)
 void fparrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
                        int *nel, int *nve, int *options, int *comm, int *err);
+
+void parrsb_reorder_dofs(long long *nid, unsigned n, const long long *ids,
+                         const MPI_Comm comm);
+#define fparrsb_reorder_dofs                                                   \
+  FORTRAN_UNPREFIXED(fparrsb_order_dofs, FPARRSB_ORDER_DOFS)
+void fparrsb_reorder_dofs(long long *nid, int *n, long long *ids, int *comm,
+                          int *err);
 
 //==============================================================================
 // Connectivity
