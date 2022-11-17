@@ -438,6 +438,10 @@ int rsb(struct array *elements, int nv, int check, parrsb_options *options,
     break;
   }
 
+  struct rsb_element *pe = (struct rsb_element *)elements->ptr;
+  for (uint i = 0; i < elements->n; i++)
+    pe[i].seq = i;
+
   if (check)
     check_rsb_partition(gc, options);
 

@@ -49,12 +49,12 @@ int parrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
 void fparrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
                        int *nel, int *nve, int *options, int *comm, int *err);
 
-void parrsb_reorder_dofs(long long *nid, unsigned n, const long long *ids,
-                         const MPI_Comm comm);
+void parrsb_reorder_dofs(long long *nid, unsigned n, unsigned nv,
+                         const long long *ids, const MPI_Comm comm);
 #define fparrsb_reorder_dofs                                                   \
   FORTRAN_UNPREFIXED(fparrsb_order_dofs, FPARRSB_ORDER_DOFS)
-void fparrsb_reorder_dofs(long long *nid, int *n, long long *ids, int *comm,
-                          int *err);
+void fparrsb_reorder_dofs(long long *nid, int *n, int *nv, long long *ids,
+                          int *comm, int *err);
 
 //==============================================================================
 // Connectivity

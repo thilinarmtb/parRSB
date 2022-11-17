@@ -146,5 +146,15 @@ int rcb(struct array *elems, size_t usize, int ndim, struct comm *ci,
 
   rcb_local(elems, usize, 0, elems->n, ndim, bfr);
 
+  if (usize == sizeof(struct rsb_element)) {
+    struct rsb_element *pe = (struct rsb_element *)elems->ptr;
+    for (uint i = 0; i < elems->n; i++)
+      pe[i].seq = i;
+  } else if (usize == sizeof(struct rcb_element)) {
+    struct rcb_element *pe = (struct rcb_element *)elems->ptr;
+    for (uint i = 0; i < elems->n; i++)
+      pe[i].seq = i;
+  }
+
   return 0;
 }
