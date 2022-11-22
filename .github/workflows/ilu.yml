@@ -8,6 +8,8 @@ env:
   GITHUB.TOKEN: ${{ secrets.token }}
   CIDIR: parRSB-github-ci
   EXAMPLESDIR: build/examples
+  SCRIPTDIR: .github/workflows
+  MPIEXE: "mpirun --oversubscribe"
 jobs:
   ilu:
     runs-on: ubuntu-latest
@@ -31,8 +33,10 @@ jobs:
         shell: bash
         run: |
           sudo apt -y update
-          sudo apt install -y mpich libmpich-dev libblas-dev liblapack-dev octave
+          sudo apt install -y openmpi-bin libopenmpi-dev
+          sudo apt install -y libblas-dev liblapack-dev octave
           sudo apt install -y build-essential
+
           python3 -m pip install --upgrade pip
           pip install numpy scipy
       - name: Build parRSB and clone tests
@@ -48,22 +52,19 @@ jobs:
 
           # Clone tests
           git clone https://github.com/thilinarmtb/${CIDIR}.git
-
-          # For MPI
-          echo "localhost:6" > hostfile
       - name: ILU(0) factorization
         if: always()
         shell: bash
         run: |
           export PARRSB_DUMP_ILU=1
 
-          cp hostfile ${EXAMPLESDIR}/ilu scripts/ilu0.m \
+          cp ${EXAMPLESDIR}/ilu ${SCRIPTDIR}/ilu0.m \
             ${CIDIR}/${{ matrix.test }}
           cd ${CIDIR}/${{ matrix.test }}
 
           tol=(`cat test.txt | grep tol`); tol=${tol[2]}
-          mpirun -np ${{ matrix.np }} --hostfile hostfile ./ilu \
-            --mesh ${{ matrix.test }} --tol=${tol} --ilu_type=0
+          ${MPIEXE} -np ${{ matrix.np }} ./ilu --mesh ${{ matrix.test }} \
+            --tol=${tol} --ilu_type=0
 
           octave-cli ilu0.m
       - name: ILU(0) solve
@@ -72,13 +73,13 @@ jobs:
         run: |
           export PARRSB_DUMP_ILU=1
 
-          cp hostfile ${EXAMPLESDIR}/ilu scripts/ilu-solve.py \
+          cp ${EXAMPLESDIR}/ilu ${SCRIPTDIR}/ilu-solve.py \
             ${CIDIR}/${{ matrix.test }}
           cd ${CIDIR}/${{ matrix.test }}
 
           tol=(`cat test.txt | grep tol`); tol=${tol[2]}
-          mpirun -np ${{ matrix.np }} --hostfile hostfile ./ilu \
-            --mesh ${{ matrix.test }} --tol=${tol} --ilu_type=0 --ilu_solve=1
+          ${MPIEXE} -np ${{ matrix.np }} ./ilu --mesh ${{ matrix.test }} \
+            --tol=${tol} --ilu_type=0 --ilu_solve=1
 
           python ilu-solve.py --test_fw 1 --test_bw 1
       - name: ILUC factorization
@@ -87,13 +88,13 @@ jobs:
         run: |
           export PARRSB_DUMP_ILU=1
 
-          cp hostfile ${EXAMPLESDIR}/ilu scripts/iluc.m \
+          cp ${EXAMPLESDIR}/ilu ${SCRIPTDIR}/iluc.m \
             ${CIDIR}/${{ matrix.test }}
           cd ${CIDIR}/${{ matrix.test }}
 
           tol=(`cat test.txt | grep tol`); tol=${tol[2]}
-          mpirun -np ${{ matrix.np }} --hostfile hostfile ./ilu \
-            --mesh ${{ matrix.test }} --tol=${tol} --ilu_type=1
+          ${MPIEXE} -np ${{ matrix.np }} ./ilu --mesh ${{ matrix.test }} \
+            --tol=${tol} --ilu_type=1
 
           octave-cli iluc.m
       - name: ILUC solve
@@ -102,12 +103,12 @@ jobs:
         run: |
           export PARRSB_DUMP_ILU=1
 
-          cp hostfile ${EXAMPLESDIR}/ilu scripts/ilu-solve.py \
+          cp ${EXAMPLESDIR}/ilu ${SCRIPTDIR}/ilu-solve.py \
             ${CIDIR}/${{ matrix.test }}
           cd ${CIDIR}/${{ matrix.test }}
 
           tol=(`cat test.txt | grep tol`); tol=${tol[2]}
-          mpirun -np ${{ matrix.np }} --hostfile hostfile ./ilu \
-            --mesh ${{ matrix.test }} --tol=${tol} --ilu_type=1 --ilu_solve=1
+          ${MPIEXE} -np ${{ matrix.np }} ./ilu --mesh ${{ matrix.test }} \
+            --tol=${tol} --ilu_type=1 --ilu_solve=1
 
           python ilu-solve.py --test_fw 1 --test_bw 1

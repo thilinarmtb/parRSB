@@ -7,7 +7,8 @@ on:
 env:
   GITHUB.TOKEN: ${{ secrets.token }}
   CIDIR: parRSB-github-ci
-  MPICH_FC: gfortran
+  SCRIPTDIR: .github/workflows
+  MPIEXE: "mpirun --oversubscribe"
 jobs:
   coarse:
     runs-on: ubuntu-latest
@@ -25,7 +26,8 @@ jobs:
         shell: bash
         run: |
           sudo apt -y update
-          sudo apt install -y mpich libmpich-dev libblas-dev liblapack-dev
+          sudo apt install -y openmpi-bin libopenmpi-dev
+          sudo apt install -y libblas-dev liblapack-dev
           sudo apt install -y gfortran build-essential
       - name: Clone Nek5000 and tests
         shell: bash
@@ -37,15 +39,15 @@ jobs:
 
           # Clone Nek5000
           git clone https://github.com/thilinarmtb/Nek5000.git -b algo
-          echo "NEK_SOURCE_ROOT=`pwd`/Nek5000" >> $GITHUB_ENV
 
           cp -r ${PARRSBDIR} Nek5000/3rd_party/parRSB/
 
           # Clone tests
           git clone https://github.com/thilinarmtb/${CIDIR}.git
 
-          # For MPI
-          echo "localhost:4" > hostfile
+          # Set env. variable
+          echo "NEK_SOURCE_ROOT=`pwd`/Nek5000" >> $GITHUB_ENV
+          echo "PARRSBDIR=${PARRSBDIR}" >> $GITHUB_ENV
       - name: Schur with tolerance = 1e-5 or 20 project iterations
         if: always()
         shell: bash
@@ -53,7 +55,8 @@ jobs:
           cd ${HOME}/${CIDIR}/${{ matrix.test }}
 
           # Copy the scripts
-          cp ${NEK_SOURCE_ROOT}/bin/makenek ${NEK_SOURCE_ROOT}/bin/nekmpi .
+          cp ${NEK_SOURCE_ROOT}/bin/makenek .
+          cp ${PARRSBDIR}/${SCRIPTDIR}/nekmpi .
 
           # Buld the case
           PPLIST="PARRSB DPROCMAP" ./makenek ${{ matrix.test }}
