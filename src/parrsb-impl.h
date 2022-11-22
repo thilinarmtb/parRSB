@@ -71,8 +71,8 @@ uint get_components_v2(sint *component, struct array *elems, unsigned nv,
 #define CSR 2
 
 struct laplacian;
-struct laplacian *laplacian_init(struct rsb_element *elems, uint nel, int nv,
-                                 int type, struct comm *c, buffer *buf);
+struct laplacian *laplacian_init(struct array *elems, unsigned nv,
+                                 unsigned type, struct comm *c, buffer *buf);
 int laplacian(scalar *v, struct laplacian *l, scalar *u, buffer *buf);
 void laplacian_free(struct laplacian *l);
 

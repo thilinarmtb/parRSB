@@ -238,11 +238,10 @@ static int inverse(scalar *y, struct array *elements, int nv, scalar *z,
                    int factor, int sagg, int grammian, slong nelg,
                    buffer *buf) {
   metric_tic(gsc, RSB_INVERSE_SETUP);
-  uint lelt = elements->n;
-  struct rsb_element *elems = (struct rsb_element *)elements->ptr;
-  struct laplacian *wl = laplacian_init(elems, lelt, nv, GS, gsc, buf);
+  struct laplacian *wl = laplacian_init(elements, nv, GS, gsc, buf);
 
   // Reserve enough memory in buffer
+  uint lelt = elements->n;
   size_t wrk = sizeof(ulong) * lelt + sizeof(slong) * nv * lelt;
   buffer_reserve(buf, wrk);
 
@@ -253,10 +252,11 @@ static int inverse(scalar *y, struct array *elements, int nv, scalar *z,
   ulong *eid = (ulong *)buf->ptr;
   slong *vtx = (slong *)(eid + lelt);
   uint i, j, k, l;
+  struct rsb_element *pe = (struct rsb_element *)elements->ptr;
   for (i = k = 0; i < lelt; i++) {
     eid[i] = start + i + 1;
     for (j = 0; j < nv; j++)
-      vtx[k++] = elems[i].vertices[j];
+      vtx[k++] = pe[i].vertices[j];
   }
 
   // Setup LAMG preconditioner
@@ -587,14 +587,13 @@ static int lanczos(scalar *fiedler, struct array *arr, int nv, scalar *initv,
                    struct comm *c, int miter, int mpass, double tol, slong ng,
                    buffer *bfr) {
   metric_tic(c, RSB_LANCZOS_SETUP);
-  uint n = arr->n;
-  struct rsb_element *pa = (struct rsb_element *)arr->ptr;
-  struct laplacian *wl = laplacian_init(pa, n, nv, GS, c, bfr);
+  struct laplacian *wl = laplacian_init(arr, nv, GS, c, bfr);
   metric_toc(c, RSB_LANCZOS_SETUP);
 
   if (miter > ng)
     miter = ng;
 
+  uint n = arr->n;
   scalar *alpha = tcalloc(scalar, miter);
   scalar *beta = tcalloc(scalar, miter);
   scalar *rr = tcalloc(scalar, (miter + 1) * n);
