@@ -185,22 +185,22 @@ static int gs_weighted_free(struct laplacian *l) {
 // Laplacian
 //
 struct laplacian *laplacian_init(struct array *elems, unsigned nv,
-                                 unsigned type, struct comm *c, buffer *buf) {
+                                 unsigned type, struct comm *c, buffer *bfr) {
   struct laplacian *l = tcalloc(struct laplacian, 1);
   l->type = type, l->nv = nv, l->nel = elems->n;
 
   if (type & CSR)
-    par_csr_init(l, elems, nv, c, buf);
+    par_csr_init(l, elems, nv, c, bfr);
   else if (type & GS)
-    gs_weighted_init(l, elems, nv, c, buf);
+    gs_weighted_init(l, elems, nv, c, bfr);
   return l;
 }
 
-int laplacian(scalar *v, struct laplacian *l, scalar *u, buffer *buf) {
+int laplacian(scalar *v, struct laplacian *l, scalar *u, buffer *bfr) {
   if (l->type & CSR)
-    par_csr(v, l, u, buf);
+    par_csr(v, l, u, bfr);
   else if (l->type & GS)
-    gs_weighted(v, l, u, buf);
+    gs_weighted(v, l, u, bfr);
   else
     return 1;
   return 0;

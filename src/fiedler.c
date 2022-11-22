@@ -952,8 +952,4 @@ void fiedler_local(struct array *arr, uint sidx, uint eidx, int nv,
     pa[sidx + i].fiedler = f[i];
 
   tfree(initv), tfree(f);
-
-  uint midx = (sidx + eidx) / 2;
-  fiedler_local(arr, sidx, midx, nv, opts, bfr, verbose);
-  fiedler_local(arr, midx, eidx, nv, opts, bfr, verbose);
 }
