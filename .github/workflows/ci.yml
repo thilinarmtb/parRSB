@@ -57,7 +57,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          export PARRSB_RSB_PRE=0
           export PARRSB_RSB_ALGO=0
 
           cp hostfile ${EXAMPLESDIR}/genmap ${CIDIR}/${{ matrix.test }}
@@ -70,7 +69,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          export PARRSB_RSB_PRE=0
           export PARRSB_RSB_ALGO=1
           export PARRSB_RSB_MG_FACTOR=2
 
@@ -84,7 +82,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          export PARRSB_RSB_PRE=0
           export PARRSB_RSB_ALGO=1
           export PARRSB_RSB_MG_FACTOR=4
 
@@ -98,7 +95,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          export PARRSB_RSB_PRE=0
           export PARRSB_RSB_ALGO=1
           export PARRSB_RSB_MG_FACTOR=4
           export PARRSB_RSB_MG_SMOOTH_AGGREGATION=1
