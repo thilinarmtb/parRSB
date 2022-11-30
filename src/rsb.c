@@ -302,14 +302,14 @@ void rsb_local(struct array *a, uint sidx, uint eidx, unsigned nv,
   unsigned ndim = (nv == 8) ? 3 : 2;
   char *st = (char *)a->ptr + usize * sidx;
   switch (options->rsb_pre) {
-  case 0:
-    sarray_sort(struct rsb_element, st, size, globalId, 1, bfr);
-    break;
   case 1:
     rcb_local(a, usize, sidx, eidx, ndim, bfr);
     break;
   case 2:
     rib_local(a, usize, sidx, eidx, ndim, bfr);
+    break;
+  case 3:
+    sarray_sort(struct rsb_element, st, size, globalId, 1, bfr);
     break;
   default:
     break;

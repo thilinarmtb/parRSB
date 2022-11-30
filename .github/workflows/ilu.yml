@@ -4,6 +4,13 @@ on:
     branches: [main, next]
   pull_request:
     branches: [main, next]
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Run the tests with tmate debugging enabled'
+        required: false
+        default: false
 env:
   GITHUB.TOKEN: ${{ secrets.token }}
   CIDIR: parRSB-github-ci
@@ -25,6 +32,9 @@ jobs:
     steps:
       - name: Setup GitHub actions
         uses: actions/checkout@v3
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3.13
+        if: ${{ inputs.debug_enabled }}
       - name: Setup Python actions
         uses: actions/setup-python@v4
         with:
@@ -112,3 +122,6 @@ jobs:
             --tol=${tol} --ilu_type=1 --ilu_solve=1
 
           python ilu-solve.py --test_fw 1 --test_bw 1
+      - name: Block to allow inspecting failures
+        run: sleep 30m
+        if: ${{ failure() && inputs.debug_enabled }}

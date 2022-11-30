@@ -155,11 +155,24 @@ void mat_print(const struct mat *mat) {
 
 void mat_dump(const char *name, const struct mat *A, struct crystal *cr,
               buffer *bfr) {
+  if (cr == NULL) {
+    FILE *fp = fopen(name, "w+");
+    if (fp != NULL) {
+      for (uint i = 0; i < A->n; i++) {
+        for (uint j = A->Lp[i]; j < A->Lp[i + 1]; j++)
+          fprintf(fp, "%d %d %lf\n", i + 1, A->Li[j] + 1, A->L[j]);
+        if (A->D != NULL)
+          fprintf(fp, "%d %d %lf\n", i + 1, i + 1, A->D[i]);
+      }
+      fclose(fp);
+    }
+    return;
+  }
+
   struct array mijs;
   array_init(struct mij, &mijs, 1024);
 
   struct mij m = {.r = 0, .c = 0, .idx = 0, .p = 0, .v = 0};
-
   uint i, j;
   for (i = 0; i < A->n; i++) {
     m.r = A->start + i;
@@ -203,7 +216,7 @@ int mat_vec(double *y, struct mat *A, const double *x) {
     double sum = 0;
     for (uint j = A->Lp[i], je = A->Lp[i + 1]; j < je; j++) {
       uint idx = A->Li[j];
-      sum += x[idx] * A->L[idx];
+      sum += x[idx] * A->L[j];
     }
     y[i] = sum;
   }

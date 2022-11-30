@@ -4,6 +4,13 @@ on:
     branches: [main, next]
   pull_request:
     branches: [main, next]
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Run the tests with tmate debugging enabled'
+        required: false
+        default: false
 env:
   GITHUB.TOKEN: ${{ secrets.token }}
   CIDIR: parRSB-github-ci
@@ -23,6 +30,9 @@ jobs:
       CC: mpicc
     steps:
       - uses: actions/checkout@v3
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3.13
+        if: ${{ inputs.debug_enabled }}
       - name: Install apt dependencies
         shell: bash
         run: |
@@ -104,3 +114,6 @@ jobs:
           tol=(`cat test.txt | grep tol`); tol=${tol[2]}
           ${MPIEXE} -np ${{ matrix.np }} ./genmap --mesh ${{ matrix.test }} \
             --tol=${tol} --dump=0 --test=1
+      - name: Block to allow inspecting failures
+        run: sleep 30m
+        if: ${{ failure() && inputs.debug_enabled }}

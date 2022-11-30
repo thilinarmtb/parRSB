@@ -4,6 +4,13 @@ on:
     branches: [main, next]
   pull_request:
     branches: [main, next]
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Run the tests with tmate debugging enabled'
+        required: false
+        default: false
 env:
   GITHUB.TOKEN: ${{ secrets.token }}
   CIDIR: parRSB-github-ci
@@ -22,6 +29,9 @@ jobs:
       CC: mpicc
     steps:
       - uses: actions/checkout@v3
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3.13
+        if: ${{ inputs.debug_enabled }}
       - name: Install apt dependencies
         shell: bash
         run: |
@@ -70,5 +80,8 @@ jobs:
           ./nekmpi ${{ matrix.test }} ${{ matrix.np }} | tee schur.log
           grep 'PRES gmres' schur.log | awk '{ print $4 }' > schur.iter
 
-          diff=`paste -d' ' schur.iter xxt.iter | awk '{ tmp=$1-$2; print sqrt(tmp*tmp) }' | sort -n | tail -n 1`
-          echo ${diff}
+          diff=$(paste -d' ' schur.iter xxt.iter | awk '{ tmp=$1-$2; print sqrt(tmp*tmp) }' | sort -n | tail -n 1)
+          echo "${diff}"
+      - name: Block to allow inspecting failures
+        run: sleep 30m
+        if: ${{ failure() && inputs.debug_enabled }}

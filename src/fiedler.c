@@ -713,19 +713,19 @@ static struct mat *laplacian_local(const struct rsb_element *pe, uint ne,
 
   struct nbr_t v = {.r = 0, .c = 0};
   for (uint i = 0; i < ne; i++) {
-    v.r = pe[i].globalId;
+    v.r = i + 1;
     for (unsigned j = 0; j < nv; j++) {
       v.c = pe[i].vertices[j];
       array_cat(struct nbr_t, &vertices, &v, 1);
     }
   }
 
+  sarray_sort(struct nbr_t, vertices.ptr, vertices.n, c, 1, bfr);
+
   struct array nbrs;
   array_init(struct nbr_t, &nbrs, vertices.n * 10 + 1);
 
-  sarray_sort(struct nbr_t, vertices.ptr, vertices.n, c, 1, bfr);
   const struct nbr_t *pv = (struct nbr_t *)vertices.ptr;
-
   sint i = 0;
   while (i < vertices.n) {
     sint j = i + 1;
@@ -737,25 +737,29 @@ static struct mat *laplacian_local(const struct rsb_element *pe, uint ne,
         array_cat(struct nbr_t, &nbrs, &v, 1);
       }
     }
+    i = j;
   }
   array_free(&vertices);
 
-  struct array mijs;
-  array_init(struct mij, &mijs, nbrs.n * 10 + 1);
-
   sarray_sort_2(struct nbr_t, nbrs.ptr, nbrs.n, r, 1, c, 1, bfr);
-  const struct nbr_t *pn = (struct nbr_t *)nbrs.ptr;
 
+  struct array mijs;
+  array_init(struct mij, &mijs, nbrs.n + 1);
+
+  const struct nbr_t *pn = (struct nbr_t *)nbrs.ptr;
   struct mij m = {.r = 0, .c = 0, .v = 0};
   i = 0;
   while (i < nbrs.n) {
     sint j = i + 1;
     while (j < nbrs.n && pn[i].c == pn[j].c && pn[i].r == pn[j].r)
       j++;
-    m.r = pn[i].r, pn[i].c, m.v = i - j; // -(j - i)
+    m.r = pn[i].r, m.c = pn[i].c, m.v = i - j; // -(j - i)
     array_cat(struct mij, &mijs, &m, 1);
+    i = j;
   }
   array_free(&nbrs);
+
+  sarray_sort_2(struct mij, mijs.ptr, mijs.n, r, 1, c, 1, bfr);
 
   // Make sure that we have zero row sum
   struct mij *pm = (struct mij *)mijs.ptr;
@@ -771,6 +775,7 @@ static struct mat *laplacian_local(const struct rsb_element *pe, uint ne,
       j++;
     }
     assert(d >= 0);
+    assert(sum < 0);
     pm[d].v = -sum;
     i = j;
   }
@@ -796,7 +801,7 @@ static int lanczos_aux_local(scalar *diag, scalar *upper, scalar *rr, uint n,
   orthol(r, n);
 
   scalar rtz1 = 1, rtz2, pap1 = 0, pap2;
-  scalar rtr = dot(r, r, n), wrk[2];
+  scalar rtr = dot(r, r, n);
   scalar rnorm = sqrt(rtr), rtol = rnorm * tol;
 
   // vec_scale(rr[0], r, rni);
@@ -878,7 +883,6 @@ static int lanczos_local(scalar *fiedler, struct array *arr, uint sidx,
 
   unsigned iter = miter, pass = 0;
   while (pass < mpass) {
-    double t = comm_time();
     iter = lanczos_aux_local(alpha, beta, rr, n, miter, tol, initv, A, bfr);
 
     // Use TQLI and find the minimum eigenvalue and associated vector
@@ -909,7 +913,7 @@ static int lanczos_local(scalar *fiedler, struct array *arr, uint sidx,
   }
 
   tfree(alpha), tfree(beta), tfree(rr), tfree(evecs), tfree(evals);
-  mat_free(A);
+  mat_free(A), tfree(A);
 
   return (pass - 1) * miter + iter;
 }
@@ -928,9 +932,9 @@ void fiedler_local(struct array *arr, uint sidx, uint eidx, int nv,
 
   orthol(initv, n);
   scalar rtr = dot(initv, initv, n);
-  rtr = 1.0 / sqrt(rtr);
+  scalar rni = 1.0 / sqrt(rtr);
   for (uint i = 0; i < n; i++)
-    initv[i] *= rtr;
+    initv[i] *= rni;
 
   unsigned iter = 0;
   scalar *f = tcalloc(scalar, n);
@@ -943,9 +947,9 @@ void fiedler_local(struct array *arr, uint sidx, uint eidx, int nv,
     break;
   }
 
-  scalar norm = 1.0 / sqrt(dot(f, f, n));
+  rni = 1.0 / sqrt(dot(f, f, n));
   for (uint i = 0; i < n; i++)
-    f[i] *= norm;
+    f[i] *= rni;
 
   struct rsb_element *pa = (struct rsb_element *)arr->ptr;
   for (uint i = 0; i < n; i++)

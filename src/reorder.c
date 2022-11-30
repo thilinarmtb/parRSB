@@ -134,7 +134,7 @@ void parrsb_reorder_dofs(long long *nid, unsigned n, unsigned nv,
   }
   tfree(levels);
 
-  sarray_sort(struct dof_t, dofs.ptr, dofs.n, level, 0, &bfr);
+  sarray_sort_2(struct dof_t, dofs.ptr, dofs.n, level, 0, id, 1, &bfr);
 
   sint min = INT_MAX, max = -INT_MAX;
   if (dofs.n > 0) {
@@ -277,9 +277,9 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
     uint e = s + 1;
     while (e < vtxs.n && pv[s].id == pv[e].id)
       e++;
-    for (unsigned i = s; i < e; i++) {
+    for (uint i = s; i < e; i++) {
       vt = pv[i];
-      for (unsigned j = s; j < e; j++) {
+      for (uint j = s; j < e; j++) {
         vt.o = pv[j].o;
         array_cat(struct vtx_t, &vtx2p, &vt, 1);
       }
