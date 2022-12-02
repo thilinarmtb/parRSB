@@ -235,8 +235,8 @@ void fparrsb_reorder_dofs(long long *nid, int *n, int *nv, long long *ids,
 }
 
 void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
-                       long long *vids, double *xyz, int *mask,
-                       const MPI_Comm comm, unsigned maxne) {
+                       long long *vids, double *xyz, int *frontier, int *mask,
+                       double *mat, const MPI_Comm comm, unsigned maxne) {
   size_t ne = *nei, size = nv;
   size *= ne;
 
@@ -292,13 +292,14 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
   sarray_sort_2(struct vtx_t, vtx2p.ptr, vtx2p.n, seq, 0, o, 0, &bfr);
 
   uint *offs = tcalloc(uint, ne + 1);
-  uint *proc = tcalloc(uint, ne * 4), nproc = ne * 4;
+  uint *proc = tcalloc(uint, ne * 4), nproc = ne * 4 + 1;
   pv = (struct vtx_t *)vtx2p.ptr, s = 0;
   while (s < vtx2p.n) {
     uint seq = pv[s].seq, e = s + 1;
     while (e < vtx2p.n && seq == pv[e].seq)
       e++;
 
+    // FIXME: Make work a dynamic array.
     uint work[1024], n = 1;
     work[0] = pv[s].o;
     for (uint i = s + 1; i < e; i++) {
@@ -319,7 +320,8 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
 
   struct elem_t {
     ulong eid, vid[8];
-    double xyz[3 * 8];
+    double xyz[3 * 8], A[8 * 8];
+    int mask[8];
     uint p;
   };
 
@@ -331,9 +333,11 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
   for (uint e = 0; e < ne; e++) {
     et.eid = eids[e];
     for (unsigned v = 0; v < nv; v++) {
-      et.vid[v] = vids[e * nv + v];
+      et.vid[v] = vids[e * nv + v], et.mask[v] = mask[e * nv + v];
       for (unsigned d = 0; d < nd; d++)
         et.xyz[v * nd + d] = xyz[e * nv * nd + v * nd + d];
+      for (unsigned u = 0; u < nv; u++)
+        et.A[v * nv + u] = mat[e * nv * nv + v * nv + u];
     }
     for (uint s = offs[e]; s < offs[e + 1]; s++) {
       et.p = proc[s];
@@ -359,32 +363,53 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
   sarray_sort(struct elem_t, elems.ptr, elems.n, eid, 1, &bfr);
   buffer_free(&bfr);
 
-  *nei = elems.n;
+  // Get rid of the duplicates.
+  struct array uelems;
+  array_init(struct elem_t, &uelems, elems.n / 2 + 1);
+
   if (elems.n > 0) {
     struct elem_t *pe = (struct elem_t *)elems.ptr;
-    for (uint e = 0; e < elems.n; e++) {
+
+    array_cat(struct elem_t, &uelems, &pe[0], 1);
+    uint i = 0, j = 1;
+    while (j < elems.n) {
+      if (pe[j].eid != pe[i].eid) {
+        array_cat(struct elem_t, &uelems, &pe[j], 1);
+        i = j;
+      }
+      j++;
+    }
+  }
+
+  array_free(&elems);
+
+  *nei = uelems.n;
+  if (uelems.n > 0) {
+    struct elem_t *pe = (struct elem_t *)uelems.ptr;
+    for (uint e = 0; e < uelems.n; e++) {
       eids[e] = pe[e].eid;
-      mask[e] = (pe[e].p != ci.id);
       for (unsigned v = 0; v < nv; v++) {
-        vids[e * nv + v] = pe[e].vid[v];
-        for (unsigned d = 0; d < nv; d++)
-          xyz[e * nv + v * nd + d] = pe[e].xyz[v * nd + d];
+        vids[e * nv + v] = pe[e].vid[v], mask[e * nv + v] = pe[e].mask[v];
+        for (unsigned d = 0; d < nd; d++)
+          xyz[e * nv * nd + v * nd + d] = pe[e].xyz[v * nd + d];
+        for (unsigned u = 0; u < nv; u++)
+          amat[e * nv * nv + v * nv + u] = pe[e].A[v * nv + u];
       }
     }
   }
 
-  array_free(&elems), comm_free(&ci);
+  array_free(&uelems), comm_free(&ci);
 }
 
 #define fparrsb_fetch_nbrs                                                     \
   FORTRAN_UNPREFIXED(fparrsb_fetch_nbrs, FPARRSB_FETCH_NBRS)
 void fparrsb_fetch_nbrs(int *nei, long long *eids, int *nv, long long *vids,
-                        double *xyz, int *mask, MPI_Fint *comm, int *maxne,
-                        int *err) {
+                        double *xyz, int *frontier, int *mask, double *mat,
+                        MPI_Fint *comm, int *maxne, int *err) {
   *err = 1;
   MPI_Comm c = MPI_Comm_f2c(*comm);
   unsigned ne = *nei;
-  parrsb_fetch_nbrs(&ne, eids, *nv, vids, xyz, mask, c, *maxne);
+  parrsb_fetch_nbrs(&ne, eids, *nv, vids, xyz, frontier, mask, mat, c, *maxne);
   *nei = ne;
   *err = 0;
 }
