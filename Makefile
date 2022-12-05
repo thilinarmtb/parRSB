@@ -16,20 +16,18 @@ endif
 
 MKFILEPATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 SRCROOT := $(realpath $(patsubst %/,%,$(dir $(MKFILEPATH))))
-SRCDIR = $(SRCROOT)/src
-EXAMPLEDIR = $(SRCROOT)/examples
-BUILDROOT = $(SRCROOT)/build
-INSTALLROOT = $(BUILDROOT)/install
+SRC := $(SRCROOT)/src
+EXAMPLE := $(SRCROOT)/examples
+BUILD := $(SRCROOT)/build
+INSTALL := $(BUILD)/install
 ifneq ($(strip $(DESTDIR)),)
-  INSTALLROOT = $(realpath $(DESTDIR))
+  INSTALL = $(realpath $(DESTDIR))
 endif
 
-SRCS = $(wildcard $(SRCDIR)/*.c)
-SRCOBJS = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%.o,$(SRCS))
-EXAMPLES = $(wildcard $(EXAMPLEDIR)/*.c)
-EXAMPLEBINS = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%,$(EXAMPLES))
+SRCS = $(patsubst $(SRCROOT)/%.c,$(BUILD)/%.o,$(wildcard $(SRC)/*.c))
+EXAMPLES = $(patsubst $(SRCROOT)/%.c,$(BUILD)/%,$(wildcard $(EXAMPLE)/*.c))
 
-LIB = $(BUILDROOT)/lib/libparRSB.a
+LIB = $(BUILD)/lib/libparRSB.a
 
 ifneq ($(DEBUG),0)
   PP += -DPARRSB_DEBUG
@@ -58,7 +56,7 @@ ifneq ($(BLAS),0)
   LDFLAGS += $(BLASFLAGS)
 endif
 
-INCFLAGS = -I$(SRCDIR) -I$(GSLIBPATH)/include
+INCFLAGS = -I$(SRC) -I$(GSLIBPATH)/include
 CCCMD = $(CC) $(CFLAGS) $(INCFLAGS) $(PP)
 LDFLAGS += -lm
 
@@ -66,24 +64,24 @@ LDFLAGS += -lm
 
 all: lib install
 
-lib: $(SRCOBJS)
-	@mkdir -p $(BUILDROOT)/lib
+lib: $(SRCS)
+	@mkdir -p $(BUILD)/lib
 	@$(AR) cr $(LIB) $?
 	@ranlib $(LIB)
 
 install: lib
-	@mkdir -p $(INSTALLROOT)/lib 2>/dev/null
-	@cp -v $(LIB) $(INSTALLROOT)/lib 2>/dev/null
-	@mkdir -p $(INSTALLROOT)/include 2>/dev/null
-	@cp $(SRCDIR)/*.h $(INSTALLROOT)/include 2>/dev/null
+	@mkdir -p $(INSTALL)/lib 2>/dev/null
+	@cp -v $(LIB) $(INSTALL)/lib 2>/dev/null
+	@mkdir -p $(INSTALL)/include 2>/dev/null
+	@cp $(SRC)/*.h $(INSTALL)/include 2>/dev/null
 
-examples: lib install $(EXAMPLEBINS)
+examples: install $(EXAMPLES)
 
 format:
 	find . -iname *.h -o -iname *.c -o -iname *.okl | xargs clang-format -i
 
 clean:
-	@$(RM) -rf $(BUILDROOT)
+	@$(RM) -rf $(BUILD)
 
 print-%:
 	$(info [ variable name]: $*)
@@ -93,12 +91,11 @@ print-%:
 	$(info)
 	@true
 
-$(BUILDROOT)/%.o: $(SRCROOT)/%.c
+$(BUILD)/src/%.o: $(SRC)/%.c | dir
 	$(CCCMD) -c $< -o $@
 
-$(BUILDROOT)/%: $(SRCROOT)/%.c | lib install
-	$(CCCMD) $< -o $@ -L$(INSTALLROOT)/lib -lparRSB -L$(GSLIBPATH)/lib -lgs \
-		$(LDFLAGS)
+$(BUILD)/examples/%: $(EXAMPLE)/%.c | lib install dir
+	$(CCCMD) $< -o $@ -L$(INSTALL)/lib -lparRSB -L$(GSLIBPATH)/lib -lgs $(LDFLAGS)
 
-$(shell mkdir -p $(BUILDROOT)/examples)
-$(shell mkdir -p $(BUILDROOT)/src)
+dir:
+	mkdir -p $(BUILD)/src $(BUILD)/examples
