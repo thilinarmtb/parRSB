@@ -234,9 +234,142 @@ void fparrsb_reorder_dofs(long long *nid, int *n, int *nv, long long *ids,
   *err = 0;
 }
 
+int FACE_VERTICES[6][4] = {{0, 2, 4, 6}, {1, 3, 5, 7}, {0, 1, 4, 5},
+                           {2, 3, 6, 7}, {0, 1, 2, 3}, {4, 5, 6, 7}};
+
+void id_elements_with_unconnected_faces(int *frontier, uint ne, unsigned nv,
+                                        const long long *vids, buffer *bfr) {
+  if (nv != 8) {
+    fprintf(stderr, "Only 3D hexes (nv = 8) are supported !\n");
+    fflush(stderr);
+    exit(1);
+  }
+  unsigned nf = 6;
+  unsigned nvf = nv / 2;
+
+  // If an element has at least one face on the boundary (i.e., not connected
+  // to any other face, the element is on the frontier. Refer src/con.c for
+  // symmetric numbering of vertices and faces. A face can only have only one
+  // other face neighbor.
+  struct face_t {
+    uint seq, connected;
+    ulong vtx[4];
+  };
+
+  struct array faces;
+  array_init(struct face_t, &faces, 6 * ne + 1);
+
+  struct face_t face = {.connected = 0};
+  ulong tmp;
+  for (uint e = 0; e < ne; e++) {
+    face.seq = e;
+    for (unsigned f = 0; f < nf; f++) {
+      // set face vertices
+      for (unsigned v = 0; v < nvf; v++)
+        face.vtx[v] = vids[e * nv + FACE_VERTICES[f][v]];
+      // sort face vertices
+      for (unsigned v = 0; v < nvf - 1; v++) {
+        for (unsigned v1 = v + 1; v1 < nvf; v1++) {
+          if (face.vtx[v1] < face.vtx[v])
+            tmp = face.vtx[v], face.vtx[v] = face.vtx[v1], face.vtx[v1] = tmp;
+        }
+      }
+      array_cat(struct face_t, &faces, &face, 1);
+    }
+  }
+
+  sarray_sort_3(struct face_t, faces.ptr, faces.n, vtx[0], 1, vtx[1], 1, vtx[2],
+                1, bfr);
+  struct face_t *pf = (struct face_t *)faces.ptr;
+  uint i = 0;
+  while (i + 1 < faces.n) {
+    if (pf[i].vtx[0] == pf[i + 1].vtx[0] && pf[i].vtx[0] == pf[i + 1].vtx[1] &&
+        pf[i].vtx[2] == pf[i + 1].vtx[2]) {
+      pf[i].connected = pf[i + 1].connected = 1, i++;
+    }
+    i++;
+  }
+
+  sarray_sort(struct face_t, faces.ptr, faces.n, seq, 0, bfr);
+  pf = (struct face_t *)faces.ptr;
+  for (uint e = 0; e < ne; e++) {
+    frontier[e] = 0;
+    for (unsigned f = 0; f < nf; f++) {
+      if (!pf[e * nf + f].connected) {
+        frontier[e] = 1;
+        break;
+      }
+    }
+  }
+
+  array_free(&faces);
+}
+
+struct elem_t {
+  ulong eid, vid[8];
+  double xyz[8 * 3], mat[8 * 8], mask[8];
+  uint p;
+};
+
+void find_vtx_frontiers(int *frontier, long long *vtx, struct array *uelems,
+                        uint ne, const long long *eids, unsigned nv,
+                        struct comm *ci, buffer *bfr) {
+  struct id_t {
+    ulong id;
+  };
+
+  struct array ids;
+  array_init(struct id_t, &ids, ne + 1);
+
+  struct id_t id;
+  for (uint i = 0; i < ne; i++) {
+    id.id = eids[i];
+    array_cat(struct id_t, &ids, &id, 1);
+  }
+
+  sarray_sort(struct id_t, ids.ptr, ids.n, id, 1, bfr);
+
+  // Mark everything as in frontier first.
+  uint nu = uelems->n;
+  for (uint i = 0; i < nu * nv; i++)
+    frontier[i] = 0;
+
+  // Unmark them if the element was part of input.
+  struct elem_t *pu = (struct elem_t *)uelems->ptr;
+  struct id_t *pi = (struct id_t *)ids.ptr;
+  uint i = 0, j = 0;
+  while (i < ne) {
+    for (; j < nu && pu[j].eid < pi[i].id; j++)
+      ;
+    for (; j < nu && pu[j].eid == pi[i].id; j++) {
+      for (unsigned v = 0; v < nv; v++)
+        frontier[j * nv + v] = 1;
+    }
+    i++;
+  }
+
+  if (uelems->n > 0) {
+    struct elem_t *pe = (struct elem_t *)uelems->ptr;
+    for (uint i = 0; i < uelems->n; i++) {
+      for (unsigned v = 0; v < nv; v++)
+        vtx[i * nv + v] = pe[i].vid[v];
+    }
+    struct comm c;
+    comm_split(ci, ci->id, ci->id, &c);
+
+    struct gs_data *gsh = gs_setup(vtx, uelems->n * nv, &c, 0, gs_pairwise, 0);
+    gs(frontier, gs_int, gs_max, 0, gsh, bfr);
+
+    gs_free(gsh), comm_free(&c);
+  }
+
+  array_free(&ids);
+}
+
 void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
-                       long long *vids, double *xyz, int *frontier, int *mask,
-                       double *mat, const MPI_Comm comm, unsigned maxne) {
+                       long long *vids, double *xyz, int *frontier,
+                       double *mask, double *mat, const MPI_Comm comm,
+                       unsigned maxne) {
   size_t ne = *nei, size = nv;
   size *= ne;
 
@@ -318,13 +451,6 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
   }
   array_free(&vtx2p);
 
-  struct elem_t {
-    ulong eid, vid[8];
-    double xyz[3 * 8], A[8 * 8];
-    int mask[8];
-    uint p;
-  };
-
   struct array elems;
   array_init(struct elem_t, &elems, size);
 
@@ -337,7 +463,7 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
       for (unsigned d = 0; d < nd; d++)
         et.xyz[v * nd + d] = xyz[e * nv * nd + v * nd + d];
       for (unsigned u = 0; u < nv; u++)
-        et.A[v * nv + u] = mat[e * nv * nv + v * nv + u];
+        et.mat[v * nv + u] = mat[e * nv * nv + v * nv + u];
     }
     for (uint s = offs[e]; s < offs[e + 1]; s++) {
       et.p = proc[s];
@@ -349,24 +475,11 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
   sarray_transfer(struct elem_t, &elems, p, 1, &cr);
   crystal_free(&cr);
 
-  sint err = (elems.n > maxne), wrk;
-  comm_allreduce(&ci, gs_int, gs_add, &err, 1, &wrk);
-  if (err > 0) {
-    if (ci.id == 0) {
-      fprintf(stderr, "maxne = %u is not large enough !\n", maxne);
-      fflush(stderr);
-    }
-    buffer_free(&bfr), array_free(&elems), comm_free(&ci);
-    exit(1);
-  }
-
-  sarray_sort(struct elem_t, elems.ptr, elems.n, eid, 1, &bfr);
-  buffer_free(&bfr);
-
   // Get rid of the duplicates.
   struct array uelems;
   array_init(struct elem_t, &uelems, elems.n / 2 + 1);
 
+  sarray_sort(struct elem_t, elems.ptr, elems.n, eid, 1, &bfr);
   if (elems.n > 0) {
     struct elem_t *pe = (struct elem_t *)elems.ptr;
 
@@ -380,8 +493,20 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
       j++;
     }
   }
-
   array_free(&elems);
+
+  sint err = (uelems.n > maxne), wrk;
+  comm_allreduce(&ci, gs_int, gs_add, &err, 1, &wrk);
+  if (err > 0) {
+    if (ci.id == 0) {
+      fprintf(stderr, "maxne = %u is not large enough !\n", maxne);
+      fflush(stderr);
+    }
+    buffer_free(&bfr), array_free(&uelems), comm_free(&ci);
+    exit(1);
+  }
+
+  find_vtx_frontiers(frontier, vids, &uelems, ne, eids, nv, &ci, &bfr);
 
   *nei = uelems.n;
   if (uelems.n > 0) {
@@ -389,22 +514,23 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
     for (uint e = 0; e < uelems.n; e++) {
       eids[e] = pe[e].eid;
       for (unsigned v = 0; v < nv; v++) {
-        vids[e * nv + v] = pe[e].vid[v], mask[e * nv + v] = pe[e].mask[v];
+        mask[e * nv + v] = pe[e].mask[v];
         for (unsigned d = 0; d < nd; d++)
           xyz[e * nv * nd + v * nd + d] = pe[e].xyz[v * nd + d];
         for (unsigned u = 0; u < nv; u++)
-          amat[e * nv * nv + v * nv + u] = pe[e].A[v * nv + u];
+          mat[e * nv * nv + v * nv + u] = pe[e].mat[v * nv + u];
       }
     }
   }
-
   array_free(&uelems), comm_free(&ci);
+
+  buffer_free(&bfr);
 }
 
 #define fparrsb_fetch_nbrs                                                     \
   FORTRAN_UNPREFIXED(fparrsb_fetch_nbrs, FPARRSB_FETCH_NBRS)
 void fparrsb_fetch_nbrs(int *nei, long long *eids, int *nv, long long *vids,
-                        double *xyz, int *frontier, int *mask, double *mat,
+                        double *xyz, int *frontier, double *mask, double *mat,
                         MPI_Fint *comm, int *maxne, int *err) {
   *err = 1;
   MPI_Comm c = MPI_Comm_f2c(*comm);

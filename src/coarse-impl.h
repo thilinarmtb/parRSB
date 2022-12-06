@@ -4,7 +4,7 @@
 #include "coarse.h"
 #include "mat.h"
 
-uint unique_ids(sint *perm, ulong *uid, uint n, const ulong *ids, buffer *bfr);
+uint unique_ids(sint *perm, ulong *uid, uint n, const slong *ids, buffer *bfr);
 
 struct coarse {
   unsigned type;       // type = schur-2-lvl, schur-3-lvl

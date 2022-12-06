@@ -169,12 +169,14 @@ void get_vertex_coordinates(double **coords_, Mesh mesh) {
   struct point_t *ptr = (struct point_t *)mesh->elements.ptr;
   int e, v, d;
   int count = 0;
-  for (e = 0; e < nelt; e++)
-    for (v = 0; v < nv; v++)
+  for (e = 0; e < nelt; e++) {
+    for (v = 0; v < nv; v++) {
       for (d = 0; d < ndim; d++) {
         coords[count] = ptr[e * nv + v].x[d];
         count++;
       }
+    }
+  }
 }
 
 int get_bcs(unsigned int *nbcs_, long long **bcs_, Mesh m) {
@@ -1373,20 +1375,20 @@ int parrsb_conn_mesh(long long *vtx, double *coord, int nelt, int ndim,
   parrsb_barrier(&c);
   double t = comm_time();
   sint err = transferBoundaryFaces(mesh, &c);
-  check_error(err, "transferBoundaryFaces");
   duration[0] = comm_time() - t;
+  check_error(err, "transferBoundaryFaces");
 
   parrsb_barrier(&c);
   t = comm_time();
   err = findMinNeighborDistance(mesh);
-  check_error(err, "findMinNeighborDistance");
   duration[1] = comm_time() - t;
+  check_error(err, "findMinNeighborDistance");
 
   parrsb_barrier(&c);
   t = comm_time();
   err = findUniqueVertices(mesh, &c, tol, verbose, &bfr);
-  check_error(err, "findSegments");
   duration[2] = comm_time() - t;
+  check_error(err, "findSegments");
 
   parrsb_barrier(&c);
   t = comm_time();
@@ -1397,20 +1399,20 @@ int parrsb_conn_mesh(long long *vtx, double *coord, int nelt, int ndim,
   parrsb_barrier(&c);
   t = comm_time();
   err = elementCheck(mesh, &c, &bfr);
-  check_error(err, "elementCheck");
   duration[4] = comm_time() - t;
+  check_error(err, "elementCheck");
 
   parrsb_barrier(&c);
   t = comm_time();
   err = faceCheck(mesh, &c, &bfr);
-  check_error(err, "faceCheck");
   duration[5] = comm_time() - t;
+  check_error(err, "faceCheck");
 
   parrsb_barrier(&c);
   t = comm_time();
   err = matchPeriodicFaces(mesh, &c, &bfr);
-  check_error(err, "matchPeriodicFaces");
   duration[6] = comm_time() - t;
+  check_error(err, "matchPeriodicFaces");
 
   // Copy output
   Point ptr = mesh->elements.ptr;
@@ -1439,10 +1441,7 @@ int parrsb_conn_mesh(long long *vtx, double *coord, int nelt, int ndim,
     fflush(stdout);
   }
 
-  buffer_free(&bfr);
-  mesh_free(mesh);
-  comm_free(&c);
-
+  buffer_free(&bfr), mesh_free(mesh), comm_free(&c);
   return err;
 }
 

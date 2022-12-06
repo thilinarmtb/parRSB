@@ -100,7 +100,7 @@ static void nmbr_local_rcb(struct array *a, uint s, uint e, const unsigned nc,
 // Number the DOFs internal first, faces second and all the rest (wire basket)
 // next. This keeps zeros as is and renumber the positive entries in `ids`
 // array.
-static void number_dual_graph_dofs(ulong *dofs, struct coarse *crs, uint n,
+static void number_dual_graph_dofs(slong *dofs, struct coarse *crs, uint n,
                                    const slong *ids, uint nelt, unsigned ndim,
                                    const scalar *coord, buffer *bfr) {
   struct comm c;
@@ -210,7 +210,7 @@ struct coarse *coarse_setup(unsigned n, unsigned nc, const long long *vl,
   for (uint i = 0; i < size; i++)
     tid[i] = vl[i];
 
-  ulong *nid = tcalloc(ulong, n);
+  slong *nid = tcalloc(slong, n);
   unsigned ndim = (nc == 8) ? 3 : 2;
   number_dual_graph_dofs(nid, crs, size, tid, crs->un, ndim, coord, &crs->bfr);
 
@@ -226,7 +226,11 @@ struct coarse *coarse_setup(unsigned n, unsigned nc, const long long *vl,
   crystal_init(&cr, &crs->c);
 
   struct array nbrs, eij;
-  find_nbrs(&nbrs, nid, tid, n, nc, &cr, &crs->bfr);
+  for (uint i = 0; i < n; i++)
+    uid[i] = nid[i];
+  find_nbrs(&nbrs, uid, tid, n, nc, &cr, &crs->bfr);
+  free(tid), free(nid), free(uid);
+
   // Convert `struct nbr` -> `struct mij` and compress entries which share the
   // same (r, c) values. Set the diagonal element to have zero row sum
   compress_nbrs(&eij, &nbrs, &crs->bfr);
@@ -241,7 +245,6 @@ struct coarse *coarse_setup(unsigned n, unsigned nc, const long long *vl,
   }
 
   array_free(&eij), crystal_free(&cr);
-  free(tid), free(nid), free(uid);
 
   return crs;
 }

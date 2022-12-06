@@ -3,7 +3,7 @@
 #include "sort.h"
 #include <float.h>
 
-uint unique_ids(sint *perm, ulong *uid, uint n, const ulong *ids, buffer *bfr) {
+uint unique_ids(sint *perm, ulong *uid, uint n, const slong *ids, buffer *bfr) {
   struct id_t {
     ulong id;
     uint idx;
