@@ -308,12 +308,13 @@ void id_elements_with_unconnected_faces(int *frontier, uint ne, unsigned nv,
 struct elem_t {
   ulong eid, vid[8];
   double xyz[8 * 3], mat[8 * 8], mask[8];
+  int frontier[8];
   uint p;
 };
 
-void find_vtx_frontiers(int *frontier, long long *vtx, struct array *uelems,
-                        uint ne, const long long *eids, unsigned nv,
-                        struct comm *ci, buffer *bfr) {
+int find_vtx_frontiers(int *frontier, long long *vtx, struct array *uelems,
+                       uint ne, const long long *eids, unsigned nv,
+                       struct comm *ci, buffer *bfr) {
   struct id_t {
     ulong id;
   };
@@ -329,54 +330,68 @@ void find_vtx_frontiers(int *frontier, long long *vtx, struct array *uelems,
 
   sarray_sort(struct id_t, ids.ptr, ids.n, id, 1, bfr);
 
-  // Mark everything as in frontier first.
+  // Initialize the frontier to -1. We will copy the frontier value for all the
+  // input elements as is and for the new elements, it will be max(frontier
+  // value of input elements) + 1.
   uint nu = uelems->n;
   for (uint i = 0; i < nu * nv; i++)
-    frontier[i] = 0;
+    frontier[i] = -1;
 
-  // Unmark them if the element was part of input.
   struct elem_t *pu = (struct elem_t *)uelems->ptr;
   struct id_t *pi = (struct id_t *)ids.ptr;
+  int maxf = -1;
   uint i = 0, j = 0;
   while (i < ne) {
     for (; j < nu && pu[j].eid < pi[i].id; j++)
       ;
     for (; j < nu && pu[j].eid == pi[i].id; j++) {
-      for (unsigned v = 0; v < nv; v++)
-        frontier[j * nv + v] = 1;
+      for (unsigned v = 0; v < nv; v++) {
+        frontier[j * nv + v] = pu[j].frontier[v];
+        if (frontier[j * nv + v] > maxf)
+          maxf = frontier[j * nv + v];
+      }
     }
     i++;
   }
 
-  if (uelems->n > 0) {
+  maxf++;
+  for (uint i = 0; i < nu; i++) {
+    for (unsigned v = 0; v < nv; v++) {
+      if (frontier[i * nv + v] == -1)
+        frontier[i * nv + v] = maxf;
+    }
+  }
+
+  if (nu > 0) {
     struct elem_t *pe = (struct elem_t *)uelems->ptr;
-    for (uint i = 0; i < uelems->n; i++) {
+    for (uint i = 0; i < nu; i++) {
       for (unsigned v = 0; v < nv; v++)
         vtx[i * nv + v] = pe[i].vid[v];
     }
+
     struct comm c;
     comm_split(ci, ci->id, ci->id, &c);
-
     struct gs_data *gsh = gs_setup(vtx, uelems->n * nv, &c, 0, gs_pairwise, 0);
-    gs(frontier, gs_int, gs_max, 0, gsh, bfr);
-
+    gs(frontier, gs_int, gs_min, 0, gsh, bfr);
     gs_free(gsh), comm_free(&c);
   }
 
   array_free(&ids);
+
+  return maxf;
 }
 
 void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
-                       long long *vids, double *xyz, int *frontier,
-                       double *mask, double *mat, const MPI_Comm comm,
+                       long long *vids, double *xyz, double *mask, double *mat,
+                       unsigned *nwi, int *frontier, const MPI_Comm comm,
                        unsigned maxne) {
-  size_t ne = *nei, size = nv;
-  size *= ne;
-
   struct vtx_t {
     ulong id;
     uint p, o, seq;
   };
+
+  size_t ne = *nei, size = nv;
+  size *= ne;
 
   struct array vtxs;
   array_init(struct vtx_t, &vtxs, size);
@@ -425,15 +440,17 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
   sarray_sort_2(struct vtx_t, vtx2p.ptr, vtx2p.n, seq, 0, o, 0, &bfr);
 
   uint *offs = tcalloc(uint, ne + 1);
-  uint *proc = tcalloc(uint, ne * 4), nproc = ne * 4 + 1;
+  uint *proc = tcalloc(uint, ne * 4 + 1), nproc = ne * 4 + 1;
+  uint *work = tcalloc(uint, 1024), nwork = 1024;
   pv = (struct vtx_t *)vtx2p.ptr, s = 0;
   while (s < vtx2p.n) {
     uint seq = pv[s].seq, e = s + 1;
     while (e < vtx2p.n && seq == pv[e].seq)
       e++;
 
-    // FIXME: Make work a dynamic array.
-    uint work[1024], n = 1;
+    if (nwork < e - s + 1)
+      nwork = e - s + 1, work = trealloc(uint, work, nwork);
+    uint n = 1;
     work[0] = pv[s].o;
     for (uint i = s + 1; i < e; i++) {
       if (work[n - 1] != pv[i].o)
@@ -441,10 +458,8 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
     }
 
     offs[seq + 1] = offs[seq] + n;
-    if (offs[seq + 1] >= nproc) {
-      nproc = offs[seq + 1] + nproc / 2 + 1;
-      proc = trealloc(uint, proc, nproc);
-    }
+    if (offs[seq + 1] >= nproc)
+      nproc = 3 * offs[seq + 1] / 2 + 1, proc = trealloc(uint, proc, nproc);
     for (uint i = 0, j = offs[seq]; i < n; i++)
       proc[j + i] = work[i];
     s = e;
@@ -454,12 +469,20 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
   struct array elems;
   array_init(struct elem_t, &elems, size);
 
+  unsigned nw = *nwi;
+  if (nw == 0) {
+    for (size_t i = 0; i < size; i++)
+      frontier[i] = 0;
+  }
+
   unsigned nd = (nv == 8) ? 3 : 2;
   struct elem_t et;
   for (uint e = 0; e < ne; e++) {
     et.eid = eids[e];
     for (unsigned v = 0; v < nv; v++) {
-      et.vid[v] = vids[e * nv + v], et.mask[v] = mask[e * nv + v];
+      et.vid[v] = vids[e * nv + v];
+      et.mask[v] = mask[e * nv + v];
+      et.frontier[v] = frontier[e * nv + v];
       for (unsigned d = 0; d < nd; d++)
         et.xyz[v * nd + d] = xyz[e * nv * nd + v * nd + d];
       for (unsigned u = 0; u < nv; u++)
@@ -470,7 +493,7 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
       array_cat(struct elem_t, &elems, &et, 1);
     }
   }
-  tfree(offs), tfree(proc);
+  tfree(offs), tfree(proc), tfree(work);
 
   sarray_transfer(struct elem_t, &elems, p, 1, &cr);
   crystal_free(&cr);
@@ -486,10 +509,8 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
     array_cat(struct elem_t, &uelems, &pe[0], 1);
     uint i = 0, j = 1;
     while (j < elems.n) {
-      if (pe[j].eid != pe[i].eid) {
-        array_cat(struct elem_t, &uelems, &pe[j], 1);
-        i = j;
-      }
+      if (pe[j].eid != pe[i].eid)
+        array_cat(struct elem_t, &uelems, &pe[j], 1), i = j;
       j++;
     }
   }
@@ -506,8 +527,7 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
     exit(1);
   }
 
-  find_vtx_frontiers(frontier, vids, &uelems, ne, eids, nv, &ci, &bfr);
-
+  *nwi = find_vtx_frontiers(frontier, vids, &uelems, ne, eids, nv, &ci, &bfr);
   *nei = uelems.n;
   if (uelems.n > 0) {
     struct elem_t *pe = (struct elem_t *)uelems.ptr;
@@ -530,13 +550,16 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
 #define fparrsb_fetch_nbrs                                                     \
   FORTRAN_UNPREFIXED(fparrsb_fetch_nbrs, FPARRSB_FETCH_NBRS)
 void fparrsb_fetch_nbrs(int *nei, long long *eids, int *nv, long long *vids,
-                        double *xyz, int *frontier, double *mask, double *mat,
-                        MPI_Fint *comm, int *maxne, int *err) {
+                        double *xyz, double *mask, double *mat, int *nwi,
+                        int *frontier, MPI_Fint *comm, int *maxne, int *err) {
   *err = 1;
   MPI_Comm c = MPI_Comm_f2c(*comm);
   unsigned ne = *nei;
-  parrsb_fetch_nbrs(&ne, eids, *nv, vids, xyz, frontier, mask, mat, c, *maxne);
+  unsigned nw = *nwi;
+  parrsb_fetch_nbrs(&ne, eids, *nv, vids, xyz, mask, mat, &nw, frontier, c,
+                    *maxne);
   *nei = ne;
+  *nwi = nw;
   *err = 0;
 }
 
