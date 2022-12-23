@@ -56,12 +56,6 @@ void parrsb_reorder_dofs(long long *nid, unsigned n, unsigned nv,
 void fparrsb_reorder_dofs(long long *nid, int *n, int *nv, long long *ids,
                           int *comm, int *err);
 
-#define fparrsb_fetch_nbrs                                                     \
-  FORTRAN_UNPREFIXED(fparrsb_fetch_nbrs, FPARRSB_FETCH_NBRS)
-void fparrsb_fetch_nbrs(int *nei, long long *eids, int *nv, long long *vids,
-                        double *xyz, int *mask, MPI_Fint *comm, int *maxne,
-                        int *err);
-
 //==============================================================================
 // Connectivity
 //
