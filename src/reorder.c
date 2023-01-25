@@ -312,8 +312,8 @@ struct elem_t {
   uint p, seq;
 };
 
-int find_vtx_frontiers(struct array *uelems, uint ne, const long long *eids,
-                       unsigned nv, struct comm *ci, buffer *bfr) {
+int find_frontier(struct array *uelems, uint ne, const long long *eids,
+                  unsigned nv, struct comm *ci, buffer *bfr) {
   struct id_t {
     ulong id;
   };
@@ -355,31 +355,19 @@ int find_vtx_frontiers(struct array *uelems, uint ne, const long long *eids,
   }
 
   maxf++;
-  for (uint i = 0; i < nu; i++) {
+  for (uint e = 0; e < nu; e++) {
     for (unsigned v = 0; v < nv; v++) {
-      if (frontier[i * nv + v] == -1)
-        frontier[i * nv + v] = maxf;
+      if (frontier[e * nv + v] == -1)
+        frontier[e * nv + v] = maxf;
     }
   }
 
-  slong *vtx = tcalloc(slong, nu * nv);
-  for (uint i = 0; i < nu; i++) {
-    for (unsigned v = 0; v < nv; v++)
-      vtx[i * nv + v] = pu[i].vid[v];
-  }
-
-  struct comm c;
-  comm_split(ci, ci->id, ci->id, &c);
-  struct gs_data *gsh = gs_setup(vtx, nu * nv, &c, 0, gs_pairwise, 0);
-  gs(frontier, gs_int, gs_min, 0, gsh, bfr);
-  gs_free(gsh), comm_free(&c);
-
   for (uint e = 0; e < nu; e++) {
     for (unsigned v = 0; v < nv; v++)
-      pu[e].frontier[v] = frontier[e * nv + v], pu[e].vid[v] = vtx[e * nv + v];
+      pu[e].frontier[v] = frontier[e * nv + v];
   }
 
-  tfree(frontier), tfree(vtx), array_free(&ids);
+  tfree(frontier), array_free(&ids);
 
   return maxf;
 }
@@ -446,8 +434,9 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
   uint *proc = tcalloc(uint, ne * 4 + 1), nproc = ne * 4 + 1;
   uint *work = tcalloc(uint, 1024), nwork = 1024;
   pv = (struct vtx_t *)vtx2p.ptr, s = 0;
+  uint seq, e;
   while (s < vtx2p.n) {
-    uint seq = pv[s].seq, e = s + 1;
+    seq = pv[s].seq, e = s + 1;
     while (e < vtx2p.n && seq == pv[e].seq)
       e++;
 
@@ -508,7 +497,6 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
   sarray_sort(struct elem_t, elems.ptr, elems.n, eid, 1, &bfr);
   if (elems.n > 0) {
     struct elem_t *pe = (struct elem_t *)elems.ptr;
-
     array_cat(struct elem_t, &uelems, &pe[0], 1);
     uint i = 0, j = 1;
     while (j < elems.n) {
@@ -519,19 +507,20 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
   }
   array_free(&elems);
 
-  sint err = (uelems.n > maxne), wrk;
+  sint err = (uelems.n > maxne), maxr = uelems.n, wrk;
   comm_allreduce(&ci, gs_int, gs_add, &err, 1, &wrk);
+  comm_allreduce(&ci, gs_int, gs_max, &maxr, 1, &wrk);
   if (err > 0) {
     if (ci.id == 0) {
-      fprintf(stderr, "maxne = %u is not large enough !\n", maxne);
+      fprintf(stderr, "maxne = %u is too small ! Try maxne larger than %d\n",
+              maxne, maxr);
       fflush(stderr);
     }
     buffer_free(&bfr), array_free(&uelems), comm_free(&ci);
     exit(1);
   }
 
-  *nwi = find_vtx_frontiers(&uelems, ne, eids, nv, &ci, &bfr);
-  comm_free(&ci);
+  *nwi = find_frontier(&uelems, ne, eids, nv, &ci, &bfr);
 
   // Sort elements first by maximum wave number of it vertices, then by global
   // element id.
@@ -562,7 +551,14 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
         mat[e * nv * nv + v * nv + u] = pu[e].mat[v * nv + u];
     }
   }
-  array_free(&uelems);
+
+  struct comm c;
+  comm_split(&ci, ci.id, ci.id, &c);
+  struct gs_data *gsh = gs_setup(vids, uelems.n * nv, &c, 0, gs_pairwise, 0);
+  gs(frontier, gs_int, gs_min, 0, gsh, &bfr);
+  gs_free(gsh), comm_free(&c);
+
+  comm_free(&ci), array_free(&uelems);
 }
 
 #define fparrsb_fetch_nbrs                                                     \
@@ -669,9 +665,9 @@ void parrsb_remove_frontier(unsigned *nei, long long *eids, unsigned nv,
     }
   }
   // Sanity check
-  assert(nk == unique.n/(nv * nv));
+  assert(nk == unique.n / (nv * nv));
 
-  *nwi = nw - 1, *nei = ne;
+  *nwi = nw - 1, *nei = nk;
 
   array_free(&unique), tfree(keep);
 }
