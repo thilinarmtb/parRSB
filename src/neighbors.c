@@ -1,4 +1,5 @@
 #include "sort.h"
+#include <err.h>
 
 static void sfree(void *p, const char *file, unsigned line) {
   if (p)
@@ -262,6 +263,277 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
   comm_free(&ci), array_free(&uelems);
 }
 
+struct eid_t {
+  ulong eid;
+  uint e;
+};
+
+static int binary_search(ulong eid, struct eid_t *pe, uint n) {
+  if (n == 0)
+    return -1;
+
+  uint l = 0, u = n - 1;
+  while (u - l > 1) {
+    uint mid = (u + l) / 2;
+    if (pe[mid].eid == eid)
+      return mid;
+    else if (pe[mid].eid < eid)
+      l = mid;
+    else
+      u = mid;
+  }
+
+  if (pe[l].eid == eid)
+    return l;
+  if (pe[u].eid == eid)
+    return u;
+  return -1;
+}
+
+void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
+                          long long *vids, double *xyz, double *mask,
+                          double *mat, unsigned nw, int *wids, MPI_Comm comm,
+                          unsigned max_ne) {
+  size_t ne = *nei;
+
+  // 1. Find neighbor elements of input elements based on vertex connectivity.
+  struct vtx_t {
+    ulong vid, eid, nid;
+    uint p, np;
+  };
+
+  struct array vtxs;
+  array_init(struct vtx_t, &vtxs, ne * nv);
+
+  struct comm c;
+  comm_init(&c, comm);
+
+  struct vtx_t vt = {.np = c.id};
+  for (uint e = 0; e < ne; e++) {
+    vt.eid = eids[e];
+    for (unsigned v = 0; v < nv; v++) {
+      vt.vid = vids[e * nv + v], vt.p = vt.vid % c.np;
+      array_cat(struct vtx_t, &vtxs, &vt, 1);
+    }
+  }
+
+  struct crystal cr;
+  crystal_init(&cr, &c);
+  sarray_transfer(struct vtx_t, &vtxs, p, 1, &cr);
+
+  buffer bfr;
+  buffer_init(&bfr, 1024);
+  sarray_sort(struct vtx_t, vtxs.ptr, vtxs.n, vid, 1, &bfr);
+
+  struct array vtx2e;
+  array_init(struct vtx_t, &vtx2e, vtxs.n);
+
+  struct vtx_t *pv = (struct vtx_t *)vtxs.ptr;
+  uint s = 0, e;
+  while (s < vtxs.n) {
+    e = s + 1;
+    while (e < vtxs.n && pv[s].vid == pv[e].vid)
+      e++;
+    for (uint i = s; i < e; i++) {
+      vt = pv[i];
+      for (uint j = s; j < e; j++) {
+        vt.np = pv[j].p, vt.nid = pv[j].eid;
+        array_cat(struct vtx_t, &vtx2e, &vt, 1);
+      }
+    }
+    s = e;
+  }
+  array_free(&vtxs);
+
+  sarray_transfer(struct vtx_t, &vtx2e, p, 0, &cr);
+  sarray_sort_2(struct vtx_t, vtx2e.ptr, vtx2e.n, eid, 1, nid, 1, &bfr);
+
+  // 2. Build element to neighbor map and element to processor map for input
+  // elements.
+  uint *offs = tcalloc(uint, max_ne + 1), max_nbrs = 27 * max_ne;
+  ulong *elist = tcalloc(ulong, max_ne), *nbrs = tcalloc(ulong, max_nbrs);
+  uint *wlist = tcalloc(uint, max_ne), *proc = tcalloc(uint, max_nbrs);
+  uint *plist = tcalloc(uint, max_ne);
+
+  uint cnt = 0;
+  pv = (struct vtx_t *)vtx2e.ptr, s = 0, offs[0] = 0;
+  while (s < vtx2e.n) {
+    elist[cnt] = pv[s].eid, wlist[cnt] = 0, plist[cnt] = c.id;
+
+    e = s + 1;
+    while (e < vtx2e.n && pv[s].eid == pv[e].eid)
+      e++;
+
+    uint s0 = offs[cnt];
+    if (max_nbrs < s0 + e - s) {
+      max_nbrs = 3 * s0 / 2 + e - s;
+      proc = trealloc(uint, proc, max_nbrs);
+      nbrs = trealloc(ulong, nbrs, max_nbrs);
+    }
+
+    nbrs[s0] = pv[s].nid, proc[s0] = pv[s].np, s0++;
+    for (uint i = s + 1; i < e; i++) {
+      if (nbrs[s0 - 1] != pv[i].nid)
+        nbrs[s0] = pv[i].nid, proc[s0] = pv[i].np, s0++;
+    }
+    cnt++, offs[cnt] = s0, s = e;
+  }
+  // Sanity check.
+  assert(cnt == ne);
+  array_free(&vtx2e);
+
+  // 3. Put all local elements in frontier array and sort by element id.
+  // We will keep updating this and the map as we update the frontier.
+  struct array input, frontier;
+  array_init(struct elem_t, &input, ne);
+  array_init(struct elem_t, &frontier, 3 * ne / 2);
+
+  struct eid_t et;
+  for (uint e = 0; e < ne; e++) {
+    et.eid = eids[e], et.e = e;
+    array_cat(struct eid_t, &frontier, &et, 1);
+  }
+  sarray_sort(struct eid_t, frontier.ptr, frontier.n, eid, 1, &bfr);
+  array_cat(struct eid_t, &input, &frontier, frontier.n);
+
+  // 4. Update the frontier by finding new neighbor elements from the previous
+  // frontier.
+  struct req_t {
+    ulong eid;
+    uint p, seq;
+  };
+
+  struct array rqsts;
+  array_init(struct req_t, &rqsts, ne);
+
+  struct res_t {
+    ulong eid, nid;
+    uint p, np;
+  };
+
+  struct array respns;
+  array_init(struct res_t, &respns, rqsts.n * 10);
+
+  uint fs = 0, fe = ne;
+  for (uint i = 1; i <= nw; i++) {
+    // Find all the new elements appearing in the map in last wave.
+    for (uint i = fs; i < fe; i++) {
+      for (uint s = offs[i], e = offs[i + 1]; s < e; s++) {
+        if (binary_search(nbrs[s], frontier.ptr, frontier.n) == -1) {
+          struct eid_t et = {.eid = nbrs[s]};
+          array_cat(struct eid_t, &frontier, &et, 1);
+          // FIXME: This is bad. Fix it.
+          sarray_sort(struct eid_t, frontier.ptr, frontier.n, eid, 1, &bfr);
+
+          struct req_t rt = {.eid = nbrs[s], .p = proc[s]};
+          array_cat(struct req_t, &rqsts, &rt, 1);
+        }
+      }
+    }
+
+    // Get the neighbors of the new elements.
+    sarray_transfer(struct req_t, &rqsts, p, 1, &cr);
+    sarray_sort(struct req_t, rqsts.ptr, rqsts.n, eid, 1, &bfr);
+    struct req_t *pr = (struct req_t *)rqsts.ptr;
+
+    for (uint i = 0; i < rqsts.n; i++) {
+      int idx = binary_search(pr[i].eid, input.ptr, input.n);
+      if (idx < 0 || idx >= ne)
+        errx(EXIT_FAILURE, "Couldn't find element: %lld on processor: %d.",
+             pr[i].eid, c.id);
+
+      struct res_t rt = {.eid = pr[i].eid, .p = pr[i].p};
+      for (uint s = offs[idx], e = offs[idx + 1]; s < e; s++) {
+        rt.nid = nbrs[s], rt.np = proc[s];
+        array_cat(struct res_t, &respns, &rt, 1);
+      }
+    }
+
+    sarray_transfer(struct res_t, &respns, p, 1, &cr);
+    sarray_sort_2(struct res_t, respns.ptr, respns.n, eid, 1, nid, 1, &bfr);
+
+    // Update the map with the new elements and their neighbors.
+    struct res_t *prs = (struct res_t *)respns.ptr;
+    fs = fe, s = 0;
+    while (s < respns.n) {
+      if (fe >= max_ne)
+        errx(EXIT_FAILURE, "max_ne: %u is too small.", max_ne);
+
+      elist[fe] = prs[s].eid, plist[fe] = prs[s].p, wlist[fe] = nw, fe++;
+      e = s + 1;
+      while (e < respns.n && prs[s].eid == prs[e].eid)
+        e++;
+
+      offs[fe] = offs[fe - 1] + e - s;
+      if (max_nbrs < offs[fe]) {
+        max_nbrs = 3 * offs[fe] / 2 + 1;
+        proc = trealloc(uint, proc, max_nbrs);
+        nbrs = trealloc(ulong, nbrs, max_nbrs);
+      }
+
+      for (uint i = 0; i < e - s; i++) {
+        proc[offs[fe - 1] + i] = prs[s + i].np;
+        nbrs[offs[fe - 1] + i] = prs[s + i].nid;
+      }
+    }
+    rqsts.n = respns.n = 0;
+  }
+  array_free(&respns), array_free(&frontier), array_free(&input);
+  tfree(offs), tfree(proc), tfree(nbrs);
+
+  for (uint i = 0; i < fe; i++) {
+    struct req_t rt = {.eid = elist[i], .p = plist[i], .seq = i};
+    array_cat(struct req_t, &rqsts, &rt, 1);
+  }
+
+  sarray_transfer(struct req_t, &rqsts, p, 1, &cr);
+  sarray_sort(struct req_t, rqsts.ptr, rqsts.n, eid, 1, &bfr);
+  struct req_t *pr = (struct req_t *)rqsts.ptr;
+
+  struct array elements;
+  array_init(struct elem_t, &elements, rqsts.n);
+
+  struct elem_t elmt;
+  for (uint i = 0, j = 0; i < rqsts.n; i++) {
+    while (j < ne && eids[j] < pr[i].eid)
+      j++;
+    // Sanity check.
+    assert(j < ne && eids[j] == pr[i].eid);
+
+    elmt.eid = eids[j], elmt.p = pr[i].p;
+    for (unsigned v = 0; v < nv; v++) {
+      elmt.vid[v] = vids[j * nv + v];
+      elmt.mask[v] = mask[j * nv + v];
+      for (unsigned u = 0; u < nv; u++)
+        elmt.mat[v * nv + u] = mat[j * nv * nv + v * nv + u];
+    }
+
+    array_cat(struct elem_t, &elements, &elmt, 1);
+  }
+  array_free(&rqsts);
+
+  sarray_transfer(struct elem_t, &elements, p, 1, &cr);
+  sarray_sort(struct elem_t, elements.ptr, elements.n, seq, 0, &bfr);
+  struct elem_t *pe = (struct elem_t *)elements.ptr;
+
+  *nei = ne = fe;
+  for (uint i = 0; i < ne; i++) {
+    eids[i] = elist[i], wids[i] = wlist[i];
+    for (unsigned v = 0; v < nv; v++) {
+      eids[i * nv + v] = pe[i].vid[v];
+      mask[i * nv + v] = pe[i].mask[v];
+      for (unsigned u = 0; u < nv; u++)
+        mat[i * nv * nv + v * nv + u] = pe[i].mat[v * nv + u];
+    }
+  }
+  array_free(&elements);
+
+  tfree(elist), tfree(wlist), tfree(plist);
+  buffer_free(&bfr), crystal_free(&cr), comm_free(&c);
+
+  return;
+}
+
 #define fparrsb_fetch_nbrs                                                     \
   FORTRAN_UNPREFIXED(fparrsb_fetch_nbrs, FPARRSB_FETCH_NBRS)
 void fparrsb_fetch_nbrs(int *nei, long long *eids, int *nv, long long *vids,
@@ -337,7 +609,7 @@ void parrsb_remove_frontier(unsigned *nei, long long *eids, unsigned nv,
       }
       e++;
     }
-    // Sanity check
+    // Sanity check.
     assert(pe[e - 1].keep == 1);
     s = e;
   }
@@ -365,7 +637,7 @@ void parrsb_remove_frontier(unsigned *nei, long long *eids, unsigned nv,
       nk++;
     }
   }
-  // Sanity check
+  // Sanity check.
   assert(nk == unique.n / (nv * nv));
 
   *nwi = nw - 1, *nei = nk;
