@@ -305,8 +305,8 @@ static int binary_search(ulong eid, struct eid_t *pe, uint n) {
 
 void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
                           long long *vids, double *xyz, double *mask,
-                          double *mat, unsigned nw, int *wids, MPI_Comm comm,
-                          unsigned max_ne) {
+                          double *mat, int *frontier, unsigned nw, int *wids,
+                          MPI_Comm comm, unsigned max_ne) {
   size_t ne = *nei;
 
   // 1. Find neighbor elements of input elements based on vertex connectivity.
@@ -397,17 +397,17 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
 
   // 3. Put all local elements in frontier array and sort by element id.
   // We will keep updating this and the map as we update the frontier.
-  struct array input, frontier;
-  array_init(struct eid_t, &input, ne);
-  array_init(struct eid_t, &frontier, 3 * ne / 2);
+  struct array inputa, fronta;
+  array_init(struct eid_t, &inputa, ne);
+  array_init(struct eid_t, &fronta, 3 * ne / 2);
 
   struct eid_t et;
   for (uint e = 0; e < ne; e++) {
     et.eid = eids[e], et.e = e;
-    array_cat(struct eid_t, &frontier, &et, 1);
+    array_cat(struct eid_t, &fronta, &et, 1);
   }
-  sarray_sort(struct eid_t, frontier.ptr, frontier.n, eid, 1, &bfr);
-  array_cat(struct eid_t, &input, frontier.ptr, frontier.n);
+  sarray_sort(struct eid_t, fronta.ptr, fronta.n, eid, 1, &bfr);
+  array_cat(struct eid_t, &inputa, fronta.ptr, fronta.n);
 
   // 4. Update the frontier by finding new neighbor elements from the previous
   // frontier.
@@ -432,11 +432,11 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
     // Find all the new elements appearing in the map in last wave.
     for (uint i = fs; i < fe; i++) {
       for (uint s = offs[i], e = offs[i + 1]; s < e; s++) {
-        if (binary_search(nbrs[s], frontier.ptr, frontier.n) == -1) {
+        if (binary_search(nbrs[s], fronta.ptr, fronta.n) == -1) {
           struct eid_t et = {.eid = nbrs[s]};
-          array_cat(struct eid_t, &frontier, &et, 1);
+          array_cat(struct eid_t, &fronta, &et, 1);
           // FIXME: This is bad. Fix it.
-          sarray_sort(struct eid_t, frontier.ptr, frontier.n, eid, 1, &bfr);
+          sarray_sort(struct eid_t, fronta.ptr, fronta.n, eid, 1, &bfr);
 
           struct req_t rt = {.eid = nbrs[s], .p = proc[s]};
           array_cat(struct req_t, &rqsts, &rt, 1);
@@ -450,7 +450,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
     struct req_t *pr = (struct req_t *)rqsts.ptr;
 
     for (uint i = 0; i < rqsts.n; i++) {
-      int idx = binary_search(pr[i].eid, (struct eid_t *)input.ptr, input.n);
+      int idx = binary_search(pr[i].eid, (struct eid_t *)inputa.ptr, inputa.n);
       if (idx < 0 || idx >= ne) {
         fprintf(stderr, "Couldn't find element: %lld on processor: %d.",
                 pr[i].eid, c.id);
@@ -496,7 +496,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
     }
     rqsts.n = respns.n = 0;
   }
-  array_free(&respns), array_free(&frontier), array_free(&input);
+  array_free(&respns), array_free(&fronta), array_free(&inputa);
   tfree(offs), tfree(proc), tfree(nbrs);
 
   for (uint i = 0; i < fe; i++) {
@@ -550,11 +550,25 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
     }
   }
   array_free(&elements);
-
   tfree(elist), tfree(wlist), tfree(plist);
-  buffer_free(&bfr), crystal_free(&cr), comm_free(&c);
 
-  printf("nid = %u 600\n", c.id);
+  for (uint e = 0; e < ne; e++) {
+    if (wids[e] == nw) {
+      for (unsigned v = 0; v < nv; v++)
+        frontier[e * nv + v] = 1;
+    } else {
+      for (unsigned v = 0; v < nv; v++)
+        frontier[e * nv + v] = 0;
+    }
+  }
+
+  struct comm lc;
+  comm_split(&c, c.id, c.id, &lc);
+  struct gs_data *gsh = gs_setup(vids, ne * nv, &lc, 0, gs_pairwise, 0);
+  gs(frontier, gs_int, gs_min, 0, gsh, &bfr);
+  gs_free(gsh), comm_free(&lc);
+
+  buffer_free(&bfr), crystal_free(&cr), comm_free(&c);
 
   return;
 }
@@ -562,13 +576,14 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
 #define fparrsb_fetch_nbrs_v2                                                  \
   FORTRAN_UNPREFIXED(fparrsb_fetch_nbrs_v2, FPARRSB_FETCH_NBRS_V2)
 void fparrsb_fetch_nbrs_v2(int *nei, long long *eids, int *nv, long long *vids,
-                           double *xyz, double *mask, double *mat, int *nw,
-                           int *wids, MPI_Fint *comm, int *maxne, int *err) {
+                           double *xyz, double *mask, double *mat,
+                           int *frontier, int *nw, int *wids, MPI_Fint *comm,
+                           int *maxne, int *err) {
   *err = 1;
   MPI_Comm c = MPI_Comm_f2c(*comm);
   unsigned ne = *nei;
-  parrsb_fetch_nbrs_v2(&ne, eids, *nv, vids, xyz, mask, mat, *nw, wids, c,
-                       *maxne);
+  parrsb_fetch_nbrs_v2(&ne, eids, *nv, vids, xyz, mask, mat, frontier, *nw,
+                       wids, c, *maxne);
   *nei = ne, *err = 0;
 }
 
