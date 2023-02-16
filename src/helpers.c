@@ -1,7 +1,7 @@
 #include "parrsb-impl.h"
 #include <getopt.h>
-
 #include <sys/resource.h>
+#include <unistd.h>
 
 #if defined __GLIBC__
 #include <execinfo.h>
@@ -382,73 +382,78 @@ void parrsb_barrier(struct comm *c) {
     dest += sizeof(T) * nunits;                                                \
   } while (0)
 
-int parrsb_vector_dump(const char *fname, scalar *y, struct rsb_element *elm,
-                       uint nelt, unsigned nv, struct comm *c) {
-  MPI_File file;
-  sint err = MPI_File_open(c->c, fname, MPI_MODE_CREATE | MPI_MODE_WRONLY,
-                           MPI_INFO_NULL, &file);
-  slong wrk[2][1];
-  comm_allreduce(c, gs_int, gs_add, &err, 1, wrk);
+void parrsb_vec_dump(const double *v, uint un, const char *name,
+                     MPI_Comm comm) {
+  struct comm c;
+  comm_init(&c, comm);
 
-  uint rank = c->id;
-  if (err) {
-    if (rank == 0) {
-      fprintf(stderr, "%s:%d Error opening file: %s\n", __FILE__, __LINE__,
-              fname);
-      fflush(stderr);
+  sint write = 0, rwrk;
+  if (c.id == 0) {
+    if (access(name, F_OK) == -1)
+      write = 1;
+  }
+  comm_allreduce(&c, gs_int, gs_add, &write, 1, &rwrk);
+
+  if (write == 0) {
+    comm_free(&c);
+    return;
+  }
+
+  slong out[2][1], wrk[2][1], in = un;
+  comm_scan(out, &c, gs_long, gs_add, &in, 1, wrk);
+  slong sn = out[0][0];
+
+  struct vec_t {
+    double v;
+    ulong idx;
+    uint p;
+  };
+
+  struct array vecs;
+  array_init(struct vec_t, &vecs, un);
+
+  struct vec_t vt = {.p = 0};
+  for (uint i = 0; i < un; i++) {
+    vt.idx = sn + i, vt.v = v[i];
+    array_cat(struct vec_t, &vecs, &vt, 1);
+  }
+
+  struct crystal cr;
+  crystal_init(&cr, &c);
+  sarray_transfer(struct vec_t, &vecs, p, 0, &cr);
+  crystal_free(&cr);
+
+  buffer bfr;
+  buffer_init(&bfr, 1024);
+  sarray_sort(struct vec_t, vecs.ptr, vecs.n, idx, 1, &bfr);
+  buffer_free(&bfr);
+
+  if (c.id == 0) {
+    if (access(name, F_OK) == -1) {
+      FILE *fp = fopen(name, "w+");
+      if (fp) {
+        struct vec_t *pv = (struct vec_t *)vecs.ptr;
+        for (unsigned i = 0; i < vecs.n; i++)
+          fprintf(fp, "%.15lf\n", pv[i].v);
+        fclose(fp);
+      }
     }
-    return err;
   }
 
-  slong out[2][1], in = nelt;
-  comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
-  slong start = out[0][0], nelgt = out[1][0];
+  array_free(&vecs);
+  comm_free(&c);
+}
 
-  int ndim = (nv == 8) ? 3 : 2;
-  uint write_size = ((ndim + 1) * sizeof(double) + sizeof(slong)) * nelt;
-  if (rank == 0)
-    write_size += sizeof(long) + sizeof(int); // for nelgt and ndim
-
-  char *bfr, *bfr0;
-  bfr = bfr0 = (char *)calloc(write_size, sizeof(char));
-  if (rank == 0) {
-    WRITE_T(bfr0, &nelgt, slong, 1);
-    WRITE_T(bfr0, &ndim, int, 1);
-  }
-
-  uint i;
-  for (i = 0; i < nelt; i++) {
-    WRITE_T(bfr0, &elm[i].globalId, ulong, 1);
-    WRITE_T(bfr0, &elm[i].coord[0], double, ndim);
-    WRITE_T(bfr0, &y[i], double, 1);
-  }
-
-  MPI_Status st;
-  err = MPI_File_write_ordered(file, bfr, write_size, MPI_BYTE, &st);
-  comm_allreduce(c, gs_int, gs_add, &err, 1, wrk);
-  if (err) {
-    if (rank == 0) {
-      fprintf(stderr, "%s:%d Error writing file: %s.\n", __FILE__, __LINE__,
-              fname);
-      fflush(stdout);
-    }
-    return err;
-  }
-
-  err = MPI_File_close(&file);
-  comm_scan(out, c, gs_int, gs_add, &err, 1, wrk);
-  if (err) {
-    if (rank == 0) {
-      fprintf(stderr, "%s:%d Error closing file: %s.\n", __FILE__, __LINE__,
-              fname);
-      fflush(stdout);
-    }
-    return err;
-  }
-
-  parrsb_barrier(c);
-  free(bfr);
-  return err;
+#define fparrsb_vec_dump FORTRAN_UNPREFIXED(fparrsb_vec_dump, FPARRSB_VEC_DUMP)
+void fparrsb_vec_dump(double *v, int *un, char *fname, int *len, int *fc,
+                      int *err) {
+  *err = 1;
+  MPI_Comm c = MPI_Comm_f2c(*fc);
+  char *name = tcalloc(char, *len + 1);
+  strncpy(name, fname, *len);
+  parrsb_vec_dump(v, *un, name, c);
+  free(name);
+  *err = 0;
 }
 
 #undef WRITE_T
