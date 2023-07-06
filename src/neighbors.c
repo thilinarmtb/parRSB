@@ -308,10 +308,11 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
                           double *mat, int *frontier, unsigned nw, int *wids,
                           MPI_Comm comm, unsigned max_ne) {
   size_t ne = *nei;
-
+  const unsigned ndim = (nv == 8) ? 3 : 2;
   // 1. Find neighbor elements of input elements based on vertex connectivity.
   struct vtx_t {
-    ulong vid, eid, nid;
+    ulong vid;
+    ulong eid, nid;
     uint p, np;
   };
 
@@ -363,13 +364,18 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
 
   // 2. Build element to neighbor map and element to processor map for input
   // elements.
-  uint *offs = tcalloc(uint, max_ne + 1), max_nbrs = 27 * max_ne;
-  ulong *elist = tcalloc(ulong, max_ne), *nbrs = tcalloc(ulong, max_nbrs);
-  uint *wlist = tcalloc(uint, max_ne), *proc = tcalloc(uint, max_nbrs);
+  uint max_nbrs = 27 * max_ne;
+  uint *offs = tcalloc(uint, max_ne + 1);
+  ulong *nbrs = tcalloc(ulong, max_nbrs);
+  uint *proc = tcalloc(uint, max_nbrs);
+
+  ulong *elist = tcalloc(ulong, max_ne);
+  uint *wlist = tcalloc(uint, max_ne);
   uint *plist = tcalloc(uint, max_ne);
 
+  pv = (struct vtx_t *)vtx2e.ptr;
+  s = 0, offs[0] = 0;
   uint cnt = 0;
-  pv = (struct vtx_t *)vtx2e.ptr, s = 0, offs[0] = 0;
   while (s < vtx2e.n) {
     elist[cnt] = pv[s].eid, wlist[cnt] = 0, plist[cnt] = c.id;
 
@@ -378,10 +384,11 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
       e++;
 
     uint s0 = offs[cnt];
-    if (max_nbrs < s0 + e - s) {
-      max_nbrs = 3 * s0 / 2 + e - s;
-      proc = trealloc(uint, proc, max_nbrs);
-      nbrs = trealloc(ulong, nbrs, max_nbrs);
+    // Check if `max_nbrs` is large enough.
+    if (s0 + e - s > max_nbrs) {
+      fprintf(stderr, "Try max_nbrs larger than %d\n", s0 + e - s);
+      fflush(stderr);
+      exit(EXIT_FAILURE);
     }
 
     nbrs[s0] = pv[s].nid, proc[s0] = pv[s].np, s0++;
@@ -397,8 +404,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
 
   // 3. Put all local elements in frontier array and sort by element id.
   // We will keep updating this and the map as we update the frontier.
-  struct array inputa, fronta;
-  array_init(struct eid_t, &inputa, ne);
+  struct array fronta;
   array_init(struct eid_t, &fronta, 3 * ne / 2);
 
   struct eid_t et;
@@ -407,6 +413,9 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
     array_cat(struct eid_t, &fronta, &et, 1);
   }
   sarray_sort(struct eid_t, fronta.ptr, fronta.n, eid, 1, &bfr);
+
+  struct array inputa;
+  array_init(struct eid_t, &inputa, ne);
   array_cat(struct eid_t, &inputa, fronta.ptr, fronta.n);
 
   // 4. Update the frontier by finding new neighbor elements from the previous
@@ -416,13 +425,13 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
     uint p, seq;
   };
 
-  struct array rqsts;
-  array_init(struct req_t, &rqsts, ne);
-
   struct res_t {
     ulong eid, nid;
     uint p, np;
   };
+
+  struct array rqsts;
+  array_init(struct req_t, &rqsts, ne);
 
   struct array respns;
   array_init(struct res_t, &respns, rqsts.n * 10);
@@ -447,13 +456,14 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
     // Get the neighbors of the new elements.
     sarray_transfer(struct req_t, &rqsts, p, 1, &cr);
     sarray_sort(struct req_t, rqsts.ptr, rqsts.n, eid, 1, &bfr);
-    struct req_t *pr = (struct req_t *)rqsts.ptr;
 
+    struct req_t *pr = (struct req_t *)rqsts.ptr;
     for (uint i = 0; i < rqsts.n; i++) {
       int idx = binary_search(pr[i].eid, (struct eid_t *)inputa.ptr, inputa.n);
       if (idx < 0 || idx >= ne) {
         fprintf(stderr, "Couldn't find element: %lld on processor: %d.",
                 pr[i].eid, c.id);
+        fflush(stderr);
         exit(EXIT_FAILURE);
       }
 
@@ -472,7 +482,8 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
     fs = fe, s = 0;
     while (s < respns.n) {
       if (fe >= max_ne) {
-        fprintf(stderr, "max_ne: %u is too small.", max_ne);
+        fprintf(stderr, "max_ne: %u is too small. Try max_ne > %u", max_ne, fe);
+        fflush(stderr);
         exit(EXIT_FAILURE);
       }
 
@@ -483,9 +494,10 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
 
       offs[fe] = offs[fe - 1] + e - s;
       if (max_nbrs < offs[fe]) {
-        max_nbrs = 3 * offs[fe] / 2 + 1;
-        proc = trealloc(uint, proc, max_nbrs);
-        nbrs = trealloc(ulong, nbrs, max_nbrs);
+        fprintf(stderr, "max_nbrs: %u is too small. Try max_nbrs > %u",
+                max_nbrs, offs[fe]);
+        fflush(stderr);
+        exit(EXIT_FAILURE);
       }
 
       for (uint i = 0; i < e - s; i++) {
@@ -496,62 +508,89 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
     }
     rqsts.n = respns.n = 0;
   }
-  array_free(&respns), array_free(&fronta), array_free(&inputa);
+  array_free(&respns);
+  array_free(&fronta), array_free(&inputa);
   tfree(offs), tfree(proc), tfree(nbrs);
 
+  // 5. Now we have the element ids of the extended domain. We need to bring
+  // other data in now. First we will put input data into an array and then
+  // sort by element id (it could be that they are not sorted in input).
+  struct array original;
+  array_init(struct elem_t, &original, ne);
+
+  struct elem_t elmt;
+  for (uint i = 0; i < ne; i++) {
+    elmt.eid = eids[i], elmt.p = c.id;
+    for (unsigned v = 0; v < nv; v++) {
+      elmt.vid[v] = vids[i * nv + v];
+      elmt.mask[v] = mask[i * nv + v];
+      for (unsigned j = 0; j < nv; j++)
+        elmt.mat[v * nv + j] = mat[i * nv * nv + v * nv + j];
+      for (unsigned d = 0; d < ndim; d++)
+        elmt.xyz[v * ndim + d] = xyz[i * nv * ndim + v * ndim + d];
+    }
+    array_cat(struct elem_t, &original, &elmt, 1);
+  }
+  sarray_sort(struct elem_t, original.ptr, original.n, eid, 1, &bfr);
+
+  // 6. Now we are sending the requests to bring in the data for the extended
+  // domain. Code doesn't distinguish between original and extended element
+  // ids. It just asks for all the elemetns and sort them by element id.
   for (uint i = 0; i < fe; i++) {
     struct req_t rt = {.eid = elist[i], .p = plist[i], .seq = i};
     array_cat(struct req_t, &rqsts, &rt, 1);
   }
+  assert(rqsts.n == fe);
 
   sarray_transfer(struct req_t, &rqsts, p, 1, &cr);
   sarray_sort(struct req_t, rqsts.ptr, rqsts.n, eid, 1, &bfr);
+
+  struct array extended;
+  array_init(struct elem_t, &extended, rqsts.n);
+
   struct req_t *pr = (struct req_t *)rqsts.ptr;
-
-  struct array elements;
-  array_init(struct elem_t, &elements, rqsts.n);
-
-  unsigned ndim = (nv == 8) ? 3 : 2;
-  struct elem_t elmt;
+  struct elem_t *po = (struct elem_t *)original.ptr;
   for (uint i = 0, j = 0; i < rqsts.n; i++) {
-    while (j < ne && eids[j] < pr[i].eid)
+    while (j < ne && po[j].eid < pr[i].eid)
       j++;
     // Sanity check.
-    assert(j < ne && eids[j] == pr[i].eid);
+    assert(j < ne && po[j].eid == pr[i].eid);
 
-    elmt.eid = eids[j], elmt.p = pr[i].p;
+    elmt.eid = po[j].eid, elmt.p = pr[i].p;
     for (unsigned v = 0; v < nv; v++) {
-      elmt.vid[v] = vids[j * nv + v];
-      elmt.mask[v] = mask[j * nv + v];
-      for (unsigned u = 0; u < nv; u++)
-        elmt.mat[v * nv + u] = mat[j * nv * nv + v * nv + u];
+      elmt.vid[v] = po[j].vid[v];
+      elmt.mask[v] = po[j].mask[v];
+      for (unsigned k = 0; k < nv; k++)
+        elmt.mat[v * nv + k] = po[j].mat[v * nv + k];
       for (unsigned d = 0; d < ndim; d++)
-        elmt.xyz[v * ndim + d] = xyz[j * nv * ndim + v * ndim + d];
+        elmt.xyz[v * ndim + d] = po[j].xyz[v * ndim + d];
     }
-
-    array_cat(struct elem_t, &elements, &elmt, 1);
+    array_cat(struct elem_t, &extended, &elmt, 1);
   }
-  array_free(&rqsts);
+  array_free(&rqsts), array_free(&original);
 
-  sarray_transfer(struct elem_t, &elements, p, 1, &cr);
-  sarray_sort(struct elem_t, elements.ptr, elements.n, seq, 0, &bfr);
-  struct elem_t *pe = (struct elem_t *)elements.ptr;
+  sarray_transfer(struct elem_t, &extended, p, 1, &cr);
 
+  // 7. We have all the data now. Let's sort them by original element ids and
+  // set the Fortran array correctly.
+  sarray_sort(struct elem_t, extended.ptr, extended.n, seq, 0, &bfr);
+  struct elem_t *pe = (struct elem_t *)extended.ptr;
   *nei = ne = fe;
   for (uint i = 0; i < ne; i++) {
     eids[i] = elist[i], wids[i] = wlist[i];
     for (unsigned v = 0; v < nv; v++) {
       vids[i * nv + v] = pe[i].vid[v];
       mask[i * nv + v] = pe[i].mask[v];
-      for (unsigned u = 0; u < nv; u++)
-        mat[i * nv * nv + v * nv + u] = pe[i].mat[v * nv + u];
+      for (unsigned j = 0; j < nv; j++)
+        mat[i * nv * nv + v * nv + j] = pe[i].mat[v * nv + j];
       for (unsigned d = 0; d < ndim; d++)
         xyz[i * nv * ndim + v * ndim + d] = pe[i].xyz[v * ndim + d];
     }
   }
-  array_free(&elements);
+  array_free(&extended);
   tfree(elist), tfree(wlist), tfree(plist);
 
+  // 8. Setup the Frontier array.
   for (uint e = 0; e < ne; e++) {
     if (wids[e] == nw) {
       for (unsigned v = 0; v < nv; v++)
