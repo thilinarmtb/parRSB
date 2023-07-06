@@ -307,12 +307,13 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
                           long long *vids, double *xyz, double *mask,
                           double *mat, int *frontier, unsigned nw, int *wids,
                           MPI_Comm comm, unsigned max_ne) {
-  size_t ne = *nei;
+  const size_t ne = *nei;
   const unsigned ndim = (nv == 8) ? 3 : 2;
   // 1. Find neighbor elements of input elements based on vertex connectivity.
   struct vtx_t {
     ulong vid;
     ulong eid, nid;
+    uint seq;
     uint p, np;
   };
 
@@ -324,7 +325,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
 
   struct vtx_t vt = {.np = c.id};
   for (uint e = 0; e < ne; e++) {
-    vt.eid = eids[e];
+    vt.eid = eids[e], vt.seq = e;
     for (unsigned v = 0; v < nv; v++) {
       vt.vid = vids[e * nv + v], vt.p = vt.vid % c.np;
       array_cat(struct vtx_t, &vtxs, &vt, 1);
@@ -360,7 +361,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
   array_free(&vtxs);
 
   sarray_transfer(struct vtx_t, &vtx2e, p, 0, &cr);
-  sarray_sort_2(struct vtx_t, vtx2e.ptr, vtx2e.n, eid, 1, nid, 1, &bfr);
+  sarray_sort_2(struct vtx_t, vtx2e.ptr, vtx2e.n, seq, 0, nid, 1, &bfr);
 
   // 2. Build element to neighbor map and element to processor map for input
   // elements.
@@ -398,7 +399,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
     }
     cnt++, offs[cnt] = s0, s = e;
   }
-  // Sanity check.
+  // Sanity checks.
   assert(cnt == ne);
   array_free(&vtx2e);
 
@@ -556,7 +557,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
     // Sanity check.
     assert(j < ne && po[j].eid == pr[i].eid);
 
-    elmt.eid = po[j].eid, elmt.p = pr[i].p;
+    elmt.eid = po[j].eid, elmt.p = pr[i].p, elmt.seq = pr[i].seq;
     for (unsigned v = 0; v < nv; v++) {
       elmt.vid[v] = po[j].vid[v];
       elmt.mask[v] = po[j].mask[v];
@@ -569,15 +570,18 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
   }
   array_free(&rqsts), array_free(&original);
 
-  sarray_transfer(struct elem_t, &extended, p, 1, &cr);
+  sarray_transfer(struct elem_t, &extended, p, 0, &cr);
 
   // 7. We have all the data now. Let's sort them by original element ids and
   // set the Fortran array correctly.
   sarray_sort(struct elem_t, extended.ptr, extended.n, seq, 0, &bfr);
   struct elem_t *pe = (struct elem_t *)extended.ptr;
-  *nei = ne = fe;
-  for (uint i = 0; i < ne; i++) {
-    eids[i] = elist[i], wids[i] = wlist[i];
+  *nei = fe;
+  for (uint i = 0; i < fe; i++) {
+    // Sanity check.
+    assert(elist[i] == pe[i].eid);
+    eids[i] = elist[i];
+    wids[i] = wlist[i];
     for (unsigned v = 0; v < nv; v++) {
       vids[i * nv + v] = pe[i].vid[v];
       mask[i * nv + v] = pe[i].mask[v];
@@ -591,7 +595,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
   tfree(elist), tfree(wlist), tfree(plist);
 
   // 8. Setup the Frontier array.
-  for (uint e = 0; e < ne; e++) {
+  for (uint e = 0; e < fe; e++) {
     if (wids[e] == nw) {
       for (unsigned v = 0; v < nv; v++)
         frontier[e * nv + v] = 1;
@@ -603,7 +607,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
 
   struct comm lc;
   comm_split(&c, c.id, c.id, &lc);
-  struct gs_data *gsh = gs_setup(vids, ne * nv, &lc, 0, gs_pairwise, 0);
+  struct gs_data *gsh = gs_setup(vids, fe * nv, &lc, 0, gs_pairwise, 0);
   gs(frontier, gs_int, gs_min, 0, gsh, &bfr);
   gs_free(gsh), comm_free(&lc);
 
