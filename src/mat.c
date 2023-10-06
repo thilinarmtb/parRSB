@@ -34,7 +34,7 @@ int compress_nbrs(struct array *eij, struct array *nbr, buffer *bfr) {
       while (j < nbr->n && ptr[j].r == ptr[i].r && ptr[j].c == ptr[i].c)
         j++;
 
-      m.v = -(j - i);
+      m.v = j - i, m.v = -m.v;
       array_cat(struct mij, eij, &m, 1);
       i = j;
     }
