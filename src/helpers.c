@@ -22,18 +22,9 @@ void parrsb_print_stack(void) {
   free(symbols);
 }
 #else
-void parrsb_print_stack(){};
+void parrsb_print_stack() {}
 #endif // defined __GLIBC__
 
-double parrsb_get_max_rss() {
-  struct rusage r_usage;
-  getrusage(RUSAGE_SELF, &r_usage);
-#if defined(__APPLE__) && defined(__MACH__)
-  return (double)r_usage.ru_maxrss;
-#else
-  return (double)(r_usage.ru_maxrss * 1024L);
-#endif
-}
 int log2ll(long long n) {
   int k = 0;
   while (n > 1)
