@@ -42,7 +42,7 @@ static void update_options(parrsb_options *const options) {
   } while (0)
 
   UPDATE_OPTION(partitioner, "PARRSB_PARTITIONER", 1);
-  UPDATE_OPTION(levels, "PARRSB_TAGGED", 1);
+  UPDATE_OPTION(tagged, "PARRSB_TAGGED", 1);
   UPDATE_OPTION(levels, "PARRSB_LEVELS", 1);
   UPDATE_OPTION(repair, "PARRSB_REPAIR", 1);
   UPDATE_OPTION(verbose_level, "PARRSB_VERBOSE_LEVEL", 1);
@@ -65,7 +65,7 @@ static void print_options(const struct comm *c,
   parrsb_print(c, options->verbose_level, "%s = " FMT "\n", STR, options->OPT)
 
   PRINT_OPTION(partitioner, "PARRSB_PARTITIONER", "%d");
-  PRINT_OPTION(levels, "PARRSB_TAGGED", "%d");
+  PRINT_OPTION(tagged, "PARRSB_TAGGED", "%d");
   PRINT_OPTION(levels, "PARRSB_LEVELS", "%d");
   PRINT_OPTION(repair, "PARRSB_REPAIR", "%d");
   PRINT_OPTION(verbose_level, "PARRSB_VERBOSE_LEVEL", "%d");
@@ -903,7 +903,7 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
 
   print_options(&c, options);
 
-  if (options->tagged && !tag) {
+  if (options->tagged == 1 && !tag) {
     parrsb_print(&c, verbose,
                  "Tagged partitioning requested but tag array is NULL..\n");
     return 1;
