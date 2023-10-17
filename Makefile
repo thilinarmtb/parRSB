@@ -20,9 +20,10 @@ SRCROOT := $(realpath $(patsubst %/,%,$(dir $(MKFILEPATH))))
 SRCDIR = $(SRCROOT)/src
 EXAMPLEDIR = $(SRCROOT)/examples
 BUILDROOT = $(SRCROOT)/build
-INSTALLROOT = $(BUILDROOT)/install
-ifneq ($(strip $(DESTDIR)),)
-  INSTALLROOT = $(realpath $(DESTDIR))
+ifneq (,$(strip $(DESTDIR)))
+INSTALLROOT = $(DESTDIR)
+else
+INSTALLROOT = $(SRCROOT)/install
 endif
 
 SRCS = $(wildcard $(SRCDIR)/*.c)
