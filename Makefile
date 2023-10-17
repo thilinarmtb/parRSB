@@ -8,6 +8,7 @@ SYNC_BY_REDUCTION ?= 1
 BLAS ?= 0
 BLASDIR ?=
 BLASFLAGS ?= -lblas -llapack
+GSLIBPATH ?=
 
 ########################## Don't touch what follows ###########################
 ifeq ($(GSLIBPATH),)
