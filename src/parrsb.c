@@ -84,11 +84,13 @@ static void print_options(const struct comm *c,
 
 static size_t load_balance(struct array *elist, uint nel, int nv,
                            const double *const xyz, const long long *const vtx,
-                           struct crystal *cr, buffer *bfr) {
+                           int verbose, struct crystal *cr, buffer *bfr) {
   struct comm *c = &cr->comm;
   slong out[2][1], wrk[2][1], in = nel;
   comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
   slong start = out[0][0], nelg = out[1][0];
+  parrsb_print(c, verbose, "load_balance: start = %lld nelg = %lld...\n", start,
+               nelg);
 
   uint nstar = nelg / c->np, nrem = nelg - nstar * c->np;
   slong lower = (nstar + 1) * nrem;
@@ -98,6 +100,9 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
     unit_size = sizeof(struct rcb_element);
   else // RSB
     unit_size = sizeof(struct rsb_element);
+  parrsb_print(
+      c, verbose, "load_balance: unit_size = %zu (rsb = %zu, rcb = %zu)...\n",
+      unit_size, sizeof(struct rsb_element), sizeof(struct rcb_element));
 
   array_init_(elist, nel, unit_size, __FILE__, __LINE__);
 
@@ -115,11 +120,13 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
       pe->proc = (eg - 1 - lower) / nstar + nrem;
 
     pe->coord[0] = pe->coord[1] = pe->coord[2] = 0.0;
-    for (int v = 0; v < nv; v++)
+    if (xyz != NULL) {
+      for (int v = 0; v < nv; v++)
+        for (int n = 0; n < ndim; n++)
+          pe->coord[n] += xyz[e * ndim * nv + v * ndim + n];
       for (int n = 0; n < ndim; n++)
-        pe->coord[n] += xyz[e * ndim * nv + v * ndim + n];
-    for (int n = 0; n < ndim; n++)
-      pe->coord[n] /= nv;
+        pe->coord[n] /= nv;
+    }
 
     array_cat_(unit_size, elist, pe, 1, __FILE__, __LINE__);
   }
@@ -139,6 +146,9 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
     sarray_sort(struct rsb_element, elist->ptr, elist->n, globalId, 1, bfr);
 
   free(pe);
+
+  parrsb_print(c, verbose, "load_balance: done ...\n");
+
   return unit_size;
 }
 
@@ -245,11 +255,19 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
                                 parrsb_options *const options,
                                 const struct comm *const c,
                                 struct crystal *const cr, buffer *const bfr) {
-  const int verbose = options->verbose_level - 1;
+  const int verbose = options->verbose_level;
 
-  parrsb_print(c, verbose, "Load balance ...\n");
+  if (vtx == NULL && xyz == NULL) {
+    parrsb_print(
+        c, verbose,
+        "parrsb_part_mesh_v0: Both vertices and coordinates can't be NULL.\n");
+    MPI_Abort(c->c, EXIT_FAILURE);
+  }
+  if (xyz == NULL)
+    options->rsb_pre = 0;
+
   struct array elist;
-  size_t esize = load_balance(&elist, nel, nv, xyz, vtx, cr, bfr);
+  size_t esize = load_balance(&elist, nel, nv, xyz, vtx, verbose, cr, bfr);
 
   struct comm ca;
   comm_split(c, elist.n > 0, c->id, &ca);
@@ -263,11 +281,11 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
     assert(levels <= sizeof(comms) / sizeof(comms[0]));
     initialize_levels(comms, &options->levels, &ca, verbose);
     parrsb_print(c, verbose,
-                 "Setup partition levels:  requested = %d, enabled = %d\n",
+                 "parrsb_part_mesh_v0: Levels:  requested = %d, enabled = %d\n",
                  levels, options->levels);
   }
 
-  parrsb_print(c, verbose, "Running partitioner ...\n");
+  parrsb_print(c, verbose, "parrsb_part_mesh_v0: Running partitioner ...\n");
   if (elist.n > 0) {
     int ndim = (nv == 8) ? 3 : 2;
     switch (options->partitioner) {
@@ -289,7 +307,7 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   for (uint l = 0; l < (uint)options->levels; l++)
     comm_free(&comms[l]);
 
-  parrsb_print(c, verbose, "Restore original input: ...\n");
+  parrsb_print(c, verbose, "parrsb_part_mesh_v0: Restore original input ...\n");
   restore_original(part, cr, &elist, esize, bfr);
 
   array_free(&elist);
@@ -391,7 +409,7 @@ static void parrsb_part_mesh_v1(int *part, const long long *const vtx,
                                 parrsb_options *const options,
                                 const struct comm *const c,
                                 struct crystal *const cr, buffer *const bfr) {
-  const int verbose = options->verbose_level - 1;
+  const int verbose = options->verbose_level;
   parrsb_print(c, verbose, "Find number of tags in the mesh ...\n");
 
   struct tag_t {
