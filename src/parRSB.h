@@ -22,7 +22,7 @@ typedef struct {
   // General options
   int partitioner; // Partition algo: 0 - RSB, 1 - RCB, 2 - RIB (Default: 0)
   int tagged;      // Tagged partitioning: 0 - No, 1 - Yes (Default: 0)
-  int levels;      // Number of levels (levels: 1, 2, 3)
+  int levels;      // Number of levels (levels: 1, 2)
   int repair; // Repair disconnected components: 0 - No, 1 - Yes (Default: 0)
   int verbose_level; // Verbose level: 0, 1, 2, .. etc (Default: 1)
   int profile_level; // Profile level: 0, 1, 2, .. etc (Default: 0)
@@ -84,12 +84,12 @@ int parrsb_dump_map(char *name, unsigned nelt, unsigned nv, long long *vl,
 // Auxiliary functions
 //
 typedef struct {
-  char *mesh;     // Mesh name, required.
-  double tol;     // gencon tolerance, default: 0.2
-  int test;       // run tests, default: 0
-  int dump;       // dump the connectivity or map file, default: 1
-  int nactive;    // # of active MPI ranks, default: INT_MAX
-  int verbose;    // Verbosity, default: 0
+  char *mesh;  // Mesh name, required.
+  double tol;  // gencon tolerance, default: 0.2
+  int test;    // run tests, default: 0
+  int dump;    // dump the connectivity or map file, default: 1
+  int nactive; // # of active MPI ranks, default: INT_MAX
+  int verbose; // Verbosity, default: 0
 
   int ilu_type;   // ILU type, default: 0
   double ilu_tol; // ILU tolerance, default: 0.1

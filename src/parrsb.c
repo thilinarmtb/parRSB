@@ -96,7 +96,7 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
   size_t unit_size;
   if (vtx == NULL) // RCB
     unit_size = sizeof(struct rcb_element);
-  else             // RSB
+  else // RSB
     unit_size = sizeof(struct rsb_element);
 
   array_init_(elist, nel, unit_size, __FILE__, __LINE__);
@@ -135,7 +135,7 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
   sarray_transfer_(elist, unit_size, offsetof(struct rcb_element, proc), 1, cr);
   if (vtx == NULL) // RCB
     sarray_sort(struct rcb_element, elist->ptr, elist->n, globalId, 1, bfr);
-  else             // RSB
+  else // RSB
     sarray_sort(struct rsb_element, elist->ptr, elist->n, globalId, 1, bfr);
 
   free(pe);
@@ -147,7 +147,7 @@ static void restore_original(int *part, struct crystal *cr, struct array *elist,
   sarray_transfer_(elist, usize, offsetof(struct rcb_element, origin), 1, cr);
   uint nel = elist->n;
 
-  if (usize == sizeof(struct rsb_element))      // RSB
+  if (usize == sizeof(struct rsb_element)) // RSB
     sarray_sort(struct rsb_element, elist->ptr, nel, globalId, 1, bfr);
   else if (usize == sizeof(struct rcb_element)) // RCB
     sarray_sort(struct rcb_element, elist->ptr, nel, globalId, 1, bfr);
@@ -202,10 +202,9 @@ static void initialize_levels(struct comm *const comms, int *const levels_,
 
   // Check if there are custom levels specified by the user. Size of the
   // partition (in terms of number of nodes) in a given level must be a
-  // multiple of the partition size of the next level. Currently, hard coded
-  // for Frontier.
-  uint levels;
-  uint sizes[9] = {nnodes, 128, 64, 32, 16, 8, 4, 2, 1};
+  // multiple of the partition size of the next level.
+  sint levels;
+  uint sizes[2] = {nnodes, 1};
   {
     const uint size_max = sizeof(sizes) / sizeof(sizes[0]);
     uint start = 1;
@@ -228,14 +227,14 @@ static void initialize_levels(struct comm *const comms, int *const levels_,
     levels = level;
   }
 
-  for (uint level = 1; level < levels - 1; ++level) {
+  for (sint level = 1; level < levels - 1; ++level) {
     comm_split(&comms[level - 1],
                comms[level - 1].id / (sizes[level] * nranks_per_node),
                comms[level - 1].id, &comms[level]);
   }
+  *levels_ = MIN(levels, *levels_);
   if (levels > 1)
     comm_dup(&comms[levels - 1], &nc);
-  *levels_ = levels;
 
   comm_free(&nc);
 }
