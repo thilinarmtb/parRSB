@@ -199,17 +199,6 @@ static int transfer_boundary_faces(Mesh mesh, struct comm *c) {
 //==============================================================================
 // C interface to find_conn
 //
-#define check_error(call, msg)                                                 \
-  {                                                                            \
-    sint err = (call);                                                         \
-    sint buf;                                                                  \
-    comm_allreduce(&c, gs_int, gs_max, &err, 1, &buf);                         \
-    if (err) {                                                                 \
-      buffer_free(&bfr), mesh_free(mesh), comm_free(&c);                       \
-      return err;                                                              \
-    }                                                                          \
-  }
-
 // Input:
 //   nelt: Number of elements, nv: Number of vertices in an element
 //   coord [nelt, nv, ndim]: Coordinates of elements vertices in preprocessor
@@ -247,17 +236,17 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[0]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(transfer_boundary_faces(mesh, &c), name[0]);
+  transfer_boundary_faces(mesh, &c);
   duration[0] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[1]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(find_min_neighbor_distance(mesh), name[1]);
+  find_min_neighbor_distance(mesh);
   duration[1] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[2]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(find_unique_vertices(mesh, &c, tol, verbose - 1, &bfr), name[2]);
+  find_unique_vertices(mesh, &c, tol, verbose - 1, &bfr);
   duration[2] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[3]);
@@ -266,19 +255,32 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
   send_back(mesh, &c, &bfr);
   duration[3] = comm_time() - t;
 
+#define check_error(call, msg)                                                 \
+  {                                                                            \
+    sint err = (call), wrk;                                                    \
+    comm_allreduce(&c, gs_int, gs_max, &err, 1, &wrk);                         \
+    if (err) {                                                                 \
+      parrsb_print(&c, 1, msg, __FILE__, __LINE__);                            \
+      buffer_free(&bfr), mesh_free(mesh), comm_free(&c);                       \
+      return err;                                                              \
+    }                                                                          \
+  }
+
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[4]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(element_check(mesh, &c, &bfr), name[4]);
+  check_error(element_check(mesh, &c, &bfr), "\t%s:%d element_check failed.");
   duration[4] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[5]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(face_check(mesh, &c, &bfr), name[5]);
+  check_error(face_check(mesh, &c, &bfr), "\t%s:%d face_check failed.");
   duration[5] = comm_time() - t;
+
+#undef check_error
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[6]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(match_periodic_faces(mesh, &c, &bfr), name[6]);
+  match_periodic_faces(mesh, &c, &bfr);
   duration[6] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[7]);
@@ -312,7 +314,6 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
 
   return 0;
 }
-#undef check_error
 
 //=============================================================================
 // Fortran interface
