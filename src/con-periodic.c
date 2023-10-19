@@ -266,7 +266,7 @@ static int setPeriodicFaceCoordinates(Mesh mesh, struct comm *c, buffer *buf) {
   return 0;
 }
 
-int matchPeriodicFaces(Mesh mesh, struct comm *c, buffer *bfr) {
+int match_periodic_faces(Mesh mesh, struct comm *c, buffer *bfr) {
   setPeriodicFaceCoordinates(mesh, c, bfr);
   gatherMatchingPeriodicFaces(mesh, c);
 

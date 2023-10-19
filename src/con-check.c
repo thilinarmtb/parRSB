@@ -197,7 +197,7 @@ static void freeVToEMap(VToEMap *map) {
   free(map);
 }
 
-int faceCheck(Mesh mesh, struct comm *c, buffer *bfr) {
+int face_check(Mesh mesh, struct comm *c, buffer *bfr) {
   VToEMap *map = getVToEMap(mesh, c, bfr);
 
   uint nelt = mesh->nelt;
@@ -265,7 +265,7 @@ int faceCheck(Mesh mesh, struct comm *c, buffer *bfr) {
   return err;
 }
 
-int elementCheck(Mesh mesh, struct comm *c, buffer *bfr) {
+int element_check(Mesh mesh, struct comm *c, buffer *bfr) {
   uint nelt = mesh->nelt;
   uint ndim = mesh->ndim;
   uint nv = (ndim == 3) ? 8 : 4;

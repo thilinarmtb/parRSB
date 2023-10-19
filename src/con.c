@@ -1,7 +1,6 @@
-#include "con-impl.h"
-#include "parrsb-impl.h"
-#include "sort.h"
 #include <stdarg.h>
+
+#include "con-impl.h"
 
 int PRE_TO_SYM_VERTEX[GC_MAX_VERTICES] = {0, 1, 3, 2, 4, 5, 7, 6};
 int PRE_TO_SYM_FACE[GC_MAX_FACES] = {2, 1, 3, 0, 4, 5};
@@ -82,7 +81,7 @@ static inline double distance_3d(struct point_t *a, struct point_t *b) {
   return distance_2d(a, b) + diff_sqr(a->x[2], b->x[2]);
 }
 
-int findMinNeighborDistance(Mesh mesh) {
+int find_min_neighbor_distance(Mesh mesh) {
   struct point_t *p = (struct point_t *)mesh->elements.ptr;
   uint ndim = mesh->ndim;
   uint nv = mesh->nv;
@@ -123,7 +122,7 @@ int findMinNeighborDistance(Mesh mesh) {
 //==============================================================================
 // Global numbering
 //
-static int setGlobalID(Mesh mesh, struct comm *c) {
+static int set_global_id(Mesh mesh, struct comm *c) {
   uint nPoints = mesh->elements.n;
   Point points = (struct point_t *)mesh->elements.ptr;
 
@@ -167,7 +166,7 @@ int send_back(Mesh mesh, struct comm *c, buffer *bfr) {
   return 0;
 }
 
-static int transferBoundaryFaces(Mesh mesh, struct comm *c) {
+static int transfer_boundary_faces(Mesh mesh, struct comm *c) {
   uint size = c->np;
 
   struct array *boundary = &mesh->boundary;
@@ -238,21 +237,22 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
   double tall = comm_time(), t;
 
   double duration[8] = {0};
-  const char *name[8] = {"transferBoundaryFaces", "findMinNbrDistance   ",
-                         "find_unique_vertices ", "setGlobalId          ",
-                         "elementCheck         ", "faceCheck            ",
-                         "matchPeriodicFaces   ", "copyOutput           "};
+  const char *name[8] = {
+      "transfer_boundary_faces    ", "find_min_neighbor_distance ",
+      "find_unique_vertices       ", "set_global_id              ",
+      "element_check              ", "face_check                 ",
+      "match_periodic_faces       ", "copy_output                "};
 
   Mesh mesh = mesh_init(nelt, ndim, coord, pinfo, npinfo, &c);
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[0]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(transferBoundaryFaces(mesh, &c), name[0]);
+  check_error(transfer_boundary_faces(mesh, &c), name[0]);
   duration[0] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[1]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(findMinNeighborDistance(mesh), name[1]);
+  check_error(find_min_neighbor_distance(mesh), name[1]);
   duration[1] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[2]);
@@ -262,23 +262,23 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[3]);
   parrsb_barrier(&c), t = comm_time();
-  setGlobalID(mesh, &c);
+  set_global_id(mesh, &c);
   send_back(mesh, &c, &bfr);
   duration[3] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[4]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(elementCheck(mesh, &c, &bfr), name[4]);
+  check_error(element_check(mesh, &c, &bfr), name[4]);
   duration[4] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[5]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(faceCheck(mesh, &c, &bfr), name[5]);
+  check_error(face_check(mesh, &c, &bfr), name[5]);
   duration[5] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[6]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(matchPeriodicFaces(mesh, &c, &bfr), name[6]);
+  check_error(match_periodic_faces(mesh, &c, &bfr), name[6]);
   duration[6] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...\n", name[7]);
