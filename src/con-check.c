@@ -168,12 +168,12 @@ static VToEMap *getVToEMap(Mesh m, struct comm *c, buffer *bfr) {
 }
 
 // key must be present in globalIds
-static int getPosition(VToEMap *map, ulong key) {
+static uint getPosition(VToEMap *map, ulong key) {
   ulong *globalIds = map->globalIds;
 
-  int begin = 0;
-  int end = map->size;
-  int mid = 0;
+  uint begin = 0;
+  uint end = map->size;
+  uint mid = 0;
   while (begin < end) {
     mid = (begin + end) / 2;
 
@@ -186,7 +186,7 @@ static int getPosition(VToEMap *map, ulong key) {
   };
 
   if (globalIds[mid] != key)
-    return -1;
+    return UINT_MAX;
   return mid;
 }
 
@@ -226,8 +226,8 @@ int face_check(Mesh mesh, struct comm *c, buffer *bfr) {
 
       for (k = 0; k < nfv; k++) {
         ulong globalId = ptr[i * nv + faces[j][k] - 1].globalId + 1;
-        int indx = getPosition(map, globalId);
-        assert(indx >= 0);
+        uint indx = getPosition(map, globalId);
+        assert(indx < UINT_MAX);
         LongID elemId;
         for (l = map->offsets[indx]; l < map->offsets[indx + 1]; l++) {
           elemId.id = map->elements[l];
