@@ -258,23 +258,15 @@ parrsb_cmd_line_opts *parrsb_parse_cmd_opts(int argc, char *argv[]) {
 
   in->mesh = NULL, in->tol = 2e-1;
   in->test = 0, in->dump = 0, in->verbose = 0, in->nactive = INT_MAX;
-  in->ilu_type = 0, in->ilu_tol = 1e-1, in->ilu_pivot = 0;
-  in->crs_type = 0, in->crs_tol = 1e-3;
 
-  static struct option long_options[] = {
-      {"mesh", required_argument, 0, 0},
-      {"tol", optional_argument, 0, 1},
-      {"test", optional_argument, 0, 2},
-      {"dump", optional_argument, 0, 3},
-      {"nactive", optional_argument, 0, 4},
-      {"verbose", optional_argument, 0, 5},
-      {"ilu_type", optional_argument, 0, 10},
-      {"ilu_tol", optional_argument, 0, 11},
-      {"ilu_pivot", optional_argument, 0, 12},
-      {"crs_type", optional_argument, 0, 20},
-      {"crs_tol", optional_argument, 0, 21},
-      {"help", optional_argument, 0, 91},
-      {0, 0, 0, 0}};
+  static struct option long_options[] = {{"mesh", required_argument, 0, 0},
+                                         {"tol", optional_argument, 0, 10},
+                                         {"test", optional_argument, 0, 20},
+                                         {"dump", optional_argument, 0, 30},
+                                         {"nactive", optional_argument, 0, 40},
+                                         {"verbose", optional_argument, 0, 50},
+                                         {"help", optional_argument, 0, 99},
+                                         {0, 0, 0, 0}};
 
   size_t len;
   for (;;) {
@@ -288,37 +280,22 @@ parrsb_cmd_line_opts *parrsb_parse_cmd_opts(int argc, char *argv[]) {
       in->mesh = tcalloc(char, len + 1);
       strncpy(in->mesh, optarg, len);
       break;
-    case 1:
+    case 10:
       in->tol = atof(optarg);
       break;
-    case 2:
+    case 20:
       in->test = 1;
       break;
-    case 3:
+    case 30:
       in->dump = 1;
       break;
-    case 4:
+    case 40:
       in->nactive = atoi(optarg);
       break;
-    case 5:
+    case 50:
       in->verbose = atoi(optarg);
       break;
-    case 10:
-      in->ilu_type = atoi(optarg);
-      break;
-    case 11:
-      in->ilu_tol = atof(optarg);
-      break;
-    case 12:
-      in->ilu_pivot = atoi(optarg);
-      break;
-    case 20:
-      in->crs_type = atoi(optarg);
-      break;
-    case 21:
-      in->crs_tol = atof(optarg);
-      break;
-    case 91:
+    case 99:
       print_help();
       break;
     default:

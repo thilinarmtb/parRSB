@@ -324,7 +324,8 @@ void rsb(struct array *elements, int nv, const parrsb_options *const options,
   for (uint level = 0; level < levels; level++) {
     // Find the maximum number of RSB cuts in current level.
     uint ncuts = get_level_cuts(level, levels, comms);
-    parrsb_print(gc, verbose, "rsb: Level=%u/%u\n", level + 1, ncuts);
+    parrsb_print(gc, verbose, "rsb: Level=%u/%u number of cuts = %u\n",
+                 level + 1, levels, ncuts);
 
     struct comm lc;
     comm_dup(&lc, &comms[level]);

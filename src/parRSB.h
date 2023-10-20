@@ -90,13 +90,6 @@ typedef struct {
   int dump;    // dump the connectivity or map file, default: 1
   int nactive; // # of active MPI ranks, default: INT_MAX
   int verbose; // Verbosity, default: 0
-
-  int ilu_type;   // ILU type, default: 0
-  double ilu_tol; // ILU tolerance, default: 0.1
-  int ilu_pivot;  // Pivoting for ILU: default: 0
-
-  int crs_type;   // Coarse solver type, default: 0
-  double crs_tol; // Coarse tolerance, default: 1e-3
 } parrsb_cmd_line_opts;
 
 parrsb_cmd_line_opts *parrsb_parse_cmd_opts(int argc, char *argv[]);
