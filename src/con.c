@@ -8,20 +8,6 @@ int NEIGHBOR_MAP[GC_MAX_VERTICES][GC_MAX_NEIGHBORS] = {
     {1, 2, 4}, {0, 3, 5}, {0, 3, 6}, {1, 2, 7},
     {0, 5, 6}, {1, 4, 7}, {2, 4, 7}, {3, 5, 6}};
 
-void parrsb_print(const struct comm *c, int verbose, const char *fmt, ...) {
-  if (c == NULL)
-    return;
-  comm_barrier(c);
-
-  va_list vargs;
-  if (c->id == 0 && verbose > 0) {
-    va_start(vargs, fmt);
-    vprintf(fmt, vargs);
-    va_end(vargs);
-    fflush(stdout);
-  }
-}
-
 double diff_sqr(double x, double y) { return (x - y) * (x - y); }
 
 //==============================================================================
@@ -220,7 +206,7 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
       verbose = atoi(val);
   }
 
-  parrsb_print(&c, verbose, "Running parCon ...\n");
+  parrsb_print(&c, verbose, "Running parCon ...");
 
   parrsb_barrier(&c);
   double tall = comm_time(), t;
@@ -234,22 +220,22 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
 
   Mesh mesh = mesh_init(nelt, ndim, coord, pinfo, npinfo, &c);
 
-  parrsb_print(&c, verbose - 1, "\t%s ...\n", name[0]);
+  parrsb_print(&c, verbose - 1, "\t%s ...", name[0]);
   parrsb_barrier(&c), t = comm_time();
   transfer_boundary_faces(mesh, &c);
   duration[0] = comm_time() - t;
 
-  parrsb_print(&c, verbose - 1, "\t%s ...\n", name[1]);
+  parrsb_print(&c, verbose - 1, "\t%s ...", name[1]);
   parrsb_barrier(&c), t = comm_time();
   find_min_neighbor_distance(mesh);
   duration[1] = comm_time() - t;
 
-  parrsb_print(&c, verbose - 1, "\t%s ...\n", name[2]);
+  parrsb_print(&c, verbose - 1, "\t%s ...", name[2]);
   parrsb_barrier(&c), t = comm_time();
   find_unique_vertices(mesh, &c, tol, verbose - 1, &bfr);
   duration[2] = comm_time() - t;
 
-  parrsb_print(&c, verbose - 1, "\t%s ...\n", name[3]);
+  parrsb_print(&c, verbose - 1, "\t%s ...", name[3]);
   parrsb_barrier(&c), t = comm_time();
   set_global_id(mesh, &c);
   send_back(mesh, &c, &bfr);
@@ -266,24 +252,24 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
     }                                                                          \
   }
 
-  parrsb_print(&c, verbose - 1, "\t%s ...\n", name[4]);
+  parrsb_print(&c, verbose - 1, "\t%s ...", name[4]);
   parrsb_barrier(&c), t = comm_time();
   check_error(element_check(mesh, &c, &bfr), "\t%s:%d element_check failed.");
   duration[4] = comm_time() - t;
 
-  parrsb_print(&c, verbose - 1, "\t%s ...\n", name[5]);
+  parrsb_print(&c, verbose - 1, "\t%s ...", name[5]);
   parrsb_barrier(&c), t = comm_time();
   check_error(face_check(mesh, &c, &bfr), "\t%s:%d face_check failed.");
   duration[5] = comm_time() - t;
 
 #undef check_error
 
-  parrsb_print(&c, verbose - 1, "\t%s ...\n", name[6]);
+  parrsb_print(&c, verbose - 1, "\t%s ...", name[6]);
   parrsb_barrier(&c), t = comm_time();
   match_periodic_faces(mesh, &c, &bfr);
   duration[6] = comm_time() - t;
 
-  parrsb_print(&c, verbose - 1, "\t%s ...\n", name[7]);
+  parrsb_print(&c, verbose - 1, "\t%s ...", name[7]);
   parrsb_barrier(&c), t = comm_time();
   Point ptr = mesh->elements.ptr;
   for (uint i = 0; i < nelt; i++) {
@@ -301,14 +287,14 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
     comm_allreduce(&c, gs_double, gs_max, gmax, 8, buf);
 
     for (unsigned i = 0; i < 7; i++) {
-      parrsb_print(&c, verbose - 1, "%s: %e %e (min max)\n", name[i], gmin[i],
+      parrsb_print(&c, verbose - 1, "%s: %e %e (min max)", name[i], gmin[i],
                    gmax[i]);
     }
   }
 
   parrsb_barrier(&c);
   tall = comm_time() - tall;
-  parrsb_print(&c, verbose, "parCon (tol = %e) finished in %g s\n", tol, tall);
+  parrsb_print(&c, verbose, "parCon (tol = %e) finished in %g s", tol, tall);
 
   buffer_free(&bfr), mesh_free(mesh), comm_free(&c);
 
