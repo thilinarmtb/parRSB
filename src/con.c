@@ -1,5 +1,3 @@
-#include <stdarg.h>
-
 #include "con-impl.h"
 
 int PRE_TO_SYM_VERTEX[GC_MAX_VERTICES] = {0, 1, 3, 2, 4, 5, 7, 6};

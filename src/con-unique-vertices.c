@@ -260,8 +260,7 @@ static void sort_segments_shared(struct array *shared, int dim, struct comm *c,
         bin = find_bin_cr(gids[index], &active, verbose - 1, bfr);
       }
       parrsb_print(&active, verbose,
-                   "\t\t\tsss_find_bin_algo_%d_parity_%d: done.", algo,
-                   parity);
+                   "\t\t\tsss_find_bin_algo_%d_parity_%d: done.", algo, parity);
       assert(bin >= 0 && bin <= (sint)active.np);
 
       // index >= 0 --> gids[index] >= 0 --> segments[index].n > 0
@@ -503,8 +502,6 @@ int find_unique_vertices(Mesh mesh, struct comm *c, scalar tol, int verbose,
 
   for (int t = 0; t < ndim; t++) {
     for (int d = 0; d < ndim; d++) {
-      parrsb_print(c, verbose, "\tlocglob: %d %d", t + 1, d + 1);
-
       // Sort both local and shared segments.
       parrsb_print(c, verbose - 1, "\t\tsort_shared_segments ...");
       sort_segments_shared(&shared, d, c, verbose - 1, bfr);
@@ -524,7 +521,8 @@ int find_unique_vertices(Mesh mesh, struct comm *c, scalar tol, int verbose,
       // Number the segments.
       parrsb_print(c, verbose - 1, "\t\tnumber_segments ...");
       slong nseg = number_segments(&local, &shared, c);
-      parrsb_print(c, verbose, " %lld %lld", nseg, npts);
+      parrsb_print(c, verbose, "\tlocglob: %d %d %lld %lld", t + 1, d + 1, nseg,
+                   npts);
     }
   }
   // Number points consecutively -- shared points after local and then load

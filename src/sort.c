@@ -178,9 +178,8 @@ void sarray_transfer_chunk(struct array *arr, const size_t usize,
     comm_allreduce(c, gs_long, gs_max, &bmax, 1, wrk);
     comm_allreduce(c, gs_long, gs_min, &cmin, 1, wrk);
     comm_allreduce(c, gs_long, gs_min, &bmin, 1, wrk);
-    parrsb_print(c, 0,
-                 "\t\t\t %d/%d brr.n = %u/%lld/%lld crr.n = %u/%lld/%lld", t,
-                 nt, brr.n, bmin, bmax, crr.n, cmin, cmax);
+    parrsb_print(c, 0, "\t\t\t %d/%d brr.n = %u/%lld/%lld crr.n = %u/%lld/%lld",
+                 t, nt, brr.n, bmin, bmax, crr.n, cmin, cmax);
   }
   array_free(&brr);
 

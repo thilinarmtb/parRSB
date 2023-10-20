@@ -1,6 +1,8 @@
 #include "metrics.h"
 #include "parrsb-impl.h"
+
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -160,8 +162,6 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
 
   free(pe);
 
-  parrsb_print(c, verbose, "load_balance: done");
-
   return unit_size;
 }
 
@@ -260,7 +260,7 @@ static void initialize_levels(struct comm *const comms, int *const levels_,
   if (levels > 1)
     comm_dup(&comms[levels - 1], &nc);
   *levels_ = levels;
-  parrsb_print(c, verbose, "initialize_levels: done");
+  parrsb_print(c, verbose, "initialize_levels: levels = %u", levels);
 
   comm_free(&nc);
 }
@@ -301,7 +301,7 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
                  levels, options->levels);
   }
 
-  parrsb_print(c, verbose, "parrsb_part_mesh_v0: Running partitioner ...");
+  parrsb_print(c, verbose, "parrsb_part_mesh_v0: running partitioner ...");
   if (elist.n > 0) {
     int ndim = (nv == 8) ? 3 : 2;
     switch (options->partitioner) {
@@ -323,7 +323,7 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   for (uint l = 0; l < (uint)options->levels; l++)
     comm_free(&comms[l]);
 
-  parrsb_print(c, verbose, "parrsb_part_mesh_v0: Restore original input ...");
+  parrsb_print(c, verbose, "parrsb_part_mesh_v0: restore original input");
   restore_original(part, cr, &elist, esize, bfr);
 
   array_free(&elist);
