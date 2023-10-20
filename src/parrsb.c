@@ -206,8 +206,9 @@ static void initialize_levels(struct comm *const comms, int *const levels_,
     assert(nranks_max == nranks_min);
     // Check invariant: nranks_per_node must be larger than 0.
     assert(nranks_per_node > 0);
-    parrsb_print(c, verbose, "nnodes = %u, nranks_per_node = %u\n", nnodes,
-                 nranks_per_node);
+    parrsb_print(c, verbose,
+                 "initialize_levels: nnodes = %u, nranks_per_node = %u\n",
+                 nnodes, nranks_per_node);
   }
 
   // Check if there are custom levels specified by the user. Size of the
@@ -360,8 +361,8 @@ void parrsb_check_tagged_partitions(const long long *const eids,
     free(lids);
   }
 
-  parrsb_print(c, verbose, "Setup multiplicity.\n");
   // Setup a local gs handle based on the original gs vertex ids.
+  parrsb_print(c, verbose, "Setup multiplicity.\n");
   const size_t size = nel * nv;
   buffer bfr;
   buffer_init(&bfr, size);
@@ -374,8 +375,8 @@ void parrsb_check_tagged_partitions(const long long *const eids,
     gs_free(gsl);
   }
 
-  parrsb_print(c, verbose, "Check multiplicity across the layers.\n");
   // Now let's compare the multiplicity across the layers.
+  parrsb_print(c, verbose, "Check multiplicity across the layers.\n");
   {
     sint *lmin = tcalloc(sint, nel);
     sint *lmax = tcalloc(sint, nel);
@@ -622,9 +623,6 @@ static void update_frontier(sint *const target, sint *const hop,
   }
 
   if (dests.n > 0) {
-    // printf("rank = %d hop = %d dest.n = %d...\n", c->id, *hop, dests.n);
-    // fflush(stdout);
-
     sarray_sort(struct dest_t, dests.ptr, dests.n, target, 0, bfr);
 
     const struct dest_t *const pd = (const struct dest_t *const)dests.ptr;
