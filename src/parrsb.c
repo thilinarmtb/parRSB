@@ -89,7 +89,7 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
   slong out[2][1], wrk[2][1], in = nel;
   comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
   slong start = out[0][0], nelg = out[1][0];
-  parrsb_print(c, verbose, "load_balance: start = %lld nelg = %lld...\n", start,
+  parrsb_print(c, verbose, "load_balance: start = %lld nelg = %lld\n", start,
                nelg);
 
   uint nstar = nelg / c->np, nrem = nelg - nstar * c->np;
@@ -101,7 +101,7 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
   else             // RSB
     unit_size = sizeof(struct rsb_element);
   parrsb_print(
-      c, verbose, "load_balance: unit_size = %zu (rsb = %zu, rcb = %zu)...\n",
+      c, verbose, "load_balance: unit_size = %zu (rsb = %zu, rcb = %zu)\n",
       unit_size, sizeof(struct rsb_element), sizeof(struct rcb_element));
 
   array_init_(elist, nel, unit_size, __FILE__, __LINE__);
@@ -147,7 +147,7 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
 
   free(pe);
 
-  parrsb_print(c, verbose, "load_balance: done ...\n");
+  parrsb_print(c, verbose, "load_balance: done\n");
 
   return unit_size;
 }
@@ -207,7 +207,7 @@ static void initialize_levels(struct comm *const comms, int *const levels_,
     // Check invariant: nranks_per_node must be larger than 0.
     assert(nranks_per_node > 0);
     parrsb_print(c, verbose,
-                 "initialize_levels: nnodes = %u, nranks_per_node = %u\n",
+                 "initialize_levels: num_nodes = %u, num_ranks_per_node = %u\n",
                  nnodes, nranks_per_node);
   }
 
@@ -243,9 +243,11 @@ static void initialize_levels(struct comm *const comms, int *const levels_,
                comms[level - 1].id / (sizes[level] * nranks_per_node),
                comms[level - 1].id, &comms[level]);
   }
-  *levels_ = MIN(levels, *levels_);
+  levels = MIN(levels, *levels_);
   if (levels > 1)
     comm_dup(&comms[levels - 1], &nc);
+  *levels_ = levels;
+  parrsb_print(c, verbose, "initialize_levels: done\n");
 
   comm_free(&nc);
 }
@@ -261,7 +263,7 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   if (vtx == NULL && xyz == NULL) {
     parrsb_print(
         c, verbose,
-        "parrsb_part_mesh_v0: Both vertices and coordinates can't be NULL.\n");
+        "parrsb_part_mesh_v0: Both vertices and coordinates can't be NULL\n");
     MPI_Abort(c->c, EXIT_FAILURE);
   }
   if (xyz == NULL)
