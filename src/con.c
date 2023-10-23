@@ -264,7 +264,7 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
 
   parrsb_print(&c, verbose - 1, "\t%s ...", name[6]);
   parrsb_barrier(&c), t = comm_time();
-  match_periodic_faces(mesh, &c, &bfr);
+  match_periodic_faces(mesh, &c, verbose - 1, &bfr);
   duration[6] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...", name[7]);

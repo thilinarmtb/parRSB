@@ -266,19 +266,33 @@ static int setPeriodicFaceCoordinates(Mesh mesh, struct comm *c, buffer *buf) {
   return 0;
 }
 
-int match_periodic_faces(Mesh mesh, struct comm *c, buffer *bfr) {
+int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
+  const char *functions[6] = {
+      "set_periodic_face_coords      ", "gather_matching_periodic_faces",
+      "find_connected_periodic_faces ", "renumber_periodic_vertices    ",
+      "compress_periodic_vertices    ", "send_back                     "};
+
+  parrsb_print(c, verbose, "\t\t%s ...", functions[0]);
   setPeriodicFaceCoordinates(mesh, c, bfr);
+
+  parrsb_print(c, verbose, "\t\t%s ...", functions[1]);
   gatherMatchingPeriodicFaces(mesh, c);
 
   struct array matched;
   array_init(struct mpair_t, &matched, 10);
   matched.n = 0;
 
+  parrsb_print(c, verbose, "\t\t%s ...", functions[2]);
   findConnectedPeriodicFaces(mesh, &matched);
+
+  parrsb_print(c, verbose, "\t\t%s ...", functions[3]);
   renumberPeriodicVertices(mesh, c, &matched, bfr);
   array_free(&matched);
 
+  parrsb_print(c, verbose, "\t\t%s ...", functions[4]);
   compressPeriodicVertices(mesh, c, bfr);
+
+  parrsb_print(c, verbose, "\t\t%s ...", functions[5]);
   send_back(mesh, c, bfr);
 
   return 0;
