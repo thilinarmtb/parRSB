@@ -83,8 +83,9 @@ static void print_options(parrsb_options *options) {
 
 #undef PRINT_OPTION
 
-static size_t load_balance(struct array *elist, uint nel, int nv, double *coord,
-                           long long *vtx, struct crystal *cr, buffer *bfr) {
+static size_t load_balance(struct array *elist, parrsb_options *options,
+                           uint nel, int nv, double *coord, long long *vtx,
+                           struct crystal *cr, buffer *bfr) {
   struct comm *c = &cr->comm;
   slong out[2][1], wrk[2][1], in = nel;
   comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
@@ -93,11 +94,21 @@ static size_t load_balance(struct array *elist, uint nel, int nv, double *coord,
   uint nstar = nelg / c->np, nrem = nelg - nstar * c->np;
   slong lower = (nstar + 1) * nrem;
 
+  if (vtx == NULL && coord == NULL) {
+    fprintf(stderr, "Either vtx or coord must be non-NULL.\n");
+    fflush(stderr);
+    exit(EXIT_FAILURE);
+  }
+
   size_t unit_size;
+  if (vtx != NULL) // RSB
+    unit_size = sizeof(struct rsb_element);
   if (vtx == NULL) // RCB
     unit_size = sizeof(struct rcb_element);
-  else // RSB
-    unit_size = sizeof(struct rsb_element);
+  // If coord == NULL, RSB_PRE is set to just a parallel sort based on fiedler
+  // value.
+  if (coord == NULL)
+    options->rsb_pre = 3;
 
   array_init_(elist, nel, unit_size, __FILE__, __LINE__);
 
@@ -112,12 +123,14 @@ static size_t load_balance(struct array *elist, uint nel, int nv, double *coord,
     else if (nstar != 0)
       pe->proc = (eg - 1 - lower) / nstar + nrem;
 
-    pe->coord[0] = pe->coord[1] = pe->coord[2] = 0.0;
-    for (int v = 0; v < nv; v++)
+    if (coord != NULL) {
+      pe->coord[0] = pe->coord[1] = pe->coord[2] = 0.0;
+      for (int v = 0; v < nv; v++)
+        for (int n = 0; n < ndim; n++)
+          pe->coord[n] += coord[e * ndim * nv + v * ndim + n];
       for (int n = 0; n < ndim; n++)
-        pe->coord[n] += coord[e * ndim * nv + v * ndim + n];
-    for (int n = 0; n < ndim; n++)
-      pe->coord[n] /= nv;
+        pe->coord[n] /= nv;
+    }
 
     array_cat_(unit_size, elist, pe, 1, __FILE__, __LINE__);
   }
@@ -189,7 +202,7 @@ int parrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
 
   // Load balance input data
   struct array elist;
-  size_t esize = load_balance(&elist, nel, nv, coord, vtx, &cr, &bfr);
+  size_t esize = load_balance(&elist, &options, nel, nv, coord, vtx, &cr, &bfr);
 
   struct comm ca;
   comm_split(&c, nel > 0, c.id, &ca);
