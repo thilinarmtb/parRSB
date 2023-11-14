@@ -37,7 +37,7 @@ static VToEMap *getVToEMap(Mesh m, struct comm *c, buffer *bfr) {
   array_init(vertex, &vertices, size);
 
   // Create (globalId, elementId) pairs and send them to globalId % np
-  Point ptr = m->elements.ptr;
+  struct point_t *ptr = (struct point_t *)m->elements.ptr;
   uint i, j;
   for (i = 0; i < nelt; i++) {
     for (j = 0; j < nv; j++) {
@@ -209,7 +209,7 @@ int face_check(Mesh mesh, struct comm *c, buffer *bfr) {
   else
     memcpy(faces, faces2D, GC_MAX_FACES * GC_MAX_FACE_VERTICES * sizeof(int));
 
-  Point ptr = mesh->elements.ptr;
+  struct point_t *ptr = (struct point_t *)mesh->elements.ptr;
   uint nf = (ndim == 3) ? 6 : 4;
   uint nfv = (ndim == 3) ? 4 : 2;
   uint nv = (ndim == 3) ? 8 : 4;
@@ -271,7 +271,7 @@ int element_check(Mesh mesh, struct comm *c, buffer *bfr) {
   uint nv = (ndim == 3) ? 8 : 4;
 
   LongID globalIds[8];
-  Point ptr = mesh->elements.ptr;
+  struct point_t *ptr = (struct point_t *)mesh->elements.ptr;
   uint i, j;
   int err = 0;
   for (i = 0; i < nelt && err == 0; i++) {

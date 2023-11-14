@@ -108,7 +108,7 @@ int find_min_neighbor_distance(Mesh mesh) {
 //
 static int set_global_id(Mesh mesh, struct comm *c) {
   uint nPoints = mesh->elements.n;
-  Point points = (struct point_t *)mesh->elements.ptr;
+  struct point_t *points = (struct point_t *)mesh->elements.ptr;
 
   sint bin = (nPoints > 0);
   struct comm nonZeroRanks;
@@ -269,7 +269,7 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
 
   parrsb_print(&c, verbose - 1, "\t%s ...", name[7]);
   parrsb_barrier(&c), t = comm_time();
-  Point ptr = mesh->elements.ptr;
+  struct point_t *ptr = (struct point_t *)mesh->elements.ptr;
   for (uint i = 0; i < nelt; i++) {
     for (uint j = 0; j < mesh->nv; j++)
       vtx[i * mesh->nv + j] = ptr[i * mesh->nv + j].globalId + 1;

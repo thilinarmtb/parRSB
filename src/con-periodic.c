@@ -25,7 +25,7 @@ static int compress_periodic_vertices(Mesh mesh, struct comm *c, buffer *bfr) {
   parallel_sort(struct point_t, &mesh->elements, globalId, gs_long, 0, 0, c,
                 bfr);
 
-  Point points = mesh->elements.ptr;
+  struct point_t *points = (struct point_t *)mesh->elements.ptr;
   uint npoints = mesh->elements.n;
 
   uint i, nunique = 0;
@@ -281,7 +281,7 @@ static int set_periodic_face_coords(Mesh mesh, struct comm *c, buffer *buf) {
   if (bSize == 0)
     return 0;
 
-  Point ePtr = mesh->elements.ptr;
+  struct point_t *ePtr = mesh->elements.ptr;
   sint eSize = mesh->elements.n;
   if (eSize == 0)
     return 0;

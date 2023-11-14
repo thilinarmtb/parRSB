@@ -101,7 +101,6 @@ struct point_t {
   int ifSegment;
   ulong sequenceId, elementId, globalId, pntid;
 };
-typedef struct point_t *Point;
 
 struct boundary_t {
   ulong elementId, faceId;
