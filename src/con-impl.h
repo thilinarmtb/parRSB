@@ -109,7 +109,6 @@ struct boundary_t {
   uint proc;
   long bc[2];
 };
-typedef struct boundary_t *BoundaryFace;
 
 struct mesh_t {
   ulong nelgt;

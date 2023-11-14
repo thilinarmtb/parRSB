@@ -154,7 +154,7 @@ static int transfer_boundary_faces(Mesh mesh, struct comm *c) {
   uint size = c->np;
 
   struct array *boundary = &mesh->boundary;
-  BoundaryFace ptr = (struct boundary_t *)boundary->ptr;
+  struct boundary_t *ptr = (struct boundary_t *)boundary->ptr;
   int nFaces = boundary->n;
 
   slong nelgt = mesh->nelgt;

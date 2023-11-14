@@ -107,8 +107,8 @@ static int renumber_periodic_vertices(Mesh mesh, struct comm *c,
   return 0;
 }
 
-static int match_connected_periodic_pair(Mesh mesh, BoundaryFace f_,
-                                         BoundaryFace g_,
+static int match_connected_periodic_pair(Mesh mesh, struct boundary_t *f_,
+                                         struct boundary_t *g_,
                                          struct array *matches) {
   struct boundary_t f = *f_, g = *g_;
 
@@ -175,10 +175,10 @@ static int match_connected_periodic_pair(Mesh mesh, BoundaryFace f_,
   return 0;
 }
 
-static sint find_connected_periodic_face(Mesh mesh, const sint i,
+static uint find_connected_periodic_face(Mesh mesh, const sint i,
                                          const sint *matched) {
   sint size = mesh->boundary.n;
-  BoundaryFace ptr = mesh->boundary.ptr;
+  struct boundary_t *ptr = mesh->boundary.ptr;
 
   ulong elementId = ptr[i].bc[0];
   ulong faceId = ptr[i].bc[1];
@@ -224,8 +224,7 @@ static sint find_connected_periodic_face(Mesh mesh, const sint i,
 static int find_connected_periodic_faces(Mesh mesh, struct array *matches,
                                          buffer *bfr) {
   sint size = mesh->boundary.n;
-  BoundaryFace ptr = mesh->boundary.ptr;
-
+  struct boundary_t *ptr = (struct boundary_t *)mesh->boundary.ptr;
   sarray_sort(struct boundary_t, ptr, size, elementId, 1, bfr);
 
   sint *matched = tcalloc(sint, size);
@@ -250,7 +249,7 @@ static int find_connected_periodic_faces(Mesh mesh, struct array *matches,
 static int gather_matching_periodic_faces(Mesh mesh, struct comm *c) {
   uint size = c->np;
 
-  BoundaryFace bPtr = mesh->boundary.ptr;
+  struct boundary_t *bPtr = mesh->boundary.ptr;
   int nFaces = mesh->boundary.n;
 
   slong nelgt = mesh->nelgt;
@@ -277,7 +276,7 @@ static int gather_matching_periodic_faces(Mesh mesh, struct comm *c) {
 }
 
 static int set_periodic_face_coords(Mesh mesh, struct comm *c, buffer *buf) {
-  BoundaryFace bPtr = mesh->boundary.ptr;
+  struct boundary_t *bPtr = mesh->boundary.ptr;
   sint bSize = mesh->boundary.n;
   if (bSize == 0)
     return 0;
