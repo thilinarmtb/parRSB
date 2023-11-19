@@ -605,6 +605,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
     }
   }
 
+  // 9. Make sure frontier values are consistent.
   struct comm lc;
   comm_split(&c, c.id, c.id, &lc);
   struct gs_data *gsh = gs_setup(vids, fe * nv, &lc, 0, gs_pairwise, 0);
