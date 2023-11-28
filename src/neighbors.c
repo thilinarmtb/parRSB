@@ -303,9 +303,9 @@ static int binary_search(ulong eid, struct eid_t *pe, uint n) {
   return -1;
 }
 
-void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
-                          long long *vids, double *xyz, double *mask,
-                          double *mat, int *frontier, unsigned nw, int *wids,
+void parrsb_fetch_nbrs_v2(unsigned *nei, slong *eids, unsigned nv, slong *vids,
+                          double *xyz, double *mask, double *mat,
+                          sint *frontier, unsigned nw, sint *wids,
                           MPI_Comm comm, unsigned max_ne) {
   const size_t ne = *nei;
   const unsigned ndim = (nv == 8) ? 3 : 2;
@@ -365,7 +365,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
 
   // 2. Build element to neighbor map and element to processor map for input
   // elements.
-  uint max_nbrs = 27 * max_ne;
+  uint max_nbrs = 100 * max_ne;
   uint *offs = tcalloc(uint, max_ne + 1);
   ulong *nbrs = tcalloc(ulong, max_nbrs);
   uint *proc = tcalloc(uint, max_nbrs);
@@ -577,6 +577,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
   sarray_sort(struct elem_t, extended.ptr, extended.n, seq, 0, &bfr);
   struct elem_t *pe = (struct elem_t *)extended.ptr;
   *nei = fe;
+  assert(fe < max_ne);
   for (uint i = 0; i < fe; i++) {
     // Sanity check.
     assert(elist[i] == pe[i].eid);
@@ -619,16 +620,19 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, long long *eids, unsigned nv,
 
 #define fparrsb_fetch_nbrs_v2                                                  \
   FORTRAN_UNPREFIXED(fparrsb_fetch_nbrs_v2, FPARRSB_FETCH_NBRS_V2)
-void fparrsb_fetch_nbrs_v2(int *nei, long long *eids, int *nv, long long *vids,
+void fparrsb_fetch_nbrs_v2(sint *nei, slong *eids, sint *nv, slong *vids,
                            double *xyz, double *mask, double *mat,
-                           int *frontier, int *nw, int *wids, MPI_Fint *comm,
-                           int *maxne, int *err) {
+                           sint *frontier, sint *nw, sint *wids, MPI_Fint *comm,
+                           sint *maxne, sint *err) {
   *err = 1;
   MPI_Comm c = MPI_Comm_f2c(*comm);
   unsigned ne = *nei;
   parrsb_fetch_nbrs_v2(&ne, eids, *nv, vids, xyz, mask, mat, frontier, *nw,
                        wids, c, *maxne);
-  *nei = ne, *err = 0;
+  *nei = ne;
+  printf("fparrsb_fetch_nbrs_v2: ne = %u, *nei = %d\n", ne, *nei);
+  fflush(stdout);
+  *err = 0;
 }
 
 #undef tfree
