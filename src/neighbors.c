@@ -630,8 +630,6 @@ void fparrsb_fetch_nbrs_v2(sint *nei, slong *eids, sint *nv, slong *vids,
   parrsb_fetch_nbrs_v2(&ne, eids, *nv, vids, xyz, mask, mat, frontier, *nw,
                        wids, c, *maxne);
   *nei = ne;
-  printf("fparrsb_fetch_nbrs_v2: ne = %u, *nei = %d\n", ne, *nei);
-  fflush(stdout);
   *err = 0;
 }
 
