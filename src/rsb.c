@@ -102,18 +102,13 @@ static void check_rsb_partition(const struct comm *gc,
   }
 }
 
-static inline int check_bin_val(int bin) {
-  if (bin < 0 || bin > 1) return 1;
-  return 0;
-}
-
 static int balance_partitions(struct array *elements, unsigned nv,
                               struct comm *lc, struct comm *gc, int bin,
                               buffer *bfr) {
   // Return if there is only one processor (or partition).
   if (gc->np == 1 || gc->np == lc->np) return 0;
 
-  assert(check_bin_val(bin) == 0 && "Invalid bin value !");
+  assert((bin == 0 || bin == 1) && "Invalid bin value !");
 
   struct ielem_t {
     uint index, orig;
@@ -301,10 +296,8 @@ void rsb(struct array *elements, int nv, const parrsb_options *const options,
                     bfr);
       metric_toc(&lc, RSB_SORT);
 
-      // Get the bin of the current process.
+      // Create the new communicator `tc` for the new partitions.
       sint bin = get_bin(&lc, level, levels, comms);
-
-      // Create the new communicator `tc`.
       struct comm tc;
       comm_split(&lc, bin, lc.id, &tc);
 
