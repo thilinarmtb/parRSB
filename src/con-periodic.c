@@ -289,10 +289,10 @@ struct periodic_point_t {
   uint dest;
 };
 
-static int setup_matrices(struct array *points_A, struct array *points_B,
-                          int nf, const int *const bid, int ndim,
-                          const double *const coords,
-                          const struct comm *const c) {
+static void setup_matrices(struct array *points_A, struct array *points_B,
+                           int nf, const int *const bid, int ndim,
+                           const double *const coords,
+                           const struct comm *const c) {
   double centroid_A[3] = {0, 0, 0}, centroid_B[3] = {0, 0, 0}, *centroid = 0;
   int32_t count_A = 0, count_B = 0;
   sint errors = 0;
@@ -358,8 +358,8 @@ static int setup_matrices(struct array *points_A, struct array *points_B,
   }
 }
 
-static int set_destination_processor(struct array *const points,
-                                     const struct comm *const c) {
+static void set_destination_processor(struct array *const points,
+                                      const struct comm *const c) {
   slong size = points->n;
 
   slong out[2][1], wrk[2][1];
@@ -384,9 +384,9 @@ static int set_destination_processor(struct array *const points,
   }
 }
 
-static int calculate_mxm(double C[3][3], const struct array *const A,
-                         const struct array *const B,
-                         const struct comm *const c) {
+static void calculate_mxm(double C[3][3], const struct array *const A,
+                          const struct array *const B,
+                          const struct comm *const c) {
   struct crystal cr;
   crystal_init(&cr, c);
 
