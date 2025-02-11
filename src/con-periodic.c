@@ -284,5 +284,88 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
   return 0;
 }
 
+struct periodic_point_t {
+  double coord[3];
+  uint dest;
+};
+
+static int setup_matrices(struct array *points_A, struct array *points_B,
+                          int nf, const int *const bid, int ndim,
+                          const double *const coords,
+                          const struct comm *const c) {
+  double centroid_A[3] = {0, 0, 0}, centroid_B[3] = {0, 0, 0}, *centroid = 0;
+  int32_t count_A = 0, count_B = 0;
+  sint errors = 0;
+
+  for (int32_t i = 0; i < nf; i++) {
+    if (bid[i] == 0)
+      count_A++, centroid = (double *)centroid_A;
+    else if (bid[i] == 1)
+      count_B++, centroid = (double *)centroid_B;
+    else
+      errors++;
+
+    centroid[0] += coords[ndim * i + 0];
+    centroid[1] += coords[ndim * i + 1];
+    if (ndim == 3) centroid[2] += coords[ndim * i + 2];
+  }
+
+  // Sanity checks:
+  // Check 1: Make sure we only have BC ids 0 or 1.
+  slong wrk;
+  comm_allreduce(&c, gs_int, gs_add, &errors, 1, &wrk);
+  if (errors > 0) {
+    parrsb_print(&c, 1, "Error: invalid periodic BC ids found.");
+    MPI_Abort(c->c, 1);
+  }
+
+  // Check 2: Check if the number of points with BC id 0 is equal to number of
+  // points with BC id 1.
+  slong global_count_A = count_A, global_count_B = count_B;
+  comm_allreduce(&c, gs_long, gs_add, &global_count_A, 1, &wrk);
+  comm_allreduce(&c, gs_long, gs_add, &global_count_B, 1, &wrk);
+  if (global_count_A != global_count_B) {
+    parrsb_print(&c, 1, "Error: number of periodic points don't match.");
+    MPI_Abort(c->c, 1);
+  }
+
+  // Calculate A_{id}^' = A_{id} - centroid(A_{id}) where A is the ndim x N
+  // matrix with periodic points.
+  array_init(struct periodic_point_t, points_A, count_A);
+  array_init(struct periodic_point_t, points_B, count_B);
+
+  struct periodic_point_t *points_A_ptr =
+      (struct periodic_point_t *)points_A->ptr;
+  struct periodic_point_t *points_B_ptr =
+      (struct periodic_point_t *)points_B->ptr;
+  struct periodic_point_t *points_ptr = 0;
+  for (int32_t i = 0; i < nf; i++) {
+    if (bid[i] == 0)
+      centroid = (double *)centroid_A, points_ptr = points_A_ptr++;
+    else if (bid[i] == 1)
+      centroid = (double *)centroid_B, points_ptr = points_B_ptr++;
+
+    points_ptr->coord[0] = coords[i * ndim + 0] - centroid[0];
+    points_ptr->coord[1] = coords[i * ndim + 1] - centroid[1];
+    if (ndim == 3) points_ptr->coord[2] = coords[i * ndim + 2] - centroid[2];
+  }
+}
+
+int match_periodic_faces_automatically(uint32_t nf, const int32_t *const bid,
+                                       int ndim, int32_t nv,
+                                       const double *const coords,
+                                       MPI_Comm comm) {
+  struct comm c;
+  comm_init(&c, comm);
+
+  // Setup the matrices A and B:
+  struct array points_A, points_B;
+  setup_matrices(&points_A, &points_B, nf, bid, ndim, coords, &c);
+
+  // Find the map from periodic id 0 to periodic id 1.
+
+  array_free(&points_A), array_free(&points_B), comm_free(&c);
+}
+
 #undef distance2D
 #undef distance3D
