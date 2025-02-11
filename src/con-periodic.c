@@ -351,6 +351,32 @@ static int setup_matrices(struct array *points_A, struct array *points_B,
   }
 }
 
+static int set_destination_processor(struct array *const points,
+                                     const struct comm *const c) {
+  slong size = points->n;
+
+  slong out[2][1], wrk[2][1];
+  comm_scan(out, c, gs_long, gs_add, &size, 1, wrk);
+
+  slong offset = out[0][0], global_size = out[1][0];
+
+  sint local_size = global_size / c->np;
+  sint remainder = global_size % c->np;
+  slong threshold = local_size * (c->np - remainder);
+
+  struct periodic_point_t *ppt = (struct periodic_point_t *)points->ptr;
+  for (int32_t i = 0; i < points->n; i++) {
+    slong index = offset + i;
+    // If local_size == 0, then threshold = 0. Therefore, index < threshold is
+    // always false. `else` branch is always taken. Therefore, we never run into
+    // divide by zero error.
+    if (index < threshold)
+      ppt[i].dest = index / local_size;
+    else
+      ppt[i].dest = c->np - remainder + (index - threshold) / (local_size + 1);
+  }
+}
+
 int match_periodic_faces_automatically(uint32_t nf, const int32_t *const bid,
                                        int ndim, int32_t nv,
                                        const double *const coords,
@@ -362,7 +388,10 @@ int match_periodic_faces_automatically(uint32_t nf, const int32_t *const bid,
   struct array points_A, points_B;
   setup_matrices(&points_A, &points_B, nf, bid, ndim, coords, &c);
 
-  // Find the map from periodic id 0 to periodic id 1.
+  // Set the destination processor so that A and B are partitioned properly for
+  // the matrix-matrix product.
+  set_destination_processor(&points_A, &c);
+  set_destination_processor(&points_B, &c);
 
   array_free(&points_A), array_free(&points_B), comm_free(&c);
 }
