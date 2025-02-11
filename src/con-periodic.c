@@ -312,8 +312,8 @@ static int setup_matrices(struct array *points_A, struct array *points_B,
 
   // Sanity checks:
   // Check 1: Make sure we only have BC ids 0 or 1.
-  slong wrk;
-  comm_allreduce(&c, gs_int, gs_add, &errors, 1, &wrk);
+  slong wrkl;
+  comm_allreduce(c, gs_int, gs_add, &errors, 1, &wrkl);
   if (errors > 0) {
     parrsb_print(&c, 1, "Error: invalid periodic BC ids found.");
     MPI_Abort(c->c, 1);
@@ -322,12 +322,19 @@ static int setup_matrices(struct array *points_A, struct array *points_B,
   // Check 2: Check if the number of points with BC id 0 is equal to number of
   // points with BC id 1.
   slong global_count_A = count_A, global_count_B = count_B;
-  comm_allreduce(&c, gs_long, gs_add, &global_count_A, 1, &wrk);
-  comm_allreduce(&c, gs_long, gs_add, &global_count_B, 1, &wrk);
+  comm_allreduce(c, gs_long, gs_add, &global_count_A, 1, &wrkl);
+  comm_allreduce(c, gs_long, gs_add, &global_count_B, 1, &wrkl);
   if (global_count_A != global_count_B) {
     parrsb_print(&c, 1, "Error: number of periodic points don't match.");
     MPI_Abort(c->c, 1);
   }
+
+  double wrkd[3];
+  comm_allreduce(c, gs_double, gs_add, centroid_A, 3, wrkd);
+  comm_allreduce(c, gs_double, gs_add, centroid_B, 3, wrkd);
+
+  for (int i = 0; i < ndim; i++)
+    centroid_A[i] /= global_count_A, centroid_B[i] /= global_count_B;
 
   // Calculate A_{id}^' = A_{id} - centroid(A_{id}) where A is the ndim x N
   // matrix with periodic points.
@@ -377,6 +384,46 @@ static int set_destination_processor(struct array *const points,
   }
 }
 
+static int calculate_mxm(double C[3][3], const struct array *const A,
+                         const struct array *const B,
+                         const struct comm *const c) {
+  struct crystal cr;
+  crystal_init(&cr, c);
+
+  sarray_transfer(struct periodic_point_t, A, dest, 1, &cr);
+  sarray_transfer(struct periodic_point_t, B, dest, 1, &cr);
+
+  // Sanity check: The size of A and B in each process should equal to each
+  // other.
+  sint error = (A->n != B->n), work[9];
+  comm_allreduce(c, gs_int, gs_add, &error, 1, work);
+  if (error > 0) {
+    parrsb_print(&c, 1, "Error: distribution of matrices are invalid.");
+    MPI_Abort(c->c, 1);
+  }
+
+  for (int i = 0; i < 9; i++) C[0][i] = 0;
+  struct periodic_point_t *pp_A = (struct periodic_point_t *)A->ptr;
+  struct periodic_point_t *pp_B = (struct periodic_point_t *)B->ptr;
+
+  for (uint i = 0; i < A->n; i++) {
+    C[0][0] += pp_A->coord[0] * pp_B->coord[0];
+    C[0][1] += pp_A->coord[0] * pp_B->coord[1];
+    C[0][2] += pp_A->coord[0] * pp_B->coord[2];
+    C[1][0] += pp_A->coord[1] * pp_B->coord[0];
+    C[1][1] += pp_A->coord[1] * pp_B->coord[1];
+    C[1][2] += pp_A->coord[1] * pp_B->coord[2];
+    C[2][0] += pp_A->coord[2] * pp_B->coord[0];
+    C[2][1] += pp_A->coord[2] * pp_B->coord[1];
+    C[2][2] += pp_A->coord[2] * pp_B->coord[2];
+    pp_A++, pp_B++;
+  }
+
+  comm_allreduce(c, gs_double, gs_add, C, 9, work);
+
+  crystal_free(&cr);
+}
+
 int match_periodic_faces_automatically(uint32_t nf, const int32_t *const bid,
                                        int ndim, int32_t nv,
                                        const double *const coords,
@@ -392,6 +439,10 @@ int match_periodic_faces_automatically(uint32_t nf, const int32_t *const bid,
   // the matrix-matrix product.
   set_destination_processor(&points_A, &c);
   set_destination_processor(&points_B, &c);
+
+  // Calculate the matrix-matrix product.
+  double C[3][3];
+  calculate_mxm(C, &points_A, &points_B, &c);
 
   array_free(&points_A), array_free(&points_B), comm_free(&c);
 }
