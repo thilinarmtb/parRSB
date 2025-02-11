@@ -79,7 +79,7 @@ install: lib
 examples: lib install $(EXAMPLEBINS)
 
 format:
-	find . -iname *.h -o -iname *.c -o -iname *.okl | xargs clang-format -i
+	find . -iname *.h -o -iname *.c | xargs clang-format -i
 
 clean:
 	@$(RM) -rf $(BUILDROOT)

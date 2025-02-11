@@ -62,7 +62,7 @@ static ulong findMinBelowI(ulong min, uint I, struct array *arr) {
 }
 
 static int renumber_periodic_vertices(Mesh mesh, struct comm *c,
-                                    struct array *matched, buffer *bfr) {
+                                      struct array *matched, buffer *bfr) {
   uint size1 = mesh->elements.n, size2 = matched->n;
   slong *mids = tcalloc(slong, size1 + 2 * size2),
         *mnew = tcalloc(slong, size1 + 2 * size2),
