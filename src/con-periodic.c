@@ -285,23 +285,23 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
 }
 
 struct periodic_point_t {
-  double coord[3];
+  scalar coord[3];
   uint dest;
 };
 
 static void setup_matrices(struct array *points_A, struct array *points_B,
                            int nf, const int *const bid, int ndim,
-                           const double *const coords,
+                           const scalar *const coords,
                            const struct comm *const c) {
-  double centroid_A[3] = {0, 0, 0}, centroid_B[3] = {0, 0, 0}, *centroid = 0;
+  scalar centroid_A[3] = {0, 0, 0}, centroid_B[3] = {0, 0, 0}, *centroid = 0;
   int32_t count_A = 0, count_B = 0;
   sint errors = 0;
 
   for (int32_t i = 0; i < nf; i++) {
     if (bid[i] == 0)
-      count_A++, centroid = (double *)centroid_A;
+      count_A++, centroid = (scalar *)centroid_A;
     else if (bid[i] == 1)
-      count_B++, centroid = (double *)centroid_B;
+      count_B++, centroid = (scalar *)centroid_B;
     else
       errors++;
 
@@ -329,9 +329,9 @@ static void setup_matrices(struct array *points_A, struct array *points_B,
     MPI_Abort(c->c, 1);
   }
 
-  double wrkd[3];
-  comm_allreduce(c, gs_double, gs_add, centroid_A, 3, wrkd);
-  comm_allreduce(c, gs_double, gs_add, centroid_B, 3, wrkd);
+  scalar wrkd[3];
+  comm_allreduce(c, gs_scalar, gs_add, centroid_A, 3, wrkd);
+  comm_allreduce(c, gs_scalar, gs_add, centroid_B, 3, wrkd);
 
   for (int i = 0; i < ndim; i++)
     centroid_A[i] /= global_count_A, centroid_B[i] /= global_count_B;
@@ -348,9 +348,9 @@ static void setup_matrices(struct array *points_A, struct array *points_B,
   struct periodic_point_t *points_ptr = 0;
   for (int32_t i = 0; i < nf; i++) {
     if (bid[i] == 0)
-      centroid = (double *)centroid_A, points_ptr = points_A_ptr++;
+      centroid = (scalar *)centroid_A, points_ptr = points_A_ptr++;
     else if (bid[i] == 1)
-      centroid = (double *)centroid_B, points_ptr = points_B_ptr++;
+      centroid = (scalar *)centroid_B, points_ptr = points_B_ptr++;
 
     points_ptr->coord[0] = coords[i * ndim + 0] - centroid[0];
     points_ptr->coord[1] = coords[i * ndim + 1] - centroid[1];
@@ -372,7 +372,7 @@ static void set_destination_processor(struct array *const points,
   slong threshold = local_size * (c->np - remainder);
 
   struct periodic_point_t *ppt = (struct periodic_point_t *)points->ptr;
-  for (int32_t i = 0; i < points->n; i++) {
+  for (uint32_t i = 0; i < points->n; i++) {
     slong index = offset + i;
     // If local_size == 0, then threshold = 0. Therefore, index < threshold is
     // always false. `else` branch is always taken. Therefore, we never run into
@@ -384,7 +384,7 @@ static void set_destination_processor(struct array *const points,
   }
 }
 
-static void calculate_mxm(double C[3][3], const struct array *const A,
+static void calculate_mxm(scalar C[3][3], const struct array *const A,
                           const struct array *const B,
                           const struct comm *const c) {
   struct crystal cr;
@@ -419,10 +419,13 @@ static void calculate_mxm(double C[3][3], const struct array *const A,
     pp_A++, pp_B++;
   }
 
-  comm_allreduce(c, gs_double, gs_add, C, 9, work);
+  comm_allreduce(c, gs_scalar, gs_add, C, 9, work);
 
   crystal_free(&cr);
 }
+
+static void calculate_R_and_t(scalar R[3][3], scalar t[3],
+                              const scalar C[3][3]) {}
 
 static void transform_points(struct array *points, scalar R[3][3],
                              scalar t[3]) {
@@ -461,11 +464,17 @@ int match_periodic_faces_automatically(uint32_t nf, const long long *const eid,
   set_destination_processor(&points_B, &c);
 
   // Calculate the matrix-matrix product.
-  double C[3][3];
+  scalar C[3][3];
   calculate_mxm(C, &points_A, &points_B, &c);
+
+  // Calculate the rotation matrix and translation vector.
+  scalar R[3][3], t[3];
+  calculate_R_and_t(R, t, C);
 
   // Transform the points in B using R and t.
   transform_points(&points_B, R, t);
+
+  // Combine the two set of points and match them:
 
   array_free(&points_A), array_free(&points_B), comm_free(&c);
 }

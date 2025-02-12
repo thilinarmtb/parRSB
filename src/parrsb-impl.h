@@ -11,7 +11,8 @@
 #ifdef scalar
 #undef scalar
 #endif
-#define scalar double
+typedef double scalar;
+#define gs_scalar gs_double
 
 #ifdef SCALAR_MAX
 #undef SCALAR_MAX
