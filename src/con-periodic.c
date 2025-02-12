@@ -471,10 +471,11 @@ static int number_points(long long *const gid, int32_t nf, int32_t nv,
   set_global_id(mesh, c);
   send_back(mesh, c, &bfr);
 
-  // Todo: add checks.
+  con_chk_err(element_check(mesh, c, &bfr), "element check failed.", c);
+  con_chk_err(element_check(mesh, c, &bfr), "face_check failed.", c);
 
-  buffer_free(&bfr);
-  mesh_free(mesh);
+  buffer_free(&bfr), mesh_free(mesh);
+  return 0;
 }
 
 int match_periodic_faces_automatically(uint32_t nf, const int32_t *const bid,

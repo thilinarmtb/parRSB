@@ -236,28 +236,15 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
   send_back(mesh, &c, &bfr);
   duration[3] = comm_time() - t;
 
-#define check_error(call, msg)                                                 \
-  {                                                                            \
-    sint err = (call), wrk;                                                    \
-    comm_allreduce(&c, gs_int, gs_max, &err, 1, &wrk);                         \
-    if (err) {                                                                 \
-      parrsb_print(&c, 1, msg, __FILE__, __LINE__);                            \
-      buffer_free(&bfr), mesh_free(mesh), comm_free(&c);                       \
-      return err;                                                              \
-    }                                                                          \
-  }
-
   parrsb_print(&c, verbose - 1, "\t%s ...", name[4]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(element_check(mesh, &c, &bfr), "\t%s:%d element_check failed.");
+  con_chk_err(element_check(mesh, &c, &bfr), "element_check failed.", &c);
   duration[4] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...", name[5]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(face_check(mesh, &c, &bfr), "\t%s:%d face_check failed.");
+  con_chk_err(face_check(mesh, &c, &bfr), "face_check failed.", &c);
   duration[5] = comm_time() - t;
-
-#undef check_error
 
   parrsb_print(&c, verbose - 1, "\t%s ...", name[6]);
   parrsb_barrier(&c), t = comm_time();

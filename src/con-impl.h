@@ -137,6 +137,18 @@ int find_unique_vertices(Mesh mesh, struct comm *c, scalar tol, int verbose,
 
 int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr);
 
+#define con_chk_err(call, msg, c)                                              \
+  {                                                                            \
+    sint err = (call);                                                         \
+    sint wrk;                                                                  \
+    comm_allreduce(c, gs_int, gs_max, &err, 1, &wrk);                          \
+    if (err) {                                                                 \
+      parrsb_print(c, 1, "%s:%d %s", __FILE__, __LINE__, msg);                 \
+      buffer_free(&bfr), mesh_free(mesh), comm_free(c);                        \
+      return err;                                                              \
+    }                                                                          \
+  }
+
 int element_check(Mesh mesh, struct comm *c, buffer *bfr);
 
 int face_check(Mesh mesh, struct comm *c, buffer *bfr);
