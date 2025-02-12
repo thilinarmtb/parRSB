@@ -428,32 +428,42 @@ static void calculate_mxm(scalar C[3][3], const struct array *const A,
   crystal_free(&cr);
 }
 
-static void calculate_R_and_t(scalar R[3][3], scalar t[3],
-                              const scalar C[3][3]) {}
+static void calculate_R_and_t(scalar R[3][3], scalar t[3], const scalar C[3][3],
+                              scalar centroid_A[3], scalar centroid_B[3]) {}
 
-static void transform_points(struct array *points, scalar R[3][3],
-                             scalar t[3]) {
-  struct periodic_point_t *ppt = (struct periodic_point_t *)points->ptr;
-  scalar coords[3];
-  for (uint32_t i = 0; i < points->n; i++) {
-    coords[0] = R[0][0] * ppt->coord[0] + R[0][1] * ppt->coord[1] +
-                R[0][2] * ppt->coord[2] + t[0];
-    coords[1] = R[1][0] * ppt->coord[0] + R[1][1] * ppt->coord[1] +
-                R[1][2] * ppt->coord[2] + t[1];
-    coords[2] = R[2][0] * ppt->coord[0] + R[2][1] * ppt->coord[1] +
-                R[2][2] * ppt->coord[2] + t[2];
-    ppt->coord[0] = coords[0];
-    ppt->coord[1] = coords[1];
-    ppt->coord[2] = coords[2];
-    ppt++;
+static void transform_points(scalar *coord_, int32_t nf,
+                             const int32_t *const bid, int32_t nv, int32_t ndim,
+                             const scalar *const coord, const scalar R[3][3],
+                             const scalar t[3]) {
+  const size_t nc = (size_t)nf * nv;
+  for (uint32_t i = 0; i < nc; i++) {
+    scalar *coord_i = &coord[i * ndim];
+    scalar *coord_o = &coord_[i * ndim];
+
+    if (bid[i] == 0) {
+      coord_o[0] = coord_i[0];
+      coord_o[1] = coord_i[1];
+      if (ndim == 3) coord_o[2] = coord_i[2];
+    } else if (bid[i] == 1) {
+      coord_o[0] = R[0][0] * coord_i[0] + R[0][1] * coord_i[1] +
+                   R[0][2] * coord_i[2] + t[0];
+      coord_o[1] = R[1][0] * coord_i[0] + R[1][1] * coord_i[1] +
+                   R[1][2] * coord_i[2] + t[1];
+      if (ndim == 3)
+        coord_o[2] = R[2][0] * coord_i[0] + R[2][1] * coord_i[1] +
+                     R[2][2] * coord_i[2] + t[2];
+    }
   }
 }
+
+static void number_points(int32_t nf, int32_t nv, int32_t ndim, scalar *coord,
+                          struct comm *c) {}
 
 int match_periodic_faces_automatically(uint32_t nf, const long long *const eid,
                                        const int32_t *const fid,
                                        const int32_t *const bid, int32_t nv,
                                        const long long *const gid, int ndim,
-                                       const scalar *const coords,
+                                       const scalar *const coord,
                                        MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
@@ -462,7 +472,7 @@ int match_periodic_faces_automatically(uint32_t nf, const long long *const eid,
   struct array points_A, points_B;
   scalar centroid_A[3], centroid_B[3];
   setup_matrices(&points_A, centroid_A, &points_B, centroid_B, nf, bid, ndim,
-                 coords, &c);
+                 coord, &c);
 
   // Set the destination processor so that A and B are partitioned properly for
   // the matrix-matrix product.
@@ -472,17 +482,20 @@ int match_periodic_faces_automatically(uint32_t nf, const long long *const eid,
   // Calculate the matrix-matrix product.
   scalar C[3][3];
   calculate_mxm(C, &points_A, &points_B, &c);
+  array_free(&points_A), array_free(&points_B);
 
   // Calculate the rotation matrix and translation vector.
   scalar R[3][3], t[3];
-  calculate_R_and_t(R, t, C);
+  calculate_R_and_t(R, t, C, centroid_A, centroid_B);
 
   // Transform the points in B using R and t.
-  transform_points(&points_B, R, t);
+  scalar *transformed_coord = tcalloc(scalar, nf * nv * ndim);
+  transform_points(transformed_coord, nf, bid, nv, ndim, coord, R, t);
 
-  // Combine the two set of points and match them:
+  // Globally number points:
 
-  array_free(&points_A), array_free(&points_B), comm_free(&c);
+  free(transformed_coord);
+  comm_free(&c);
 }
 
 #undef distance2D
