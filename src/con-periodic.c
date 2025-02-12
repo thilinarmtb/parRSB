@@ -300,6 +300,8 @@ static void setup_matrices(struct array *points_A, scalar centroid_A[3],
 
   for (int i = 0; i < 3; i++) centroid_A[i] = centroid_B[i] = 0;
 
+  if (ndim == 2) goto dim2;
+
   for (int32_t i = 0; i < nf; i++) {
     if (bid[i] == 0)
       count_A++, centroid = (scalar *)centroid_A;
@@ -310,9 +312,25 @@ static void setup_matrices(struct array *points_A, scalar centroid_A[3],
 
     centroid[0] += coords[ndim * i + 0];
     centroid[1] += coords[ndim * i + 1];
-    if (ndim == 3) centroid[2] += coords[ndim * i + 2];
+    centroid[2] += coords[ndim * i + 2];
   }
 
+  goto check;
+
+dim2:
+  for (int32_t i = 0; i < nf; i++) {
+    if (bid[i] == 0)
+      count_A++, centroid = (scalar *)centroid_A;
+    else if (bid[i] == 1)
+      count_B++, centroid = (scalar *)centroid_B;
+    else
+      errors++;
+
+    centroid[0] += coords[ndim * i + 0];
+    centroid[1] += coords[ndim * i + 1];
+  }
+
+check:
   // Sanity checks:
   // Check 1: Make sure we only have BC ids 0 or 1.
   slong wrkl;
@@ -349,6 +367,9 @@ static void setup_matrices(struct array *points_A, scalar centroid_A[3],
   struct periodic_point_t *points_B_ptr =
       (struct periodic_point_t *)points_B->ptr;
   struct periodic_point_t *points_ptr = 0;
+
+  if (ndim == 2) goto dim2_translate;
+
   for (int32_t i = 0; i < nf; i++) {
     if (bid[i] == 0)
       centroid = (scalar *)centroid_A, points_ptr = points_A_ptr++;
@@ -357,7 +378,21 @@ static void setup_matrices(struct array *points_A, scalar centroid_A[3],
 
     points_ptr->coord[0] = coords[i * ndim + 0] - centroid[0];
     points_ptr->coord[1] = coords[i * ndim + 1] - centroid[1];
-    if (ndim == 3) points_ptr->coord[2] = coords[i * ndim + 2] - centroid[2];
+    points_ptr->coord[2] = coords[i * ndim + 2] - centroid[2];
+    points_ptr->index = i;
+  }
+
+  return;
+
+dim2_translate:
+  for (int32_t i = 0; i < nf; i++) {
+    if (bid[i] == 0)
+      centroid = (scalar *)centroid_A, points_ptr = points_A_ptr++;
+    else if (bid[i] == 1)
+      centroid = (scalar *)centroid_B, points_ptr = points_B_ptr++;
+
+    points_ptr->coord[0] = coords[i * ndim + 0] - centroid[0];
+    points_ptr->coord[1] = coords[i * ndim + 1] - centroid[1];
     points_ptr->index = i;
   }
 }
@@ -436,6 +471,9 @@ static void transform_points(scalar *coord_, int32_t nf,
                              const scalar *const coord, const scalar R[3][3],
                              const scalar t[3]) {
   const size_t nc = (size_t)nf * nv;
+
+  if (ndim == 2) goto dim2;
+
   for (uint32_t i = 0; i < nc; i++) {
     const scalar *coord_i = &coord[i * ndim];
     scalar *coord_o = &coord_[i * ndim];
@@ -443,15 +481,30 @@ static void transform_points(scalar *coord_, int32_t nf,
     if (bid[i] == 0) {
       coord_o[0] = coord_i[0];
       coord_o[1] = coord_i[1];
-      if (ndim == 3) coord_o[2] = coord_i[2];
+      coord_o[2] = coord_i[2];
     } else if (bid[i] == 1) {
       coord_o[0] = R[0][0] * coord_i[0] + R[0][1] * coord_i[1] +
                    R[0][2] * coord_i[2] + t[0];
       coord_o[1] = R[1][0] * coord_i[0] + R[1][1] * coord_i[1] +
                    R[1][2] * coord_i[2] + t[1];
-      if (ndim == 3)
-        coord_o[2] = R[2][0] * coord_i[0] + R[2][1] * coord_i[1] +
-                     R[2][2] * coord_i[2] + t[2];
+      coord_o[2] = R[2][0] * coord_i[0] + R[2][1] * coord_i[1] +
+                   R[2][2] * coord_i[2] + t[2];
+    }
+  }
+
+  return;
+
+dim2:
+  for (uint32_t i = 0; i < nc; i++) {
+    const scalar *coord_i = &coord[i * ndim];
+    scalar *coord_o = &coord_[i * ndim];
+
+    if (bid[i] == 0) {
+      coord_o[0] = coord_i[0];
+      coord_o[1] = coord_i[1];
+    } else if (bid[i] == 1) {
+      coord_o[0] = R[0][0] * coord_i[0] + R[0][1] * coord_i[1];
+      coord_o[1] = R[1][0] * coord_i[0] + R[1][1] * coord_i[1];
     }
   }
 }
