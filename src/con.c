@@ -6,14 +6,11 @@ int NEIGHBOR_MAP[GC_MAX_VERTICES][GC_MAX_NEIGHBORS] = {
     {1, 2, 4}, {0, 3, 5}, {0, 3, 6}, {1, 2, 7},
     {0, 5, 6}, {1, 4, 7}, {2, 4, 7}, {3, 5, 6}};
 
-double diff_sqr(double x, double y) { return (x - y) * (x - y); }
-
 //==============================================================================
 // Mesh struct
 //
-static struct mesh_t *mesh_init(uint nelt, unsigned ndim, double *coord,
-                                long long *pinfo, uint npinfo,
-                                const struct comm *c) {
+struct mesh_t *mesh_init(uint nelt, unsigned ndim, double *coord,
+                         long long *pinfo, uint npinfo, const struct comm *c) {
   struct mesh_t *m = tcalloc(struct mesh_t, 1);
   m->nelt = nelt, m->ndim = ndim, m->nnbrs = ndim;
   m->nv = (ndim == 2) ? 4 : 8;
@@ -49,7 +46,7 @@ static struct mesh_t *mesh_init(uint nelt, unsigned ndim, double *coord,
   return m;
 }
 
-static int mesh_free(struct mesh_t *m) {
+int mesh_free(struct mesh_t *m) {
   array_free(&m->elements), array_free(&m->boundary), free(m);
   return 0;
 }
@@ -105,7 +102,7 @@ int find_min_neighbor_distance(Mesh mesh) {
 //==============================================================================
 // Global numbering
 //
-static int set_global_id(Mesh mesh, struct comm *c) {
+int set_global_id(Mesh mesh, struct comm *c) {
   uint nPoints = mesh->elements.n;
   Point points = (struct point_t *)mesh->elements.ptr;
 

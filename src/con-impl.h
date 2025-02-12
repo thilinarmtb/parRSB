@@ -95,6 +95,8 @@ as arguments:
 extern int faces3D[GC_MAX_FACES][GC_MAX_FACE_VERTICES];
 extern int faces2D[GC_MAX_FACES][GC_MAX_FACE_VERTICES];
 
+static inline double diff_sqr(double x, double y) { return (x - y) * (x - y); }
+
 struct point_t {
   scalar dx, x[3];
   uint proc, origin;
@@ -118,7 +120,12 @@ struct mesh_t {
 };
 typedef struct mesh_t *Mesh;
 
-double diff_sqr(double x, double y);
+struct mesh_t *mesh_init(uint nelt, unsigned ndim, double *coord,
+                         long long *pinfo, uint npinfo, const struct comm *c);
+
+int mesh_free(struct mesh_t *m);
+
+int set_global_id(Mesh mesh, struct comm *c);
 
 int send_back(Mesh mesh, struct comm *c, buffer *bfr);
 
