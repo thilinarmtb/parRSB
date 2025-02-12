@@ -550,11 +550,16 @@ int match_periodic_faces_automatically(long long *const gid, uint32_t nf,
   struct comm c;
   comm_init(&c, comm);
 
+  sint err = 0;
+
+  // Todo: Identify the unique points by averaging based on the global id.
+  // Is above necessary?
+
   // Setup the matrices A and B:
   struct array points_A, points_B;
   scalar centroid_A[3], centroid_B[3];
-  setup_matrices(&points_A, centroid_A, &points_B, centroid_B, nf, bid, ndim,
-                 coord, &c);
+  err |= setup_matrices(&points_A, centroid_A, &points_B, centroid_B, nf, bid,
+                        ndim, coord, &c);
 
   // Set the destination processor so that A and B are partitioned properly for
   // the matrix-matrix product.
@@ -563,7 +568,7 @@ int match_periodic_faces_automatically(long long *const gid, uint32_t nf,
 
   // Calculate the matrix-matrix product.
   scalar C[3][3];
-  calculate_mxm(C, &points_A, &points_B, &c);
+  err |= calculate_mxm(C, &points_A, &points_B, &c);
   array_free(&points_A), array_free(&points_B);
 
   // Calculate the rotation matrix and translation vector.
@@ -579,12 +584,17 @@ int match_periodic_faces_automatically(long long *const gid, uint32_t nf,
   buffer_init(&bfr, 1024);
 
   long long *new_gid = tcalloc(long long, nf *nv);
-  number_points(new_gid, nf, nv, ndim, transformed_coord, tol, &c, &bfr);
+  err |= number_points(new_gid, nf, nv, ndim, transformed_coord, tol, &c, &bfr);
 
   update_global_ids(gid, nf, nv, new_gid, &c, &bfr);
 
+  sint wrk;
+  comm_allreduce(&c, gs_int, gs_max, &err, 1, &wrk);
+
   free(transformed_coord), free(new_gid);
   buffer_free(&bfr), comm_free(&c);
+
+  return err;
 }
 
 #undef distance2D
