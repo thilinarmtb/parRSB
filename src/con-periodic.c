@@ -424,9 +424,29 @@ static void calculate_mxm(double C[3][3], const struct array *const A,
   crystal_free(&cr);
 }
 
-int match_periodic_faces_automatically(uint32_t nf, const int32_t *const bid,
-                                       int ndim, int32_t nv,
-                                       const double *const coords,
+static void transform_points(struct array *points, scalar R[3][3],
+                             scalar t[3]) {
+  struct periodic_point_t *ppt = (struct periodic_point_t *)points->ptr;
+  scalar coords[3];
+  for (uint32_t i = 0; i < points->n; i++) {
+    coords[0] = R[0][0] * ppt->coord[0] + R[0][1] * ppt->coord[1] +
+                R[0][2] * ppt->coord[2] + t[0];
+    coords[1] = R[1][0] * ppt->coord[0] + R[1][1] * ppt->coord[1] +
+                R[1][2] * ppt->coord[2] + t[1];
+    coords[2] = R[2][0] * ppt->coord[0] + R[2][1] * ppt->coord[1] +
+                R[2][2] * ppt->coord[2] + t[2];
+    ppt->coord[0] = coords[0];
+    ppt->coord[1] = coords[1];
+    ppt->coord[2] = coords[2];
+    ppt++;
+  }
+}
+
+int match_periodic_faces_automatically(uint32_t nf, const long long *const eid,
+                                       const int32_t *const fid,
+                                       const int32_t *const bid, int32_t nv,
+                                       const long long *const gid, int ndim,
+                                       const scalar *const coords,
                                        MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
@@ -443,6 +463,9 @@ int match_periodic_faces_automatically(uint32_t nf, const int32_t *const bid,
   // Calculate the matrix-matrix product.
   double C[3][3];
   calculate_mxm(C, &points_A, &points_B, &c);
+
+  // Transform the points in B using R and t.
+  transform_points(&points_B, R, t);
 
   array_free(&points_A), array_free(&points_B), comm_free(&c);
 }
