@@ -9,18 +9,20 @@ int NEIGHBOR_MAP[GC_MAX_VERTICES][GC_MAX_NEIGHBORS] = {
 //==============================================================================
 // Mesh struct
 //
-struct mesh_t *mesh_init(uint nelt, unsigned ndim, double *coord,
-                         long long *pinfo, uint npinfo, const struct comm *c) {
+struct mesh_t *mesh_init(uint nelt, unsigned nv, unsigned ndim, unsigned nnbrs,
+                         double *coord, long long *pinfo, uint npinfo,
+                         const struct comm *c) {
   struct mesh_t *m = tcalloc(struct mesh_t, 1);
-  m->nelt = nelt, m->ndim = ndim, m->nnbrs = ndim;
-  m->nv = (ndim == 2) ? 4 : 8;
+  m->nelt = nelt;
+  m->nv = nv;
+  m->ndim = ndim;
+  m->nnbrs = nnbrs;
 
   slong out[2][1], wrk[2][1], in = nelt;
   comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
   ulong start = out[0][0];
   m->nelgt = out[1][0];
 
-  uint nv = m->nv;
   array_init(struct point_t, &m->elements, nelt * nv);
   struct point_t p = {.origin = c->id};
   for (uint i = 0; i < nelt; i++) {
@@ -47,7 +49,7 @@ struct mesh_t *mesh_init(uint nelt, unsigned ndim, double *coord,
 }
 
 int mesh_free(struct mesh_t *m) {
-  array_free(&m->elements), array_free(&m->boundary), free(m);
+  array_free(&m->elements), array_free(&m->boundary), free(m), m = 0;
   return 0;
 }
 
@@ -209,7 +211,9 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
       "element_check              ", "face_check                 ",
       "match_periodic_faces       ", "copy_output                "};
 
-  Mesh mesh = mesh_init(nelt, ndim, coord, pinfo, npinfo, &c);
+  unsigned nv = (ndim == 3) ? 8 : 4;
+  unsigned nnbrs = ndim;
+  Mesh mesh = mesh_init(nelt, nv, ndim, nnbrs, coord, pinfo, npinfo, &c);
 
   parrsb_print(&c, verbose - 1, "\t%s ...", name[0]);
   parrsb_barrier(&c), t = comm_time();

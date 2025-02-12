@@ -120,8 +120,9 @@ struct mesh_t {
 };
 typedef struct mesh_t *Mesh;
 
-struct mesh_t *mesh_init(uint nelt, unsigned ndim, double *coord,
-                         long long *pinfo, uint npinfo, const struct comm *c);
+struct mesh_t *mesh_init(uint nelt, unsigned nv, unsigned ndim, unsigned nnbrs,
+                         double *coord, long long *pinfo, uint npinfo,
+                         const struct comm *c);
 
 int mesh_free(struct mesh_t *m);
 
