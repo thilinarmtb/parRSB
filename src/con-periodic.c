@@ -515,28 +515,36 @@ dim2:
 
 static int number_points(long long *const gid, int32_t nf, int32_t nv,
                          int32_t ndim, scalar *coord, scalar tol,
-                         struct comm *c) {
+                         struct comm *c, buffer *bfr) {
   unsigned nnbrs = (nv == 4) ? 2 : 1;
   struct mesh_t *mesh = mesh_init(nf, nv, ndim, nnbrs, coord, 0, 0, c);
 
   find_min_neighbor_distance(mesh);
 
-  buffer bfr;
-  buffer_init(&bfr, 1024);
-
-  find_unique_vertices(mesh, c, tol, 0, &bfr);
+  find_unique_vertices(mesh, c, tol, 0, bfr);
   set_global_id(mesh, c);
-  send_back(mesh, c, &bfr);
+  send_back(mesh, c, bfr);
 
-  con_chk_err(element_check(mesh, c, &bfr), "element check failed.", c);
-  con_chk_err(element_check(mesh, c, &bfr), "face_check failed.", c);
+  con_chk_err(element_check(mesh, c, bfr), "element check failed.", c);
+  con_chk_err(face_check(mesh, c, bfr), "face_check failed.", c);
 
-  buffer_free(&bfr), mesh_free(mesh);
+  mesh_free(mesh);
   return 0;
 }
 
-int match_periodic_faces_automatically(uint32_t nf, const int32_t *const bid,
-                                       int32_t nv, const long long *const gid,
+static void update_global_ids(long long *const gid, int32_t nf, int32_t nv,
+                              const long long *const new_gid,
+                              const struct comm *const c, buffer *bfr) {
+  const size_t size = (size_t)nf * nv;
+  struct gs_data *gsh = gs_setup(new_gid, size, c, 0, gs_pairwise, 0);
+
+  gs(gid, gs_long, gs_min, 0, gsh, bfr);
+
+  gs_free(gsh);
+}
+
+int match_periodic_faces_automatically(long long *const gid, uint32_t nf,
+                                       const int32_t *const bid, int32_t nv,
                                        int ndim, const scalar *const coord,
                                        scalar tol, MPI_Comm comm) {
   struct comm c;
@@ -567,11 +575,16 @@ int match_periodic_faces_automatically(uint32_t nf, const int32_t *const bid,
   transform_points(transformed_coord, nf, bid, nv, ndim, coord, R, t);
 
   // Globally number points:
-  long long *new_gid = tcalloc(long long, nf *nv);
-  number_points(new_gid, nf, nv, ndim, transformed_coord, tol, &c);
+  buffer bfr;
+  buffer_init(&bfr, 1024);
 
-  free(transformed_coord);
-  comm_free(&c);
+  long long *new_gid = tcalloc(long long, nf *nv);
+  number_points(new_gid, nf, nv, ndim, transformed_coord, tol, &c, &bfr);
+
+  update_global_ids(gid, nf, nv, new_gid, &c, &bfr);
+
+  free(transformed_coord), free(new_gid);
+  buffer_free(&bfr), comm_free(&c);
 }
 
 #undef distance2D
