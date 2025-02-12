@@ -289,11 +289,11 @@ struct periodic_point_t {
   uint dest, index;
 };
 
-static void setup_matrices(struct array *points_A, scalar centroid_A[3],
-                           struct array *points_B, scalar centroid_B[3], int nf,
-                           const int *const bid, int ndim,
-                           const scalar *const coords,
-                           const struct comm *const c) {
+static int setup_matrices(struct array *points_A, scalar centroid_A[3],
+                          struct array *points_B, scalar centroid_B[3], int nf,
+                          const int *const bid, int ndim,
+                          const scalar *const coords,
+                          const struct comm *const c) {
   int32_t count_A = 0, count_B = 0;
   scalar *centroid = 0;
   sint errors = 0;
@@ -336,8 +336,9 @@ check:
   slong wrkl;
   comm_allreduce(c, gs_int, gs_add, &errors, 1, &wrkl);
   if (errors > 0) {
-    parrsb_print(&c, 1, "Error: invalid periodic BC ids found.");
-    MPI_Abort(c->c, 1);
+    parrsb_print(&c, 1, "%s:%d Error: invalid periodic BC ids found.", __FILE__,
+                 __LINE__);
+    return 1;
   }
 
   // Check 2: Check if the number of points with BC id 0 is equal to number of
@@ -346,8 +347,9 @@ check:
   comm_allreduce(c, gs_long, gs_add, &global_count_A, 1, &wrkl);
   comm_allreduce(c, gs_long, gs_add, &global_count_B, 1, &wrkl);
   if (global_count_A != global_count_B) {
-    parrsb_print(&c, 1, "Error: number of periodic points don't match.");
-    MPI_Abort(c->c, 1);
+    parrsb_print(&c, 1, "%s:%d Error: number of periodic points don't match.",
+                 __FILE__, __LINE__);
+    return 1;
   }
 
   scalar wrkd[3];
@@ -382,8 +384,7 @@ check:
     points_ptr->index = i;
   }
 
-  return;
-
+  return 0;
 dim2_translate:
   for (int32_t i = 0; i < nf; i++) {
     if (bid[i] == 0)
@@ -395,6 +396,8 @@ dim2_translate:
     points_ptr->coord[1] = coords[i * ndim + 1] - centroid[1];
     points_ptr->index = i;
   }
+
+  return 0;
 }
 
 static void set_destination_processor(struct array *const points,
@@ -423,9 +426,9 @@ static void set_destination_processor(struct array *const points,
   }
 }
 
-static void calculate_mxm(scalar C[3][3], const struct array *const A,
-                          const struct array *const B,
-                          const struct comm *const c) {
+static int calculate_mxm(scalar C[3][3], const struct array *const A,
+                         const struct array *const B,
+                         const struct comm *const c) {
   struct crystal cr;
   crystal_init(&cr, c);
 
@@ -438,7 +441,7 @@ static void calculate_mxm(scalar C[3][3], const struct array *const A,
   comm_allreduce(c, gs_int, gs_add, &error, 1, work);
   if (error > 0) {
     parrsb_print(&c, 1, "Error: distribution of matrices are invalid.");
-    MPI_Abort(c->c, 1);
+    return 1;
   }
 
   for (int i = 0; i < 9; i++) C[0][i] = 0;
@@ -461,6 +464,8 @@ static void calculate_mxm(scalar C[3][3], const struct array *const A,
   comm_allreduce(c, gs_scalar, gs_add, C, 9, work);
 
   crystal_free(&cr);
+
+  return 0;
 }
 
 static void calculate_R_and_t(scalar R[3][3], scalar t[3], const scalar C[3][3],
@@ -493,7 +498,6 @@ static void transform_points(scalar *coord_, int32_t nf,
   }
 
   return;
-
 dim2:
   for (uint32_t i = 0; i < nc; i++) {
     const scalar *coord_i = &coord[i * ndim];
