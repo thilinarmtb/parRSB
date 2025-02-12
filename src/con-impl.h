@@ -130,6 +130,8 @@ int set_global_id(Mesh mesh, struct comm *c);
 
 int send_back(Mesh mesh, struct comm *c, buffer *bfr);
 
+int find_min_neighbor_distance(Mesh mesh);
+
 int find_unique_vertices(Mesh mesh, struct comm *c, scalar tol, int verbose,
                          buffer *bfr);
 

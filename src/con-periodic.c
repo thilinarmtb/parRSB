@@ -437,7 +437,7 @@ static void transform_points(scalar *coord_, int32_t nf,
                              const scalar t[3]) {
   const size_t nc = (size_t)nf * nv;
   for (uint32_t i = 0; i < nc; i++) {
-    scalar *coord_i = &coord[i * ndim];
+    const scalar *coord_i = &coord[i * ndim];
     scalar *coord_o = &coord_[i * ndim];
 
     if (bid[i] == 0) {
@@ -456,15 +456,31 @@ static void transform_points(scalar *coord_, int32_t nf,
   }
 }
 
-static void number_points(int32_t nf, int32_t nv, int32_t ndim, scalar *coord,
-                          struct comm *c) {}
+static int number_points(long long *const gid, int32_t nf, int32_t nv,
+                         int32_t ndim, scalar *coord, scalar tol,
+                         struct comm *c) {
+  unsigned nnbrs = (nv == 4) ? 2 : 1;
+  struct mesh_t *mesh = mesh_init(nf, nv, ndim, nnbrs, coord, 0, 0, c);
 
-int match_periodic_faces_automatically(uint32_t nf, const long long *const eid,
-                                       const int32_t *const fid,
-                                       const int32_t *const bid, int32_t nv,
-                                       const long long *const gid, int ndim,
-                                       const scalar *const coord,
-                                       MPI_Comm comm) {
+  find_min_neighbor_distance(mesh);
+
+  buffer bfr;
+  buffer_init(&bfr, 1024);
+
+  find_unique_vertices(mesh, c, tol, 0, &bfr);
+  set_global_id(mesh, c);
+  send_back(mesh, c, &bfr);
+
+  // Todo: add checks.
+
+  buffer_free(&bfr);
+  mesh_free(mesh);
+}
+
+int match_periodic_faces_automatically(uint32_t nf, const int32_t *const bid,
+                                       int32_t nv, const long long *const gid,
+                                       int ndim, const scalar *const coord,
+                                       scalar tol, MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 
@@ -493,6 +509,8 @@ int match_periodic_faces_automatically(uint32_t nf, const long long *const eid,
   transform_points(transformed_coord, nf, bid, nv, ndim, coord, R, t);
 
   // Globally number points:
+  long long *new_gid = tcalloc(long long, nf *nv);
+  number_points(new_gid, nf, nv, ndim, transformed_coord, tol, &c);
 
   free(transformed_coord);
   comm_free(&c);
