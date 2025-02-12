@@ -286,16 +286,19 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
 
 struct periodic_point_t {
   scalar coord[3];
-  uint dest;
+  uint dest, index;
 };
 
-static void setup_matrices(struct array *points_A, struct array *points_B,
-                           int nf, const int *const bid, int ndim,
+static void setup_matrices(struct array *points_A, scalar centroid_A[3],
+                           struct array *points_B, scalar centroid_B[3], int nf,
+                           const int *const bid, int ndim,
                            const scalar *const coords,
                            const struct comm *const c) {
-  scalar centroid_A[3] = {0, 0, 0}, centroid_B[3] = {0, 0, 0}, *centroid = 0;
   int32_t count_A = 0, count_B = 0;
+  scalar *centroid = 0;
   sint errors = 0;
+
+  for (int i = 0; i < 3; i++) centroid_A[i] = centroid_B[i] = 0;
 
   for (int32_t i = 0; i < nf; i++) {
     if (bid[i] == 0)
@@ -355,6 +358,7 @@ static void setup_matrices(struct array *points_A, struct array *points_B,
     points_ptr->coord[0] = coords[i * ndim + 0] - centroid[0];
     points_ptr->coord[1] = coords[i * ndim + 1] - centroid[1];
     if (ndim == 3) points_ptr->coord[2] = coords[i * ndim + 2] - centroid[2];
+    points_ptr->index = i;
   }
 }
 
@@ -456,7 +460,9 @@ int match_periodic_faces_automatically(uint32_t nf, const long long *const eid,
 
   // Setup the matrices A and B:
   struct array points_A, points_B;
-  setup_matrices(&points_A, &points_B, nf, bid, ndim, coords, &c);
+  scalar centroid_A[3], centroid_B[3];
+  setup_matrices(&points_A, centroid_A, &points_B, centroid_B, nf, bid, ndim,
+                 coords, &c);
 
   // Set the destination processor so that A and B are partitioned properly for
   // the matrix-matrix product.
