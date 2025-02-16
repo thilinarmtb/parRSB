@@ -284,202 +284,71 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
   return 0;
 }
 
-struct periodic_point_t {
-  scalar coord[3];
-  uint dest, index;
-};
+static scalar transform_face(scalar R[4][3], const scalar face[4][3],
+                             const scalar *const coord, sint nv, sint ndim) {
+  return DBL_MAX;
+}
 
-static int setup_matrices(struct array *points_A, scalar centroid_A[3],
-                          struct array *points_B, scalar centroid_B[3], int nf,
-                          const int *const bid, int ndim,
-                          const scalar *const coords,
-                          const struct comm *const c) {
-  int32_t count_A = 0, count_B = 0;
-  scalar *centroid = 0;
-  sint errors = 0;
-
-  for (int i = 0; i < 3; i++) centroid_A[i] = centroid_B[i] = 0;
-
-  if (ndim == 2) goto dim2;
-
-  for (int32_t i = 0; i < nf; i++) {
-    if (bid[i] == 0)
-      count_A++, centroid = (scalar *)centroid_A;
-    else if (bid[i] == 1)
-      count_B++, centroid = (scalar *)centroid_B;
-    else
-      errors++;
-
-    centroid[0] += coords[ndim * i + 0];
-    centroid[1] += coords[ndim * i + 1];
-    centroid[2] += coords[ndim * i + 2];
+static sint calculate_R_and_t(scalar R[4][3], long long *const gid, uint nf,
+                              const sint *const bid, sint nv, sint ndim,
+                              const scalar *const coord, struct comm *c) {
+  sint root = INT_MAX;
+  uint index = UINT_MAX;
+  for (uint i = 0; i < nf; i++) {
+    if (bid[i] == 1) continue;
+    root = c->id, index = i;
+    break;
   }
 
-  goto check;
+  char wrk[MAX(sizeof(scalar), sizeof(sint))];
+  comm_allreduce(c, gs_int, gs_min, &root, 1, &wrk);
 
-dim2:
-  for (int32_t i = 0; i < nf; i++) {
-    if (bid[i] == 0)
-      count_A++, centroid = (scalar *)centroid_A;
-    else if (bid[i] == 1)
-      count_B++, centroid = (scalar *)centroid_B;
-    else
-      errors++;
+  scalar face[4][3];
+  if (c->id != root) goto bcast_face;
+  for (uint i = 0; i < nv * ndim; i++)
+    face[0][i] = coord[index * nv * ndim + i];
+bcast_face:
+  comm_bcast(c, face, nv * ndim * sizeof(scalar), root);
 
-    centroid[0] += coords[ndim * i + 0];
-    centroid[1] += coords[ndim * i + 1];
+  scalar error = DBL_MAX;
+  index = UINT_MAX;
+  for (uint i = 0; i < nf; i++) {
+    if (bid[i] == 0) continue;
+    scalar error_i = transform_face(R, face, &coord[i * nv * ndim], nv, ndim);
+    if (error_i < error) {
+      error = error_i;
+      index = i;
+    }
   }
 
-check:
-  // Sanity checks:
-  // Check 1: Make sure we only have BC ids 0 or 1.
-  slong wrkl;
-  comm_allreduce(c, gs_int, gs_add, &errors, 1, &wrkl);
-  if (errors > 0) {
-    parrsb_print(&c, 1, "%s:%d Error: invalid periodic BC ids found.", __FILE__,
-                 __LINE__);
-    return 1;
-  }
+  scalar global_error = error;
+  comm_allreduce(c, gs_scalar, gs_min, &global_error, 1, &wrk);
 
-  // Check 2: Check if the number of points with BC id 0 is equal to number of
-  // points with BC id 1.
-  slong global_count_A = count_A, global_count_B = count_B;
-  comm_allreduce(c, gs_long, gs_add, &global_count_A, 1, &wrkl);
-  comm_allreduce(c, gs_long, gs_add, &global_count_B, 1, &wrkl);
-  if (global_count_A != global_count_B) {
-    parrsb_print(&c, 1, "%s:%d Error: number of periodic points don't match.",
-                 __FILE__, __LINE__);
-    return 1;
-  }
+  if (global_error > 1e-14) return 1;
 
-  scalar wrkd[3];
-  comm_allreduce(c, gs_scalar, gs_add, centroid_A, 3, wrkd);
-  comm_allreduce(c, gs_scalar, gs_add, centroid_B, 3, wrkd);
+  if (fabs(global_error - error) < 1e-13)
+    root = c->id;
+  else
+    root = INT_MAX;
+  comm_allreduce(c, gs_int, gs_min, &root, 1, &wrk);
 
-  for (int i = 0; i < ndim; i++)
-    centroid_A[i] /= global_count_A, centroid_B[i] /= global_count_B;
-
-  // Calculate A_{id}^' = A_{id} - centroid(A_{id}) where A is the ndim x N
-  // matrix with periodic points.
-  array_init(struct periodic_point_t, points_A, count_A);
-  array_init(struct periodic_point_t, points_B, count_B);
-
-  struct periodic_point_t *points_A_ptr =
-      (struct periodic_point_t *)points_A->ptr;
-  struct periodic_point_t *points_B_ptr =
-      (struct periodic_point_t *)points_B->ptr;
-  struct periodic_point_t *points_ptr = 0;
-
-  if (ndim == 2) goto dim2_translate;
-
-  for (int32_t i = 0; i < nf; i++) {
-    if (bid[i] == 0)
-      centroid = (scalar *)centroid_A, points_ptr = points_A_ptr++;
-    else if (bid[i] == 1)
-      centroid = (scalar *)centroid_B, points_ptr = points_B_ptr++;
-
-    points_ptr->coord[0] = coords[i * ndim + 0] - centroid[0];
-    points_ptr->coord[1] = coords[i * ndim + 1] - centroid[1];
-    points_ptr->coord[2] = coords[i * ndim + 2] - centroid[2];
-    points_ptr->index = i;
-  }
-
-  return 0;
-dim2_translate:
-  for (int32_t i = 0; i < nf; i++) {
-    if (bid[i] == 0)
-      centroid = (scalar *)centroid_A, points_ptr = points_A_ptr++;
-    else if (bid[i] == 1)
-      centroid = (scalar *)centroid_B, points_ptr = points_B_ptr++;
-
-    points_ptr->coord[0] = coords[i * ndim + 0] - centroid[0];
-    points_ptr->coord[1] = coords[i * ndim + 1] - centroid[1];
-    points_ptr->index = i;
-  }
+  if (c->id != root) goto bcast_R_and_t;
+  transform_face(R, face, &coord[index * nv * ndim], nv, ndim);
+bcast_R_and_t:
+  comm_bcast(c, R, 4 * 3 * sizeof(scalar), root);
 
   return 0;
 }
 
-static void set_destination_processor(struct array *const points,
-                                      const struct comm *const c) {
-  slong size = points->n;
-
-  slong out[2][1], wrk[2][1];
-  comm_scan(out, c, gs_long, gs_add, &size, 1, wrk);
-
-  slong offset = out[0][0], global_size = out[1][0];
-
-  sint local_size = global_size / c->np;
-  sint remainder = global_size % c->np;
-  slong threshold = local_size * (c->np - remainder);
-
-  struct periodic_point_t *ppt = (struct periodic_point_t *)points->ptr;
-  for (uint32_t i = 0; i < points->n; i++) {
-    slong index = offset + i;
-    // If local_size == 0, then threshold = 0. Therefore, index < threshold is
-    // always false. `else` branch is always taken. Therefore, we never run into
-    // divide by zero error.
-    if (index < threshold)
-      ppt[i].dest = index / local_size;
-    else
-      ppt[i].dest = c->np - remainder + (index - threshold) / (local_size + 1);
-  }
-}
-
-static int calculate_mxm(scalar C[3][3], const struct array *const A,
-                         const struct array *const B,
-                         const struct comm *const c) {
-  struct crystal cr;
-  crystal_init(&cr, c);
-
-  sarray_transfer(struct periodic_point_t, A, dest, 1, &cr);
-  sarray_transfer(struct periodic_point_t, B, dest, 1, &cr);
-
-  // Sanity check: The size of A and B in each process should equal to each
-  // other.
-  sint error = (A->n != B->n), work[9];
-  comm_allreduce(c, gs_int, gs_add, &error, 1, work);
-  if (error > 0) {
-    parrsb_print(&c, 1, "Error: distribution of matrices are invalid.");
-    return 1;
-  }
-
-  for (int i = 0; i < 9; i++) C[0][i] = 0;
-  struct periodic_point_t *pp_A = (struct periodic_point_t *)A->ptr;
-  struct periodic_point_t *pp_B = (struct periodic_point_t *)B->ptr;
-
-  for (uint i = 0; i < A->n; i++) {
-    C[0][0] += pp_A->coord[0] * pp_B->coord[0];
-    C[0][1] += pp_A->coord[0] * pp_B->coord[1];
-    C[0][2] += pp_A->coord[0] * pp_B->coord[2];
-    C[1][0] += pp_A->coord[1] * pp_B->coord[0];
-    C[1][1] += pp_A->coord[1] * pp_B->coord[1];
-    C[1][2] += pp_A->coord[1] * pp_B->coord[2];
-    C[2][0] += pp_A->coord[2] * pp_B->coord[0];
-    C[2][1] += pp_A->coord[2] * pp_B->coord[1];
-    C[2][2] += pp_A->coord[2] * pp_B->coord[2];
-    pp_A++, pp_B++;
-  }
-
-  comm_allreduce(c, gs_scalar, gs_add, C, 9, work);
-
-  crystal_free(&cr);
-
-  return 0;
-}
-
-static void calculate_R_and_t(scalar R[3][3], scalar t[3], const scalar C[3][3],
-                              scalar centroid_A[3], scalar centroid_B[3]) {}
-
-static void transform_points(scalar *coord_, int32_t nf,
-                             const int32_t *const bid, int32_t nv, int32_t ndim,
-                             const scalar *const coord, const scalar R[3][3],
-                             const scalar t[3]) {
+static void transform_points(scalar *coord_, sint nf, const sint *const bid,
+                             sint nv, sint ndim, const scalar *const coord,
+                             const scalar R[4][3]) {
   const size_t nc = (size_t)nf * nv;
+  const scalar t[3] = {R[3][0], R[3][1], R[3][2]};
 
   if (ndim == 2) goto dim2;
 
-  for (uint32_t i = 0; i < nc; i++) {
+  for (uint i = 0; i < nc; i++) {
     const scalar *coord_i = &coord[i * ndim];
     scalar *coord_o = &coord_[i * ndim];
 
@@ -499,7 +368,7 @@ static void transform_points(scalar *coord_, int32_t nf,
 
   return;
 dim2:
-  for (uint32_t i = 0; i < nc; i++) {
+  for (uint i = 0; i < nc; i++) {
     const scalar *coord_i = &coord[i * ndim];
     scalar *coord_o = &coord_[i * ndim];
 
@@ -513,9 +382,9 @@ dim2:
   }
 }
 
-static int number_points(long long *const gid, int32_t nf, int32_t nv,
-                         int32_t ndim, scalar *coord, scalar tol,
-                         struct comm *c, buffer *bfr) {
+static int number_points(long long *const gid, sint nf, sint nv, sint ndim,
+                         scalar *coord, scalar tol, struct comm *c,
+                         buffer *bfr) {
   unsigned nnbrs = (nv == 4) ? 2 : 1;
   struct mesh_t *mesh = mesh_init(nf, nv, ndim, nnbrs, coord, 0, 0, c);
 
@@ -532,7 +401,7 @@ static int number_points(long long *const gid, int32_t nf, int32_t nv,
   return 0;
 }
 
-static void update_global_ids(long long *const gid, int32_t nf, int32_t nv,
+static void update_global_ids(long long *const gid, sint nf, sint nv,
                               const long long *const new_gid,
                               const struct comm *const c, buffer *bfr) {
   const size_t size = (size_t)nf * nv;
@@ -543,41 +412,24 @@ static void update_global_ids(long long *const gid, int32_t nf, int32_t nv,
   gs_free(gsh);
 }
 
-int match_periodic_faces_automatically(long long *const gid, uint32_t nf,
-                                       const int32_t *const bid, int32_t nv,
-                                       int ndim, const scalar *const coord,
+int match_periodic_faces_automatically(long long *const gid, uint nf,
+                                       const sint *const bid, sint nv,
+                                       sint ndim, const scalar *const coord,
                                        scalar tol, MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 
   sint err = 0;
 
-  // Todo: Identify the unique points by averaging based on the global id.
-  // Is above necessary?
-
-  // Setup the matrices A and B:
-  struct array points_A, points_B;
-  scalar centroid_A[3], centroid_B[3];
-  err |= setup_matrices(&points_A, centroid_A, &points_B, centroid_B, nf, bid,
-                        ndim, coord, &c);
-
-  // Set the destination processor so that A and B are partitioned properly for
-  // the matrix-matrix product.
-  set_destination_processor(&points_A, &c);
-  set_destination_processor(&points_B, &c);
-
-  // Calculate the matrix-matrix product.
-  scalar C[3][3];
-  err |= calculate_mxm(C, &points_A, &points_B, &c);
-  array_free(&points_A), array_free(&points_B);
-
-  // Calculate the rotation matrix and translation vector.
-  scalar R[3][3], t[3];
-  calculate_R_and_t(R, t, C, centroid_A, centroid_B);
+  // Match one periodic face from bid = 0 with all the faces of bid = 1 and
+  // calculate the rotation matrix and translation vector in case there is
+  // a match.
+  scalar R[4][3];
+  err |= calculate_R_and_t(R, gid, nf, bid, nv, ndim, coord, &c);
 
   // Transform the points in B using R and t.
   scalar *transformed_coord = tcalloc(scalar, nf * nv * ndim);
-  transform_points(transformed_coord, nf, bid, nv, ndim, coord, R, t);
+  transform_points(transformed_coord, nf, bid, nv, ndim, coord, R);
 
   // Globally number points:
   buffer bfr;
