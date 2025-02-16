@@ -144,7 +144,7 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr);
     comm_allreduce(c, gs_int, gs_max, &err, 1, &wrk);                          \
     if (err) {                                                                 \
       parrsb_print(c, 1, "%s:%d %s", __FILE__, __LINE__, msg);                 \
-      mesh_free(mesh), comm_free(c);                                           \
+      cleanup_before_return();                                                 \
       return err;                                                              \
     }                                                                          \
   }

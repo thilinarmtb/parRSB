@@ -394,10 +394,14 @@ static int number_points(long long *const gid, sint nf, sint nv, sint ndim,
   set_global_id(mesh, c);
   send_back(mesh, c, bfr);
 
+#define cleanup_before_return()                                                \
+  { mesh_free(mesh); }
+
   con_chk_err(element_check(mesh, c, bfr), "element check failed.", c);
   con_chk_err(face_check(mesh, c, bfr), "face_check failed.", c);
 
-  mesh_free(mesh);
+  cleanup_before_return();
+#undef cleanup_before_return
   return 0;
 }
 
@@ -419,34 +423,42 @@ int match_periodic_faces_automatically(long long *const gid, uint nf,
   struct comm c;
   comm_init(&c, comm);
 
-  sint err = 0;
+  const size_t ngids = (size_t)nf * nv;
+  long long *new_gid = tcalloc(long long, ngids);
+
+  const size_t ncoords = ngids * ndim;
+  scalar *transformed_coord = tcalloc(scalar, ncoords);
+
+  buffer bfr;
+  buffer_init(&bfr, 1024);
+
+#define cleanup_before_return()                                                \
+  {                                                                            \
+    free(transformed_coord), free(new_gid);                                    \
+    buffer_free(&bfr), comm_free(&c);                                          \
+  }
 
   // Match one periodic face from bid = 0 with all the faces of bid = 1 and
   // calculate the rotation matrix and translation vector in case there is
   // a match.
   scalar R[4][3];
-  err |= calculate_R_and_t(R, gid, nf, bid, nv, ndim, coord, &c);
+  con_chk_err(calculate_R_and_t(R, gid, nf, bid, nv, ndim, coord, &c),
+              "calculate_R_and_t failed.", &c);
 
-  // Transform the points in B using R and t.
-  scalar *transformed_coord = tcalloc(scalar, nf * nv * ndim);
+  // Transform the points in bid = 1 set using R and t.
   transform_points(transformed_coord, nf, bid, nv, ndim, coord, R);
 
   // Globally number points:
-  buffer bfr;
-  buffer_init(&bfr, 1024);
+  con_chk_err(
+      number_points(new_gid, nf, nv, ndim, transformed_coord, tol, &c, &bfr),
+      "number_points failed.", &c);
 
-  long long *new_gid = tcalloc(long long, nf *nv);
-  err |= number_points(new_gid, nf, nv, ndim, transformed_coord, tol, &c, &bfr);
-
+  // Update the global ids of the original points.
   update_global_ids(gid, nf, nv, new_gid, &c, &bfr);
 
-  sint wrk;
-  comm_allreduce(&c, gs_int, gs_max, &err, 1, &wrk);
-
-  free(transformed_coord), free(new_gid);
-  buffer_free(&bfr), comm_free(&c);
-
-  return err;
+  cleanup_before_return();
+#undef cleanup_before_return
+  return 0;
 }
 
 #undef distance2D
