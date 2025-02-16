@@ -186,23 +186,12 @@ static int transfer_boundary_faces(Mesh mesh, struct comm *c) {
 // Output:
 //   vtx[nelt, nv]: Global numbering of vertices of elements
 int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
-                     long long *pinfo, int npinfo, double tol, MPI_Comm comm) {
+                     long long *pinfo, int npinfo, double tol, MPI_Comm comm,
+                     int verbose) {
   struct comm c;
   comm_init(&c, comm);
 
-  buffer bfr;
-  buffer_init(&bfr, 1024);
-
-  int verbose = 1;
-  {
-    const char *val = getenv("PARRSB_VERBOSE_LEVEL");
-    if (val != NULL) verbose = atoi(val);
-  }
-
   parrsb_print(&c, verbose, "Running parCon ...");
-
-  parrsb_barrier(&c);
-  double tall = comm_time(), t;
 
   double duration[8] = {0};
   const char *name[8] = {
@@ -211,9 +200,18 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
       "element_check              ", "face_check                 ",
       "match_periodic_faces       ", "copy_output                "};
 
+  buffer bfr;
+  buffer_init(&bfr, 1024);
+
+  parrsb_barrier(&c);
+  double tall = comm_time(), t;
+
   unsigned nv = (ndim == 3) ? 8 : 4;
   unsigned nnbrs = ndim;
   Mesh mesh = mesh_init(nelt, nv, ndim, nnbrs, coord, pinfo, npinfo, &c);
+
+#define cleanup_before_return()                                                \
+  { buffer_free(&bfr), mesh_free(mesh), comm_free(&c); }
 
   parrsb_print(&c, verbose - 1, "\t%s ...", name[0]);
   parrsb_barrier(&c), t = comm_time();
@@ -235,9 +233,6 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
   set_global_id(mesh, &c);
   send_back(mesh, &c, &bfr);
   duration[3] = comm_time() - t;
-
-#define cleanup_before_return()                                                \
-  { buffer_free(&bfr), mesh_free(mesh), comm_free(&c); }
 
   parrsb_print(&c, verbose - 1, "\t%s ...", name[4]);
   parrsb_barrier(&c), t = comm_time();
@@ -264,16 +259,14 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
   duration[7] = comm_time() - t;
 
   // Report timing info and finish
-  {
-    double gmin[8], gmax[8], buf[8];
-    for (unsigned i = 0; i < 8; i++) gmax[i] = gmin[i] = duration[i];
-    comm_allreduce(&c, gs_double, gs_min, gmin, 8, buf);
-    comm_allreduce(&c, gs_double, gs_max, gmax, 8, buf);
+  double gmin[8], gmax[8], buf[8];
+  for (unsigned i = 0; i < 8; i++) gmax[i] = gmin[i] = duration[i];
+  comm_allreduce(&c, gs_double, gs_min, gmin, 8, buf);
+  comm_allreduce(&c, gs_double, gs_max, gmax, 8, buf);
 
-    for (unsigned i = 0; i < 7; i++) {
-      parrsb_print(&c, verbose - 1, "%s: %e %e (min max)", name[i], gmin[i],
-                   gmax[i]);
-    }
+  for (unsigned i = 0; i < 7; i++) {
+    parrsb_print(&c, verbose - 1, "%s: %e %e (min max)", name[i], gmin[i],
+                 gmax[i]);
   }
 
   parrsb_barrier(&c);
@@ -290,8 +283,9 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
 //
 void fparrsb_conn_mesh(long long *vtx, double *coord, int *nelt, int *ndim,
                        long long *pinfo, int *npinfo, double *tol,
-                       MPI_Fint *fcomm, int *err) {
+                       MPI_Fint *fcomm, int *err, int *verbose) {
   *err = 1;
   MPI_Comm c = MPI_Comm_f2c(*fcomm);
-  *err = parrsb_conn_mesh(vtx, coord, *nelt, *ndim, pinfo, *npinfo, *tol, c);
+  *err = parrsb_conn_mesh(vtx, coord, *nelt, *ndim, pinfo, *npinfo, *tol, c,
+                          *verbose);
 }

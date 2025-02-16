@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
   unsigned ndim = (nv == 8 ? 3 : 2);
   long long *vl = (long long *)calloc(nelt * nv, sizeof(long long));
   parrsb_check_error(vl == NULL, world);
-  err = parrsb_conn_mesh(vl, coord, nelt, ndim, bcs, nbcs, in->tol, world);
+  err = parrsb_conn_mesh(vl, coord, nelt, ndim, bcs, nbcs, in->tol, world, 0);
   parrsb_check_error(err, world);
 
   // Write connectivity to a .co2 file if dump is on.

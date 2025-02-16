@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
     parrsb_check_error(vl == NULL, comm);
 
     unsigned ndim = (nv == 8 ? 3 : 2);
-    err = parrsb_conn_mesh(vl, coord, nelt, ndim, bcs, nbcs, in->tol, comm);
+    err = parrsb_conn_mesh(vl, coord, nelt, ndim, bcs, nbcs, in->tol, comm, 0);
     parrsb_check_error(err, comm);
 
     // Print pre-partition statistics

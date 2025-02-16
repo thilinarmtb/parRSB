@@ -376,8 +376,8 @@ dim2:
       coord_o[0] = coord_i[0];
       coord_o[1] = coord_i[1];
     } else if (bid[i] == 1) {
-      coord_o[0] = R[0][0] * coord_i[0] + R[0][1] * coord_i[1];
-      coord_o[1] = R[1][0] * coord_i[0] + R[1][1] * coord_i[1];
+      coord_o[0] = R[0][0] * coord_i[0] + R[0][1] * coord_i[1] + t[0];
+      coord_o[1] = R[1][0] * coord_i[0] + R[1][1] * coord_i[1] + t[1];
     }
   }
 }

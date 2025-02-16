@@ -61,13 +61,13 @@ void parrsb_check_tagged_partitions(const long long *const eids,
 //
 int parrsb_conn_mesh(long long *vtx, double *coord, uint nel, unsigned nDim,
                      long long *periodicInfo, int nPeriodicFaces, double tol,
-                     MPI_Comm comm);
+                     MPI_Comm comm, int verbose);
 
 #define fparrsb_conn_mesh                                                      \
   GS_FORTRAN_UNPREFIXED(fparrsb_conn_mesh, FPARRSB_CONN_MESH)
 void fparrsb_conn_mesh(long long *vtx, double *coord, int *nel, int *nDim,
                        long long *periodicInfo, int *nPeriodicFaces,
-                       double *tol, MPI_Fint *fcomm, int *err);
+                       double *tol, MPI_Fint *fcomm, int *err, int *verbose);
 
 //==============================================================================
 // I/O routines
