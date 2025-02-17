@@ -1,6 +1,7 @@
 #include "con-impl.h"
 
 #include <math.h>
+#include <time.h>
 
 //==============================================================================
 // Handle periodic BCs
@@ -284,15 +285,156 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
   return 0;
 }
 
-static scalar transform_face(scalar R[4][3], const scalar face[4][3],
-                             const scalar *coord, sint nv, sint ndim) {
-  // Form the face^T * coord matrix (ndim x ndim).
+/*
+ * Lanczos algorithm for symmetric eigenvalue problems.
+ */
+static inline scalar dot(scalar *a, scalar *b, sint n) {
+  scalar sum = 0.0;
+  for (sint i = 0; i < n; i++) sum += a[i] * b[i];
+  return sum;
+}
+
+static inline void scale(scalar *a, scalar *b, scalar c, sint n) {
+  for (sint i = 0; i < n; i++) a[i] = b[i] * c;
+}
+
+static inline void add2s1(scalar *a, scalar *b, scalar c, sint n) {
+  for (sint i = 0; i < n; i++) a[i] = c * a[i] + b[i];
+}
+
+static inline void add2s2(scalar *a, scalar *b, scalar c, sint n) {
+  for (sint i = 0; i < n; i++) a[i] = a[i] + c * b[i];
+}
+
+static inline void ax(scalar *y, scalar A[3][3], scalar *x, sint n) {
+  for (sint i = 0; i < n; i++) {
+    scalar sum = 0.0;
+    for (sint j = 0; j < n; j++) sum += A[i][j] * x[j];
+    y[i] = sum;
+  }
+}
+
+static sint lanczos(scalar *diag, scalar *upper, scalar rr[3][4], sint ndim,
+                    const scalar A[3][3], scalar tol) {
+  scalar r[3], p[3], w[3];
+  for (sint i = 0; i < ndim; i++) {
+    r[i] = rand() / (scalar)RAND_MAX;
+    p[i] = w[i] = 0.0;
+  }
+
+  scalar rtr = dot(r, r, ndim);
+  scalar rnorm = sqrt(rtr);
+  scalar rtol = rnorm * tol;
+  scalar rni = 1.0 / rnorm;
+
+  scalar rr_[4][3];
+  scale(&rr_[0][0], r, rni, ndim);
+
+  scalar rtz1 = 1, rtz2;
+  scalar pap = 0, pap_old;
+  scalar alpha, beta;
+
+  sint iter;
+  for (iter = 0; iter < ndim; iter++) {
+    rtz2 = rtz1, rtz1 = rtr;
+    beta = rtz1 / rtz2;
+    if (iter == 0) beta = 0.0;
+
+    add2s1(p, r, beta, ndim);
+    ax(w, A, p, ndim);
+
+    pap_old = pap, pap = dot(w, p, ndim);
+
+    alpha = rtz1 / pap;
+    add2s2(r, w, -alpha, ndim);
+
+    rtr = dot(r, r, ndim);
+    rnorm = sqrt(rtr), rni = 1.0 / rnorm;
+    scale(&rr_[iter + 1][0], r, rni, ndim);
+
+    if (iter == 0) {
+      diag[iter] = pap / rtz1;
+    } else {
+      diag[iter] = (beta * beta * pap_old + pap) / rtz1;
+      upper[iter - 1] = -beta * pap_old / sqrt(rtz2 * rtz1);
+    }
+
+    if (rnorm < rtol) {
+      iter++;
+      break;
+    }
+  }
+
+  // Transpose rr
+  for (int i = 0; i < ndim; i++)
+    for (int j = 0; j < iter; j++) rr[i][j] = rr_[j][i];
+
+  return iter;
+}
+
+static void svd(scalar U[3][3], scalar S[3], scalar V[3][3], sint ndim,
+                scalar C[3][3]) {
+  // Find the eigenvectors of C^T C. These are the columns of V.
+  scalar CTC[3][3];
+  for (int i = 0; i < 9; i++) CTC[0][i] = 0.0;
+
+  for (sint i = 0; i < ndim; i++) {
+    for (sint j = 0; j < ndim; j++)
+      for (sint k = 0; k < ndim; k++) CTC[i][j] += C[k][i] * C[k][j];
+  }
+
+  scalar diag[3], upper[2], rr[3][4];
+  sint iter = lanczos(diag, upper, rr, ndim, CTC, 1e-10);
+
+  scalar evec_t[9], eval_t[3];
+  tqli(evec_t, eval_t, iter, diag, upper, 0);
+
+  scalar evec[3][3], eval[3];
+  for (sint i = 0; i < iter; i++) {
+    for (sint j = 0; j < iter; j++) {
+      evec[i][j] = 0;
+      for (sint k = 0; k < iter; k++)
+        evec[i][j] += rr[i][k] * evec_t[j * iter + k];
+    }
+  }
+}
+
+// find the translation vector `t` and the rotation matrix `R` that maps the
+// face `face0` to the face `face1`.
+static scalar transform_face(scalar R[4][3], const scalar face1[4][3],
+                             const scalar face0[4][3], sint nv, sint ndim) {
+  // Find the translation vector `t`:
+  scalar t[3];
+  for (int i = 0; i < 3; i++) t[i] = 0.0;
+
+  for (sint i = 0; i < nv; i++)
+    for (sint j = 0; j < ndim; j++) t[j] += face1[i][j] - face0[i][j];
+  for (sint i = 0; i < ndim; i++) t[i] /= nv;
+
+  // Next we find the rotation matrix `R`. To do so, we form the (face0^T x
+  // face1) matrix (ndim x ndim).
+  scalar C[3][3];
+  for (int i = 0; i < 9; i++) C[0][i] = 0.0;
+
+  for (sint i = 0; i < ndim; i++) {
+    for (sint j = 0; j < ndim; j++) {
+      for (sint k = 0; k < nv; k++)
+        C[i][j] += (face0[k][i] - t[i]) * (face1[k][j] - t[j]);
+    }
+  }
+
+  // Compute the SVD of the matrix C = USV^T.
+  scalar U[3][3], V[3][3], S[3];
+  svd(U, S, V, ndim, C);
+
   return DBL_MAX;
 }
 
 static sint calculate_R_and_t(scalar R[4][3], slong *const gid, uint nf,
                               const sint *const bid, sint nv, sint ndim,
                               const scalar *const coord, struct comm *c) {
+  srand(time(0));
+
   sint root = INT_MAX;
   uint index = UINT_MAX;
   for (uint i = 0; i < nf; i++) {
@@ -306,8 +448,8 @@ static sint calculate_R_and_t(scalar R[4][3], slong *const gid, uint nf,
 
   scalar face[4][3];
   if (c->id != root) goto bcast_face;
-  for (uint i = 0; i < nv * ndim; i++)
-    face[0][i] = coord[index * nv * ndim + i];
+  for (sint i = 0; i < nv; i++)
+    for (sint j = 0; j < ndim; j++) face[i][j] = coord[(index + i) * ndim + j];
 bcast_face:
   comm_bcast(c, face, nv * ndim * sizeof(scalar), root);
 
@@ -315,7 +457,8 @@ bcast_face:
   index = UINT_MAX;
   for (uint i = 0; i < nf; i++) {
     if (bid[i] == 0) continue;
-    scalar error_i = transform_face(R, face, &coord[i * nv * ndim], nv, ndim);
+    scalar error_i = transform_face(
+        R, face, (const scalar(*)[3])(&coord[i * nv * ndim]), nv, ndim);
     if (error_i < error) {
       error = error_i;
       index = i;
@@ -336,7 +479,8 @@ bcast_face:
   comm_allreduce(c, gs_int, gs_min, &root, 1, &wrk);
 
   if (c->id != root) goto bcast_R_and_t;
-  transform_face(R, face, &coord[index * nv * ndim], nv, ndim);
+  transform_face(R, face, (const scalar(*)[3])(&coord[index * nv * ndim]), nv,
+                 ndim);
 bcast_R_and_t:
   comm_bcast(c, R, 4 * 3 * sizeof(scalar), root);
 

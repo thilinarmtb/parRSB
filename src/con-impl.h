@@ -97,6 +97,9 @@ extern int faces2D[GC_MAX_FACES][GC_MAX_FACE_VERTICES];
 
 static inline double diff_sqr(double x, double y) { return (x - y) * (x - y); }
 
+/*
+ * Data structures used in connectivity finding.
+ */
 struct point_t {
   scalar dx, x[3];
   uint proc, origin;
@@ -120,12 +123,18 @@ struct mesh_t {
 };
 typedef struct mesh_t *Mesh;
 
+/*
+ * Mesh init and finalize functions.
+ */
 struct mesh_t *mesh_init(uint nelt, unsigned nv, unsigned ndim, unsigned nnbrs,
                          double *coord, long long *pinfo, uint npinfo,
                          const struct comm *c);
 
 int mesh_free(struct mesh_t *m);
 
+/*
+ * Connectivity finding functions.
+ */
 int set_global_id(Mesh mesh, struct comm *c);
 
 int send_back(Mesh mesh, struct comm *c, buffer *bfr);
@@ -149,6 +158,9 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr);
     }                                                                          \
   }
 
+/*
+ * Connectivity sanity check functions.
+ */
 int element_check(Mesh mesh, struct comm *c, buffer *bfr);
 
 int face_check(Mesh mesh, struct comm *c, buffer *bfr);

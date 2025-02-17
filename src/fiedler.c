@@ -325,8 +325,8 @@ static double sign(scalar a, scalar b) {
   return fabs(a) * m;
 }
 
-static int tqli(scalar *eVectors, scalar *eValues, sint n, scalar *diagonal,
-                scalar *upper, int id) {
+int tqli(scalar *eVectors, scalar *eValues, sint n, scalar *diagonal,
+         scalar *upper, int id) {
   if (n == 0) return 0;
 
   scalar *d = tcalloc(scalar, 2 * n), *e = d + n;
@@ -473,11 +473,6 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint lelt,
 
     pap_old = pap, pap = dot(w, p, lelt);
     comm_allreduce(gsc, gs_double, gs_add, &pap, 1, buf);
-
-    // if (gsc->id == 0) {
-    //   printf("host iter = %d beta = %lf pp = %lf pap = %lf\n", iter, beta,
-    //   pp, pap);
-    // }
 
     alpha = rtz1 / pap;
     // vec_axpby(r, r, 1.0, w, -1.0 * alpha);
