@@ -325,9 +325,11 @@ bcast_face:
   scalar global_error = error;
   comm_allreduce(c, gs_scalar, gs_min, &global_error, 1, &wrk);
 
-  if (global_error > 1e-14) return 1;
+  const scalar tol = 1e-13;
+  if (global_error > tol) return 1;
 
-  if (fabs(global_error - error) < 1e-13)
+  const scalar eps = 1e-15;
+  if (fabs(global_error - error) < eps)
     root = c->id;
   else
     root = INT_MAX;
@@ -341,21 +343,31 @@ bcast_R_and_t:
   return 0;
 }
 
-#define DIM 3
-#include "con-periodic.inc.h"
-#undef DIM
-
-#define DIM 2
-#include "con-periodic.inc.h"
-#undef DIM
-
+// `coordo` should be zero initialized.
 static void transform_points(scalar *coordo, sint nf, const sint *const bid,
                              sint nv, sint ndim, const scalar *const coordi,
                              const scalar R[4][3]) {
-  if (ndim == 3)
-    transform_points_3(coordo, nf, bid, nv, coordi, R);
-  else if (ndim == 2)
-    transform_points_2(coordo, nf, bid, nv, coordi, R);
+  const scalar t[3] = {R[3][0], R[3][1], R[3][2]};
+
+  for (size_t i = 0; i < nf; i++) {
+    const size_t offset = i * (size_t)nv * (size_t)ndim;
+    const scalar *coordi_i = &coordi[offset];
+    scalar *coordo_i = &coordo[offset];
+
+    if (bid[i] == 0) {
+      for (int j = 0; j < nv; j++) {
+        for (int k = 0; k < ndim; k++)
+          coordo_i[j * nv + k] = coordi_i[j * nv + k];
+      }
+    } else if (bid[i] == 1) {
+      for (int j = 0; j < nv; j++) {
+        for (int k = 0; k < ndim; k++) {
+          for (int l = 0; l < ndim; l++)
+            coordo_i[j * nv + l] += R[k][l] * coordi_i[j * nv + l] + t[l];
+        }
+      }
+    }
+  }
 }
 
 static int number_points(slong *const gid, sint nf, sint nv, sint ndim,
