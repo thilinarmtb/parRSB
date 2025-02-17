@@ -285,11 +285,12 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
 }
 
 static scalar transform_face(scalar R[4][3], const scalar face[4][3],
-                             const scalar *const coord, sint nv, sint ndim) {
+                             const scalar *coord, sint nv, sint ndim) {
+  // Form the face^T * coord matrix (ndim x ndim).
   return DBL_MAX;
 }
 
-static sint calculate_R_and_t(scalar R[4][3], long long *const gid, uint nf,
+static sint calculate_R_and_t(scalar R[4][3], slong *const gid, uint nf,
                               const sint *const bid, sint nv, sint ndim,
                               const scalar *const coord, struct comm *c) {
   sint root = INT_MAX;
@@ -340,49 +341,24 @@ bcast_R_and_t:
   return 0;
 }
 
-static void transform_points(scalar *coord_, sint nf, const sint *const bid,
-                             sint nv, sint ndim, const scalar *const coord,
+#define DIM 3
+#include "con-periodic.inc.h"
+#undef DIM
+
+#define DIM 2
+#include "con-periodic.inc.h"
+#undef DIM
+
+static void transform_points(scalar *coordo, sint nf, const sint *const bid,
+                             sint nv, sint ndim, const scalar *const coordi,
                              const scalar R[4][3]) {
-  const size_t nc = (size_t)nf * nv;
-  const scalar t[3] = {R[3][0], R[3][1], R[3][2]};
-
-  if (ndim == 2) goto dim2;
-
-  for (uint i = 0; i < nc; i++) {
-    const scalar *coord_i = &coord[i * ndim];
-    scalar *coord_o = &coord_[i * ndim];
-
-    if (bid[i] == 0) {
-      coord_o[0] = coord_i[0];
-      coord_o[1] = coord_i[1];
-      coord_o[2] = coord_i[2];
-    } else if (bid[i] == 1) {
-      coord_o[0] = R[0][0] * coord_i[0] + R[0][1] * coord_i[1] +
-                   R[0][2] * coord_i[2] + t[0];
-      coord_o[1] = R[1][0] * coord_i[0] + R[1][1] * coord_i[1] +
-                   R[1][2] * coord_i[2] + t[1];
-      coord_o[2] = R[2][0] * coord_i[0] + R[2][1] * coord_i[1] +
-                   R[2][2] * coord_i[2] + t[2];
-    }
-  }
-
-  return;
-dim2:
-  for (uint i = 0; i < nc; i++) {
-    const scalar *coord_i = &coord[i * ndim];
-    scalar *coord_o = &coord_[i * ndim];
-
-    if (bid[i] == 0) {
-      coord_o[0] = coord_i[0];
-      coord_o[1] = coord_i[1];
-    } else if (bid[i] == 1) {
-      coord_o[0] = R[0][0] * coord_i[0] + R[0][1] * coord_i[1] + t[0];
-      coord_o[1] = R[1][0] * coord_i[0] + R[1][1] * coord_i[1] + t[1];
-    }
-  }
+  if (ndim == 3)
+    transform_points_3(coordo, nf, bid, nv, coordi, R);
+  else if (ndim == 2)
+    transform_points_2(coordo, nf, bid, nv, coordi, R);
 }
 
-static int number_points(long long *const gid, sint nf, sint nv, sint ndim,
+static int number_points(slong *const gid, sint nf, sint nv, sint ndim,
                          scalar *coord, scalar tol, struct comm *c,
                          buffer *bfr) {
   unsigned nnbrs = (nv == 4) ? 2 : 1;
@@ -405,8 +381,8 @@ static int number_points(long long *const gid, sint nf, sint nv, sint ndim,
   return 0;
 }
 
-static void update_global_ids(long long *const gid, sint nf, sint nv,
-                              const long long *const new_gid,
+static void update_global_ids(slong *const gid, sint nf, sint nv,
+                              const slong *const new_gid,
                               const struct comm *const c, buffer *bfr) {
   const size_t size = (size_t)nf * nv;
   struct gs_data *gsh = gs_setup(new_gid, size, c, 0, gs_pairwise, 0);
@@ -416,17 +392,17 @@ static void update_global_ids(long long *const gid, sint nf, sint nv,
   gs_free(gsh);
 }
 
-int match_periodic_faces_automatically(long long *const gid, uint nf,
+int match_periodic_faces_automatically(slong *const gid, uint nf,
                                        const sint *const bid, sint nv,
                                        sint ndim, const scalar *const coord,
                                        scalar tol, MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 
-  const size_t ngids = (size_t)nf * nv;
-  long long *new_gid = tcalloc(long long, ngids);
+  const size_t ngids = (size_t)nf * (size_t)nv;
+  slong *new_gid = tcalloc(slong, ngids);
 
-  const size_t ncoords = ngids * ndim;
+  const size_t ncoords = ngids * (size_t)ndim;
   scalar *transformed_coord = tcalloc(scalar, ncoords);
 
   buffer bfr;
