@@ -422,19 +422,35 @@ static int power_iteration(scalar *evecs, scalar *evals, sint ndim,
   return 0;
 }
 
-static void svd(scalar U[3][3], scalar S[3], scalar V[3][3], sint ndim,
-                scalar C[3][3], scalar tol) {
-  // Find the eigenvectors of C^T C. These are the columns of V.
-  scalar CTC[3][3];
-  for (int i = 0; i < 9; i++) CTC[0][i] = 0.0;
+static void svd(scalar U[3][3], scalar V[3][3], sint ndim, scalar A[3][3],
+                scalar tol) {
+  // Find the eigenvectors of A^T A. These are the columns of V.
+  scalar ATA[3][3];
+  for (int i = 0; i < 9; i++) ATA[0][i] = 0.0;
 
   for (sint i = 0; i < ndim; i++) {
     for (sint j = 0; j < ndim; j++)
-      for (sint k = 0; k < ndim; k++) CTC[i][j] += C[k][i] * C[k][j];
+      for (sint k = 0; k < ndim; k++) ATA[i][j] += A[k][i] * A[k][j];
   }
 
   scalar evecs[9], evals[3];
-  power_iteration(evecs, evals, ndim, CTC, tol);
+  power_iteration(evecs, evals, ndim, ATA, tol);
+
+  // V = evecs
+  for (sint i = 0; i < 3; i++)
+    for (sint j = 0; j < ndim; j++) V[j][i] = evecs[i * ndim + j];
+
+  // Singular values are the square roots of the eigenvalues of A^T A.
+  for (int i = 0; i < 3; i++) evals[i] = sqrt(evals[i]);
+
+  // Calculate U.
+  for (sint i = 0; i < ndim; i++) {
+    for (sint j = 0; j < ndim; j++) {
+      U[j][i] = 0.0;
+      for (sint k = 0; k < ndim; k++) U[j][i] += A[j][k] * V[k][i];
+      U[j][i] /= evals[i];
+    }
+  }
 }
 
 // find the translation vector `t` and the rotation matrix `R` that maps the
@@ -462,9 +478,17 @@ static scalar transform_face(scalar R[4][3], const scalar face1[4][3],
   }
 
   // Compute the SVD of the matrix C = USV^T.
-  scalar U[3][3], V[3][3], S[3];
+  scalar U[3][3], V[3][3];
   const scalar tol = 1e-13;
-  svd(U, S, V, ndim, C, tol);
+  svd(U, V, ndim, C, tol);
+
+  // Calculate the rotation matrix R = VU^T.
+  for (sint i = 0; i < ndim; i++) {
+    for (sint j = 0; j < ndim; j++) {
+      R[i][j] = 0.0;
+      for (sint k = 0; k < ndim; k++) R[i][j] += V[i][k] * U[j][k];
+    }
+  }
 
   return DBL_MAX;
 }
