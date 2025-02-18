@@ -673,8 +673,9 @@ int automatic_periodic_face_match(slong *const gid, uint nf,
   return 0;
 }
 
-static int test_power_iteration_diag_matrix_00(const scalar tol) {
+static int test_power_iteration_00(const scalar tol) {
   scalar A[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
+
   scalar evecs[9], evals[3];
   power_iteration(evecs, evals, 3, A, tol);
 
@@ -692,8 +693,9 @@ static int test_power_iteration_diag_matrix_00(const scalar tol) {
   return err;
 }
 
-static int test_power_iteration_diag_matrix_01(const scalar tol) {
+static int test_power_iteration_01(const scalar tol) {
   scalar A[3][3] = {{1.0, 0.0, 0.0}, {0.0, 2.0, 0.0}, {0.0, 0.0, 3.0}};
+
   scalar evecs[9], evals[3];
   power_iteration(evecs, evals, 3, A, tol);
 
@@ -711,14 +713,34 @@ static int test_power_iteration_diag_matrix_01(const scalar tol) {
   return err;
 }
 
+static int test_power_iteration_02(const scalar tol) {
+  scalar A[3][3] = {{5, -10, -5}, {2, 14, 2}, {-4, -8, 6}};
+
+  scalar evecs[9], evals[3];
+  power_iteration(evecs, evals, 3, A, tol);
+
+  sint err = 0;
+  err |= (fabs((evals[0] - 10.0) / 10.0) > tol);
+  err |= (fabs((evals[1] - 10.0) / 10.0) > tol);
+  err |= (fabs((evals[2] - 5.0) / 5.0) > tol);
+  err |= (fabs(dot(evecs, evecs, 3) - 1) > tol);
+  err |= (fabs(dot(evecs + 3, evecs + 3, 3) - 1) > tol);
+  err |= (fabs(dot(evecs + 6, evecs + 6, 3) - 1) > tol);
+  err |= (fabs(dot(evecs, evecs + 3, 3)) > tol);
+  err |= (fabs(dot(evecs, evecs + 6, 3)) > tol);
+  err |= (fabs(dot(evecs + 3, evecs + 6, 3)) > tol);
+
+  return err;
+}
+
 #define chk_test(call, count, c)                                               \
   {                                                                            \
     sint err = (call);                                                         \
     sint wrk;                                                                  \
-    comm_allreduce((c), gs_int, gs_max, &err, 1, &wrk);                        \
+    comm_allreduce(&(c), gs_int, gs_max, &err, 1, &wrk);                       \
     if (err) {                                                                 \
-      if ((c)->id == 0) fprintf(stderr, #call " failed.\n");                   \
-      (*(count))++;                                                            \
+      if ((c).id == 0) fprintf(stderr, #call " failed.\n");                    \
+      (count)++;                                                               \
     }                                                                          \
   }
 
@@ -730,8 +752,9 @@ int test_automatic_periodic_face_match(slong *const gid, uint nf,
   comm_init(&c, comm);
 
   sint errs = 0;
-  chk_test(test_power_iteration_diag_matrix_00(tol), &errs, &c);
-  chk_test(test_power_iteration_diag_matrix_01(tol), &errs, &c);
+  chk_test(test_power_iteration_00(tol), errs, c);
+  chk_test(test_power_iteration_01(tol), errs, c);
+  chk_test(test_power_iteration_02(tol), errs, c);
 
   comm_free(&c);
   return errs;
