@@ -403,7 +403,8 @@ static int power_iteration(scalar *evecs, scalar *evals, sint ndim,
     scalar x[3];
     for (sint i = 0; i < 3; i++) x[i] = rand() / (scalar)RAND_MAX;
 
-    scalar norm_1 = normi(x, ndim);
+    scalar norm_1 = norm2(x, ndim);
+    scale(x, x, 1.0 / norm_1, ndim);
     scalar norm_0;
     do {
       ax(evecs + i * ndim, A, x, ndim);
@@ -411,7 +412,7 @@ static int power_iteration(scalar *evecs, scalar *evals, sint ndim,
         ortho(evecs + i * ndim, evecs + j * ndim, ndim);
 
       norm_0 = norm_1;
-      norm_1 = normi(evecs + i * ndim, ndim);
+      norm_1 = norm2(evecs + i * ndim, ndim);
       scale(x, evecs + i * ndim, 1.0 / norm_1, ndim);
     } while (fabs(norm_1 - norm_0) > tol);
 
@@ -422,8 +423,8 @@ static int power_iteration(scalar *evecs, scalar *evals, sint ndim,
   return 0;
 }
 
-static void svd(scalar U[3][3], scalar V[3][3], sint ndim, scalar A[3][3],
-                scalar tol) {
+static void svd(scalar U[3][3], scalar S[3][3], scalar V[3][3], sint ndim,
+                scalar A[3][3], scalar tol) {
   // Find the eigenvectors of A^T A. These are the columns of V.
   scalar ATA[3][3];
   for (int i = 0; i < 9; i++) ATA[0][i] = 0.0;
@@ -441,7 +442,8 @@ static void svd(scalar U[3][3], scalar V[3][3], sint ndim, scalar A[3][3],
     for (sint j = 0; j < ndim; j++) V[j][i] = evecs[i * ndim + j];
 
   // Singular values are the square roots of the eigenvalues of A^T A.
-  for (int i = 0; i < 3; i++) evals[i] = sqrt(evals[i]);
+  for (int i = 0; i < 9; i++) S[0][i] = 0.0;
+  for (int i = 0; i < 3; i++) S[i][i] = evals[i] = sqrt(evals[i]);
 
   // Calculate U.
   for (sint i = 0; i < ndim; i++) {
@@ -455,14 +457,14 @@ static void svd(scalar U[3][3], scalar V[3][3], sint ndim, scalar A[3][3],
 
 // find the translation vector `t` and the rotation matrix `R` that maps the
 // face `face0` to the face `face1`.
-static scalar transform_face(scalar R[4][3], const scalar face1[4][3],
-                             const scalar face0[4][3], sint nv, sint ndim) {
-  // Find the translation vector `t`:
-  scalar t[3];
+static scalar transform_face(scalar R[3][3], scalar t[3],
+                             const scalar face1[4][3], const scalar face0[4][3],
+                             sint nv, sint ndim, scalar tol) {
+  // Find the translation vector `t`.
   for (int i = 0; i < 3; i++) t[i] = 0.0;
 
   for (sint i = 0; i < nv; i++)
-    for (sint j = 0; j < ndim; j++) t[j] += face1[i][j] - face0[i][j];
+    for (sint j = 0; j < ndim; j++) t[j] += (face1[i][j] - face0[i][j]);
   for (sint i = 0; i < ndim; i++) t[i] /= nv;
 
   // Next we find the rotation matrix `R`. To do so, we form the (face0^T x
@@ -478,9 +480,8 @@ static scalar transform_face(scalar R[4][3], const scalar face1[4][3],
   }
 
   // Compute the SVD of the matrix C = USV^T.
-  scalar U[3][3], V[3][3];
-  const scalar tol = 1e-13;
-  svd(U, V, ndim, C, tol);
+  scalar U[3][3], S[3][3], V[3][3];
+  svd(U, S, V, ndim, C, tol);
 
   // Calculate the rotation matrix R = VU^T.
   for (sint i = 0; i < ndim; i++) {
@@ -490,12 +491,28 @@ static scalar transform_face(scalar R[4][3], const scalar face1[4][3],
     }
   }
 
-  return DBL_MAX;
+  // Transform the face0 using R and t.
+  scalar face1_[4][3];
+  for (sint i = 0; i < nv; i++) {
+    for (sint j = 0; j < ndim; j++) {
+      face1_[i][j] = 0.0;
+      for (sint k = 0; k < ndim; k++) face1_[i][j] += R[j][k] * face0[i][k];
+      face1_[i][j] += t[j];
+    }
+  }
+
+  // Calculate the error.
+  scalar err = 0;
+  for (sint i = 0; i < nv; i++)
+    for (sint j = 0; j < ndim; j++) err += diff_sqr(face1[i][j], face1_[i][j]);
+
+  return sqrt(err / nv);
 }
 
-static sint calculate_R_and_t(scalar R[4][3], slong *const gid, uint nf,
-                              const sint *const bid, sint nv, sint ndim,
-                              const scalar *const coord, struct comm *c) {
+static sint calculate_R_and_t(scalar R[3][3], scalar t[3], slong *const gid,
+                              uint nf, const sint *const bid, sint nv,
+                              sint ndim, const scalar *const coord, scalar tol,
+                              struct comm *c) {
   srand(time(0));
 
   sint root = INT_MAX;
@@ -521,7 +538,7 @@ bcast_face:
   for (uint i = 0; i < nf; i++) {
     if (bid[i] == 0) continue;
     scalar error_i = transform_face(
-        R, face, (const scalar(*)[3])(&coord[i * nv * ndim]), nv, ndim);
+        R, t, face, (const scalar(*)[3])(&coord[i * nv * ndim]), nv, ndim, tol);
     if (error_i < error) {
       error = error_i;
       index = i;
@@ -531,7 +548,6 @@ bcast_face:
   scalar global_error = error;
   comm_allreduce(c, gs_scalar, gs_min, &global_error, 1, &wrk);
 
-  const scalar tol = 1e-13;
   if (global_error > tol) return 1;
 
   const scalar eps = 1e-15;
@@ -542,10 +558,11 @@ bcast_face:
   comm_allreduce(c, gs_int, gs_min, &root, 1, &wrk);
 
   if (c->id != root) goto bcast_R_and_t;
-  transform_face(R, face, (const scalar(*)[3])(&coord[index * nv * ndim]), nv,
-                 ndim);
+  transform_face(R, t, face, (const scalar(*)[3])(&coord[index * nv * ndim]),
+                 nv, ndim, tol);
 bcast_R_and_t:
-  comm_bcast(c, R, 4 * 3 * sizeof(scalar), root);
+  comm_bcast(c, R, 3 * 3 * sizeof(scalar), root);
+  comm_bcast(c, t, 3 * sizeof(scalar), root);
 
   return 0;
 }
@@ -636,8 +653,8 @@ int automatic_periodic_face_match(slong *const gid, uint nf,
   // Match one periodic face from bid = 0 with all the faces of bid = 1 and
   // calculate the rotation matrix and translation vector in case there is
   // a match.
-  scalar R[4][3];
-  con_chk_err(calculate_R_and_t(R, gid, nf, bid, nv, ndim, coord, &c),
+  scalar R[3][3], t[3];
+  con_chk_err(calculate_R_and_t(R, t, gid, nf, bid, nv, ndim, coord, tol, &c),
               "calculate_R_and_t failed.", &c);
 
   // Transform the points in bid = 1 set using R and t.
@@ -656,23 +673,40 @@ int automatic_periodic_face_match(slong *const gid, uint nf,
   return 0;
 }
 
-static int test_00_power_iteration_diag_matrix(const scalar tol) {
+static int test_power_iteration_diag_matrix_00(const scalar tol) {
+  scalar A[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
+  scalar evecs[9], evals[3];
+  power_iteration(evecs, evals, 3, A, tol);
+
+  sint err = 0;
+  err |= (fabs((evals[0] - 1.0) / 1.0) > tol);
+  err |= (fabs((evals[1] - 1.0) / 1.0) > tol);
+  err |= (fabs((evals[2] - 1.0) / 1.0) > tol);
+  err |= (fabs(dot(evecs, evecs, 3) - 1) > tol);
+  err |= (fabs(dot(evecs + 3, evecs + 3, 3) - 1) > tol);
+  err |= (fabs(dot(evecs + 6, evecs + 6, 3) - 1) > tol);
+  err |= (fabs(dot(evecs, evecs + 3, 3)) > tol);
+  err |= (fabs(dot(evecs, evecs + 6, 3)) > tol);
+  err |= (fabs(dot(evecs + 3, evecs + 6, 3)) > tol);
+
+  return err;
+}
+
+static int test_power_iteration_diag_matrix_01(const scalar tol) {
   scalar A[3][3] = {{1.0, 0.0, 0.0}, {0.0, 2.0, 0.0}, {0.0, 0.0, 3.0}};
   scalar evecs[9], evals[3];
   power_iteration(evecs, evals, 3, A, tol);
 
   sint err = 0;
   err |= (fabs((evals[0] - 3.0) / 3.0) > tol);
-  // err |= (fabs((evals[1] - 2.0) / 2.0) > tol);
-  // err |= (fabs((evals[2] - 1.0) / 1.0) > tol);
+  err |= (fabs((evals[1] - 2.0) / 2.0) > tol);
+  err |= (fabs((evals[2] - 1.0) / 1.0) > tol);
+  err |= (fabs(dot(evecs, evecs, 3) - 1) > tol);
+  err |= (fabs(dot(evecs + 3, evecs + 3, 3) - 1) > tol);
+  err |= (fabs(dot(evecs + 6, evecs + 6, 3) - 1) > tol);
   err |= (fabs(dot(evecs, evecs + 3, 3)) > tol);
   err |= (fabs(dot(evecs, evecs + 6, 3)) > tol);
   err |= (fabs(dot(evecs + 3, evecs + 6, 3)) > tol);
-
-  printf("evals: %e %e %e\n", fabs(evals[0] - 3.0) / 3.0,
-         fabs(evals[1] - 2.0) / 2.0, fabs(evals[2] - 1.0) / 1.0);
-  printf("ortho: %e %e %e\n", dot(evecs, evecs + 3, 3),
-         dot(evecs, evecs + 6, 3), dot(evecs + 3, evecs + 6, 3));
 
   return err;
 }
@@ -696,7 +730,8 @@ int test_automatic_periodic_face_match(slong *const gid, uint nf,
   comm_init(&c, comm);
 
   sint errs = 0;
-  chk_test(test_00_power_iteration_diag_matrix(tol), &errs, &c);
+  chk_test(test_power_iteration_diag_matrix_00(tol), &errs, &c);
+  chk_test(test_power_iteration_diag_matrix_01(tol), &errs, &c);
 
   comm_free(&c);
   return errs;
