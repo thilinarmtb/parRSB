@@ -165,4 +165,12 @@ int element_check(Mesh mesh, struct comm *c, buffer *bfr);
 
 int face_check(Mesh mesh, struct comm *c, buffer *bfr);
 
+/*
+ * Tests for various connectivity functions.
+ */
+int test_automatic_periodic_face_match(slong *const gid, uint nf,
+                                       const sint *const bid, sint nv,
+                                       sint ndim, const scalar *const coord,
+                                       scalar tol, MPI_Comm comm);
+
 #endif // _CON_IMPL_H_

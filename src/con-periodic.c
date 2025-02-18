@@ -288,13 +288,13 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
 /*
  * Lanczos algorithm for symmetric eigenvalue problems.
  */
-static inline scalar dot(scalar *a, scalar *b, sint n) {
+static inline scalar dot(const scalar *a, const scalar *b, sint n) {
   scalar sum = 0.0;
   for (sint i = 0; i < n; i++) sum += a[i] * b[i];
   return sum;
 }
 
-static inline void scale(scalar *a, scalar *b, scalar c, sint n) {
+static inline void scale(scalar *a, const scalar *b, scalar c, sint n) {
   for (sint i = 0; i < n; i++) a[i] = b[i] * c;
 }
 
@@ -306,7 +306,8 @@ static inline void add2s2(scalar *a, scalar *b, scalar c, sint n) {
   for (sint i = 0; i < n; i++) a[i] = a[i] + c * b[i];
 }
 
-static inline void ax(scalar *y, scalar A[3][3], scalar *x, sint n) {
+static inline void ax(scalar *y, const scalar A[3][3], const scalar *x,
+                      sint n) {
   for (sint i = 0; i < n; i++) {
     scalar sum = 0.0;
     for (sint j = 0; j < n; j++) sum += A[i][j] * x[j];
@@ -372,8 +373,57 @@ static sint lanczos(scalar *diag, scalar *upper, scalar rr[3][4], sint ndim,
   return iter;
 }
 
+/*
+ * Power iteration.
+ */
+static scalar norm2(const scalar *x, sint n) { return sqrt(dot(x, x, n)); }
+
+static scalar normi(const scalar *x, sint n) {
+  scalar norm = 0;
+  for (sint i = 0; i < n; i++)
+    if (norm < fabs(x[i])) norm = fabs(x[i]);
+  return norm;
+}
+
+static void ortho(scalar *x, const scalar *y, sint n) {
+  scalar dotxy = dot(x, y, n);
+  scalar normy = sqrt(dot(y, y, n));
+  scalar y_[3];
+  scale(y_, y, 1.0 / normy, n);
+  add2s2(x, y_, -dotxy / normy, n);
+}
+
+static void copy(scalar *a, const scalar *b, sint n) {
+  for (sint i = 0; i < n; i++) a[i] = b[i];
+}
+
+static int power_iteration(scalar *evecs, scalar *evals, sint ndim,
+                           const scalar A[3][3], scalar tol) {
+  for (int i = 0; i < ndim; i++) {
+    scalar x[3];
+    for (sint i = 0; i < 3; i++) x[i] = rand() / (scalar)RAND_MAX;
+
+    scalar norm_1 = normi(x, ndim);
+    scalar norm_0;
+    do {
+      ax(evecs + i * ndim, A, x, ndim);
+      for (sint j = 0; j < i; j++)
+        ortho(evecs + i * ndim, evecs + j * ndim, ndim);
+
+      norm_0 = norm_1;
+      norm_1 = normi(evecs + i * ndim, ndim);
+      scale(x, evecs + i * ndim, 1.0 / norm_1, ndim);
+    } while (fabs(norm_1 - norm_0) > tol);
+
+    evals[i] = norm_1;
+    copy(evecs + i * ndim, x, ndim);
+  }
+
+  return 0;
+}
+
 static void svd(scalar U[3][3], scalar S[3], scalar V[3][3], sint ndim,
-                scalar C[3][3]) {
+                scalar C[3][3], scalar tol) {
   // Find the eigenvectors of C^T C. These are the columns of V.
   scalar CTC[3][3];
   for (int i = 0; i < 9; i++) CTC[0][i] = 0.0;
@@ -383,20 +433,8 @@ static void svd(scalar U[3][3], scalar S[3], scalar V[3][3], sint ndim,
       for (sint k = 0; k < ndim; k++) CTC[i][j] += C[k][i] * C[k][j];
   }
 
-  scalar diag[3], upper[2], rr[3][4];
-  sint iter = lanczos(diag, upper, rr, ndim, CTC, 1e-10);
-
-  scalar evec_t[9], eval_t[3];
-  tqli(evec_t, eval_t, iter, diag, upper, 0);
-
-  scalar evec[3][3], eval[3];
-  for (sint i = 0; i < iter; i++) {
-    for (sint j = 0; j < iter; j++) {
-      evec[i][j] = 0;
-      for (sint k = 0; k < iter; k++)
-        evec[i][j] += rr[i][k] * evec_t[j * iter + k];
-    }
-  }
+  scalar evecs[9], evals[3];
+  power_iteration(evecs, evals, ndim, CTC, tol);
 }
 
 // find the translation vector `t` and the rotation matrix `R` that maps the
@@ -425,7 +463,8 @@ static scalar transform_face(scalar R[4][3], const scalar face1[4][3],
 
   // Compute the SVD of the matrix C = USV^T.
   scalar U[3][3], V[3][3], S[3];
-  svd(U, S, V, ndim, C);
+  const scalar tol = 1e-13;
+  svd(U, S, V, ndim, C, tol);
 
   return DBL_MAX;
 }
@@ -548,10 +587,10 @@ static void update_global_ids(slong *const gid, sint nf, sint nv,
   gs_free(gsh);
 }
 
-int match_periodic_faces_automatically(slong *const gid, uint nf,
-                                       const sint *const bid, sint nv,
-                                       sint ndim, const scalar *const coord,
-                                       scalar tol, MPI_Comm comm) {
+int automatic_periodic_face_match(slong *const gid, uint nf,
+                                  const sint *const bid, sint nv, sint ndim,
+                                  const scalar *const coord, scalar tol,
+                                  MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 
@@ -591,6 +630,52 @@ int match_periodic_faces_automatically(slong *const gid, uint nf,
   cleanup_before_return();
 #undef cleanup_before_return
   return 0;
+}
+
+static int test_00_power_iteration_diag_matrix(const scalar tol) {
+  scalar A[3][3] = {{1.0, 0.0, 0.0}, {0.0, 2.0, 0.0}, {0.0, 0.0, 3.0}};
+  scalar evecs[9], evals[3];
+  power_iteration(evecs, evals, 3, A, tol);
+
+  sint err = 0;
+  err |= (fabs((evals[0] - 3.0) / 3.0) > tol);
+  // err |= (fabs((evals[1] - 2.0) / 2.0) > tol);
+  // err |= (fabs((evals[2] - 1.0) / 1.0) > tol);
+  err |= (fabs(dot(evecs, evecs + 3, 3)) > tol);
+  err |= (fabs(dot(evecs, evecs + 6, 3)) > tol);
+  err |= (fabs(dot(evecs + 3, evecs + 6, 3)) > tol);
+
+  printf("evals: %e %e %e\n", fabs(evals[0] - 3.0) / 3.0,
+         fabs(evals[1] - 2.0) / 2.0, fabs(evals[2] - 1.0) / 1.0);
+  printf("ortho: %e %e %e\n", dot(evecs, evecs + 3, 3),
+         dot(evecs, evecs + 6, 3), dot(evecs + 3, evecs + 6, 3));
+
+  return err;
+}
+
+#define chk_test(call, count, c)                                               \
+  {                                                                            \
+    sint err = (call);                                                         \
+    sint wrk;                                                                  \
+    comm_allreduce((c), gs_int, gs_max, &err, 1, &wrk);                        \
+    if (err) {                                                                 \
+      if ((c)->id == 0) fprintf(stderr, #call " failed.\n");                   \
+      (*(count))++;                                                            \
+    }                                                                          \
+  }
+
+int test_automatic_periodic_face_match(slong *const gid, uint nf,
+                                       const sint *const bid, sint nv,
+                                       sint ndim, const scalar *const coord,
+                                       scalar tol, MPI_Comm comm) {
+  struct comm c;
+  comm_init(&c, comm);
+
+  sint errs = 0;
+  chk_test(test_00_power_iteration_diag_matrix(tol), &errs, &c);
+
+  comm_free(&c);
+  return errs;
 }
 
 #undef distance2D

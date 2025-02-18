@@ -18,17 +18,21 @@ MKFILEPATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 SRCROOT := $(realpath $(patsubst %/,%,$(dir $(MKFILEPATH))))
 SRCDIR = $(SRCROOT)/src
 EXAMPLEDIR = $(SRCROOT)/examples
+TESTDIR = $(SRCROOT)/tests
 BUILDROOT = $(SRCROOT)/build
+
 ifneq (,$(strip $(DESTDIR)))
-INSTALLROOT = $(DESTDIR)
+	INSTALLROOT = $(DESTDIR)
 else
-INSTALLROOT = $(SRCROOT)/install
+	INSTALLROOT = $(SRCROOT)/install
 endif
 
-SRCS = $(wildcard $(SRCDIR)/*.c)
-SRCOBJS = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%.o,$(SRCS))
+SRC = $(wildcard $(SRCDIR)/*.c)
+SRCOBJS = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%.o,$(SRC))
 EXAMPLES = $(wildcard $(EXAMPLEDIR)/*.c)
 EXAMPLEBINS = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%,$(EXAMPLES))
+TESTS = $(wildcard $(TESTDIR)/*.c)
+TESTBINS = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%,$(TESTS))
 
 LIB = $(BUILDROOT)/lib/libparRSB.a
 
@@ -61,9 +65,9 @@ INCFLAGS = -I$(SRCDIR) -I$(GSLIBPATH)/include
 CCCMD = $(CC) $(CFLAGS) $(INCFLAGS) $(PP)
 LDFLAGS += -lm
 
-.PHONY: all lib install examples format clean
+.PHONY: all lib install examples tests format clean
 
-all: lib install examples
+all: lib install examples tests
 
 lib: $(SRCOBJS)
 	@mkdir -p $(BUILDROOT)/lib
@@ -77,6 +81,8 @@ install: lib
 	@cp $(SRCDIR)/*.h $(INSTALLROOT)/include 2>/dev/null
 
 examples: lib install $(EXAMPLEBINS)
+
+tests: lib install $(TESTBINS)
 
 format:
 	find . -iname *.h -o -iname *.c | xargs clang-format -i
@@ -100,4 +106,5 @@ $(BUILDROOT)/%: $(SRCROOT)/%.c | lib install
 		$(LDFLAGS)
 
 $(shell mkdir -p $(BUILDROOT)/examples)
+$(shell mkdir -p $(BUILDROOT)/tests)
 $(shell mkdir -p $(BUILDROOT)/src)
