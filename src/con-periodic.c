@@ -738,6 +738,78 @@ static int test_power_iteration_02(const scalar tol) {
   return err;
 }
 
+static int test_transform_face_00(const scalar tol) {
+  scalar face1[4][3], face0[4][3];
+  for (sint i = 0; i < 4; i++)
+    for (sint j = 0; j < 3; j++)
+      face1[i][j] = face0[i][j] = rand() / (scalar)RAND_MAX;
+
+  scalar R[3][3], t[3];
+  scalar error = transform_face(R, t, face1, face0, 4, 3, tol);
+
+  scalar R_expected[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
+  scalar t_expected[3] = {0.0, 0.0, 0.0};
+
+  scalar R_err[9], t_err[3];
+  for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
+  for (size_t i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
+
+  sint err = 0;
+  err |= (normi(t_err, 3) > 1e-8);
+  err |= (normi(R_err, 9) > 1e-8);
+  return err;
+}
+
+static int test_transform_face_01(const scalar tol) {
+  scalar face1[4][3], face0[4][3];
+  for (sint i = 0; i < 4; i++) {
+    for (sint j = 0; j < 3; j++) {
+      face1[i][j] = face0[i][j] = rand() / (scalar)RAND_MAX;
+      face1[i][j] += 10.0;
+    }
+  }
+
+  scalar R_expected[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
+  scalar t_expected[3] = {10.0, 10.0, 10.0};
+
+  scalar R[3][3], t[3];
+  scalar error = transform_face(R, t, face1, face0, 4, 3, tol);
+
+  scalar R_err[9], t_err[3];
+  for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
+  for (size_t i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
+
+  sint err = 0;
+  err |= (normi(t_err, 3) > 1e-8);
+  err |= (normi(R_err, 9) > 1e-8);
+  return err;
+}
+
+static int test_transform_face_02(const scalar tol) {
+  scalar face1[4][3], face0[4][3];
+  for (sint i = 0; i < 4; i++) {
+    for (sint j = 0; j < 3; j++) {
+      face1[i][j] = face0[i][j] = rand() / (scalar)RAND_MAX;
+      face1[i][j] += j;
+    }
+  }
+
+  scalar R_expected[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
+  scalar t_expected[3] = {0.0, 1.0, 2.0};
+
+  scalar R[3][3], t[3];
+  scalar error = transform_face(R, t, face1, face0, 4, 3, tol);
+
+  scalar R_err[9], t_err[3];
+  for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
+  for (size_t i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
+
+  sint err = 0;
+  err |= (normi(t_err, 3) > 1e-8);
+  err |= (normi(R_err, 9) > 1e-8);
+  return err;
+}
+
 #define chk_test(call, count, c)                                               \
   {                                                                            \
     sint err = (call);                                                         \
@@ -760,6 +832,10 @@ int test_automatic_periodic_face_match(slong *const gid, uint nf,
   chk_test(test_power_iteration_00(tol), errs, c);
   chk_test(test_power_iteration_01(tol), errs, c);
   chk_test(test_power_iteration_02(tol), errs, c);
+
+  chk_test(test_transform_face_00(tol), errs, c);
+  chk_test(test_transform_face_01(tol), errs, c);
+  chk_test(test_transform_face_02(tol), errs, c);
 
   comm_free(&c);
   return errs;
