@@ -460,22 +460,21 @@ static void svd(scalar U[3][3], scalar S[3][3], scalar V[3][3], sint ndim,
 static scalar transform_face(scalar R[3][3], scalar t[3],
                              const scalar face1[4][3], const scalar face0[4][3],
                              sint nv, sint ndim, scalar tol) {
-  // Find the translation vector `t`.
-  for (int i = 0; i < 3; i++) t[i] = 0.0;
-
+  // Find the centroids of the faces.
+  scalar t0[3], t1[3];
+  for (int i = 0; i < 3; i++) t0[i] = t1[i] = 0.0;
   for (sint i = 0; i < nv; i++)
-    for (sint j = 0; j < ndim; j++) t[j] += (face1[i][j] - face0[i][j]);
-  for (sint i = 0; i < ndim; i++) t[i] /= nv;
+    for (sint j = 0; j < ndim; j++) t1[j] += face1[i][j], t0[j] += face0[i][j];
+  for (sint i = 0; i < ndim; i++) t1[i] /= nv, t0[i] /= nv;
 
-  // Next we find the rotation matrix `R`. To do so, we form the (face0^T x
+  // Next we find the rotation matrix R. To do so, we form the (face0^T x
   // face1) matrix (ndim x ndim).
   scalar C[3][3];
-  for (int i = 0; i < 9; i++) C[0][i] = 0.0;
-
   for (sint i = 0; i < ndim; i++) {
     for (sint j = 0; j < ndim; j++) {
+      C[i][j] = 0.0;
       for (sint k = 0; k < nv; k++)
-        C[i][j] += (face0[k][i] - t[i]) * (face1[k][j] - t[j]);
+        C[i][j] += (face0[k][i] - t0[i]) * (face1[k][j] - t1[j]);
     }
   }
 
@@ -489,6 +488,12 @@ static scalar transform_face(scalar R[3][3], scalar t[3],
       R[i][j] = 0.0;
       for (sint k = 0; k < ndim; k++) R[i][j] += V[i][k] * U[j][k];
     }
+  }
+
+  // Calculate the translation vector t (fix this).
+  for (sint i = 0; i < ndim; i++) {
+    t[i] = t1[i];
+    for (sint j = 0; j < ndim; j++) t[i] -= R[i][j] * t0[j];
   }
 
   // Transform the face0 using R and t.
@@ -506,7 +511,7 @@ static scalar transform_face(scalar R[3][3], scalar t[3],
   for (sint i = 0; i < nv; i++)
     for (sint j = 0; j < ndim; j++) err += diff_sqr(face1[i][j], face1_[i][j]);
 
-  return sqrt(err / nv);
+  return sqrt(err / (nv * ndim));
 }
 
 static sint calculate_R_and_t(scalar R[3][3], scalar t[3], slong *const gid,
