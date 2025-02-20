@@ -292,7 +292,7 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
 }
 
 /*
- * Lanczos algorithm for symmetric eigenvalue problems.
+ * Power iteration for finding the eigenvectors of a matrix.
  */
 static inline scalar dot(const scalar *a, const scalar *b, sint n) {
   scalar sum = 0.0;
@@ -302,10 +302,6 @@ static inline scalar dot(const scalar *a, const scalar *b, sint n) {
 
 static inline void scale(scalar *a, const scalar *b, scalar c, sint n) {
   for (sint i = 0; i < n; i++) a[i] = b[i] * c;
-}
-
-static inline void add2s1(scalar *a, scalar *b, scalar c, sint n) {
-  for (sint i = 0; i < n; i++) a[i] = c * a[i] + b[i];
 }
 
 static inline void add2s2(scalar *a, scalar *b, scalar c, sint n) {
@@ -344,67 +340,6 @@ static void print_vector(scalar *x, sint n) {
   for (sint i = 0; i < n; i++) printf("%e\n", x[i]);
 }
 
-static sint lanczos(scalar *diag, scalar *upper, scalar rr[3][4], sint ndim,
-                    const scalar A[3][3], scalar tol) {
-  scalar r[3], p[3], w[3];
-  for (sint i = 0; i < ndim; i++) {
-    r[i] = rand() / (scalar)RAND_MAX;
-    p[i] = w[i] = 0.0;
-  }
-
-  scalar rtr = dot(r, r, ndim);
-  scalar rnorm = sqrt(rtr);
-  scalar rtol = rnorm * tol;
-  scalar rni = 1.0 / rnorm;
-
-  scalar rr_[4][3];
-  scale(&rr_[0][0], r, rni, ndim);
-
-  scalar rtz1 = 1, rtz2;
-  scalar pap = 0, pap_old;
-  scalar alpha, beta;
-
-  sint iter;
-  for (iter = 0; iter < ndim; iter++) {
-    rtz2 = rtz1, rtz1 = rtr;
-    beta = rtz1 / rtz2;
-    if (iter == 0) beta = 0.0;
-
-    add2s1(p, r, beta, ndim);
-    ax(w, A, p, ndim);
-
-    pap_old = pap, pap = dot(w, p, ndim);
-
-    alpha = rtz1 / pap;
-    add2s2(r, w, -alpha, ndim);
-
-    rtr = dot(r, r, ndim);
-    rnorm = sqrt(rtr), rni = 1.0 / rnorm;
-    scale(&rr_[iter + 1][0], r, rni, ndim);
-
-    if (iter == 0) {
-      diag[iter] = pap / rtz1;
-    } else {
-      diag[iter] = (beta * beta * pap_old + pap) / rtz1;
-      upper[iter - 1] = -beta * pap_old / sqrt(rtz2 * rtz1);
-    }
-
-    if (rnorm < rtol) {
-      iter++;
-      break;
-    }
-  }
-
-  // Transpose rr
-  for (int i = 0; i < ndim; i++)
-    for (int j = 0; j < iter; j++) rr[i][j] = rr_[j][i];
-
-  return iter;
-}
-
-/*
- * Power iteration.
- */
 static scalar norm2(const scalar *x, sint n) { return sqrt(dot(x, x, n)); }
 
 static scalar normi(const scalar *x, sint n) {
