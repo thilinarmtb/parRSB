@@ -720,7 +720,6 @@ static int test_power_iteration_01(const scalar tol) {
 
 static int test_power_iteration_02(const scalar tol) {
   scalar A[3][3] = {{5, -10, -5}, {2, 14, 2}, {-4, -8, 6}};
-
   scalar evecs[9], evals[3];
   power_iteration(evecs, evals, 3, A, tol);
 
@@ -731,6 +730,27 @@ static int test_power_iteration_02(const scalar tol) {
   err |= (fabs(dot(evecs, evecs, 3) - 1) > tol);
   err |= (fabs(dot(evecs + 3, evecs + 3, 3) - 1) > tol);
   err |= (fabs(dot(evecs + 6, evecs + 6, 3) - 1) > tol);
+  err |= (fabs(dot(evecs, evecs + 3, 3)) > tol);
+  err |= (fabs(dot(evecs, evecs + 6, 3)) > tol);
+  err |= (fabs(dot(evecs + 3, evecs + 6, 3)) > tol);
+
+  return err;
+}
+
+static int test_power_iteration_03(const scalar tol) {
+  scalar A[3][3] = {
+      {1.0, 0.0, 0.0}, {0.0, 5.0e-01, 8.660254e-01}, {0.0, 0.0, 0.0}};
+
+  scalar evals[3], evecs[9];
+  power_iteration(evecs, evals, 3, A, tol);
+
+  sint err = 0;
+  err |= (fabs((evals[0] - 1.0)) > tol);
+  err |= (fabs((evals[1] - 0.5)) > tol);
+  err |= (fabs((evals[2] - 0.0)) > tol);
+  err |= (fabs(dot(evecs + 3, evecs + 3, 3) - 1) > tol);
+  err |= (fabs(dot(evecs + 6, evecs + 6, 3) - 1) > tol);
+  err |= (fabs(dot(evecs, evecs + 3, 3)) > tol);
   err |= (fabs(dot(evecs, evecs + 3, 3)) > tol);
   err |= (fabs(dot(evecs, evecs + 6, 3)) > tol);
   err |= (fabs(dot(evecs + 3, evecs + 6, 3)) > tol);
@@ -752,7 +772,7 @@ static int test_transform_face_00(const scalar tol) {
 
   scalar R_err[9], t_err[3];
   for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
-  for (size_t i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
+  for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
 
   sint err = 0;
   err |= (normi(t_err, 3) > 1e-8);
@@ -777,7 +797,7 @@ static int test_transform_face_01(const scalar tol) {
 
   scalar R_err[9], t_err[3];
   for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
-  for (size_t i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
+  for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
 
   sint err = 0;
   err |= (normi(t_err, 3) > 1e-8);
@@ -802,11 +822,46 @@ static int test_transform_face_02(const scalar tol) {
 
   scalar R_err[9], t_err[3];
   for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
-  for (size_t i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
+  for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
 
   sint err = 0;
   err |= (normi(t_err, 3) > 1e-8);
   err |= (normi(R_err, 9) > 1e-8);
+  return err;
+}
+
+static int test_transform_face_03(const scalar tol) {
+  scalar face0[4][3] = {
+      {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 0.0}};
+
+  // Rotate by 60 degrees around the x-axis and translate by (1, 2, 3).
+  scalar theta = M_PI / 3.0;
+  scalar R_orig[3][3] = {{1.0, 0.0, 0.0},
+                         {0.0, cos(theta), -sin(theta)},
+                         {0.0, sin(theta), cos(theta)}};
+  scalar t_orig[3] = {1.0, 2.0, 3.0};
+
+  scalar face1[4][3];
+  for (sint i = 0; i < 4; i++) {
+    for (sint j = 0; j < 3; j++) {
+      face1[i][j] = 0;
+      for (sint k = 0; k < 3; k++) face1[i][j] += R_orig[j][k] * face0[i][k];
+      face1[i][j] += t_orig[j];
+    }
+  }
+
+  scalar R[3][3], t[3];
+  scalar error = transform_face(R, t, face1, face0, 4, 3, tol);
+
+  sint err = 0;
+
+  scalar errs[12];
+  for (sint i = 0; i < 12; i++) errs[i] = R[0][i] - R_orig[0][i];
+  err |= (normi(errs, 12) > 1e-8);
+
+  for (sint i = 0; i < 3; i++) errs[i] = t[i] - t_orig[i];
+  err |= (normi(errs, 3) > 1e-8);
+
   return err;
 }
 
@@ -832,10 +887,12 @@ int test_automatic_periodic_face_match(slong *const gid, uint nf,
   chk_test(test_power_iteration_00(tol), errs, c);
   chk_test(test_power_iteration_01(tol), errs, c);
   chk_test(test_power_iteration_02(tol), errs, c);
+  chk_test(test_power_iteration_03(tol), errs, c);
 
   chk_test(test_transform_face_00(tol), errs, c);
   chk_test(test_transform_face_01(tol), errs, c);
   chk_test(test_transform_face_02(tol), errs, c);
+  chk_test(test_transform_face_03(tol), errs, c);
 
   comm_free(&c);
   return errs;
