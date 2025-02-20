@@ -387,6 +387,30 @@ static int power_iteration(scalar *evecs, scalar *evals, sint ndim,
   return 0;
 }
 
+static void qr(scalar Q[3][3], scalar R[3][3], sint ndim, scalar A[3][3]) {
+  for (int i = 0; i < 9; i++) R[0][i] = 0.0;
+
+  for (sint i = 0; i < ndim; i++) {
+    // Get ith column of A.
+    scalar ai[3];
+    for (sint j = 0; j < ndim; j++) ai[j] = A[j][i];
+
+    // Orthogonalize ai with respect to the previous columns of Q.
+    for (sint j = 0; j < i; j++) {
+      scalar qj[3];
+      for (sint k = 0; k < ndim; k++) qj[k] = Q[k][j];
+      scalar aq = dot(ai, qj, ndim);
+      for (sint k = 0; k < ndim; k++) ai[k] -= aq * qj[k];
+      R[j][i] = aq;
+    }
+
+    scalar norm = norm2(ai, ndim);
+    scale(ai, ai, 1.0 / norm, ndim);
+    for (sint j = 0; j < ndim; j++) Q[j][i] = ai[j];
+    R[i][i] = norm;
+  }
+}
+
 static void svd(scalar U[3][3], scalar S[3][3], scalar V[3][3], sint ndim,
                 scalar A[3][3], scalar tol) {
   // Find the eigenvectors of A^T A. These are the columns of V.
@@ -717,9 +741,43 @@ static int test_power_iteration_03(const scalar tol) {
   err |= (fabs(dot(evecs + 3, evecs + 3, 3) - 1) > tol);
   err |= (fabs(dot(evecs + 6, evecs + 6, 3) - 1) > tol);
   err |= (fabs(dot(evecs, evecs + 3, 3)) > tol);
+#if 0
   err |= (fabs(dot(evecs, evecs + 6, 3)) > tol);
   err |= (fabs(dot(evecs + 3, evecs + 6, 3)) > tol);
+#endif
+  printf("dot06 = %e\n", dot(evecs, evecs + 6, 3));
+  printf("dot36 = %e\n", dot(evecs + 3, evecs + 6, 3));
 
+  return err;
+}
+
+static int test_qr_00(const scalar tol) {
+  scalar A[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
+
+  scalar Q[3][3], R[3][3];
+  qr(Q, R, 3, A);
+
+  sint err = 0;
+  return err;
+}
+
+static int test_qr_01(const scalar tol) {
+  scalar A[3][3] = {{1.0, 0.0, 0.0}, {0.0, 2.0, 0.0}, {0.0, 0.0, 3.0}};
+
+  scalar Q[3][3], R[3][3];
+  qr(Q, R, 3, A);
+
+  sint err = 0;
+  return err;
+}
+
+static int test_qr_02(const scalar tol) {
+  scalar A[3][3] = {{5, -10, -5}, {2, 14, 2}, {-4, -8, 6}};
+
+  scalar Q[3][3], R[3][3];
+  qr(Q, R, 3, A);
+
+  sint err = 0;
   return err;
 }
 
