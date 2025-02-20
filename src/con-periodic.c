@@ -3,6 +3,12 @@
 #include <math.h>
 #include <time.h>
 
+#define return_if_not_debug()                                                  \
+  {                                                                            \
+    char *dbg = getenv("DEBUG");                                               \
+    if (!dbg || atoi(dbg) == 0) return;                                        \
+  }
+
 //==============================================================================
 // Handle periodic BCs
 //
@@ -313,6 +319,29 @@ static inline void ax(scalar *y, const scalar A[3][3], const scalar *x,
     for (sint j = 0; j < n; j++) sum += A[i][j] * x[j];
     y[i] = sum;
   }
+}
+
+static void print_matrix(scalar A[3][3], sint n) {
+  return_if_not_debug();
+
+  if (n == 3) {
+    printf("%e %e %e\n", A[0][0], A[0][1], A[0][2]);
+    printf("%e %e %e\n", A[1][0], A[1][1], A[1][2]);
+    printf("%e %e %e\n", A[2][0], A[2][1], A[2][2]);
+  }
+
+  if (n == 2) {
+    printf("%e %e\n", A[0][0], A[0][1]);
+    printf("%e %e\n", A[1][0], A[1][1]);
+  }
+}
+
+static void print_vector(scalar *x, sint n) {
+  return_if_not_debug();
+
+  if (n == 3) printf("%e %e %e\n", x[0], x[1], x[2]);
+  if (n == 2) printf("%e %e\n", x[0], x[1]);
+  for (sint i = 0; i < n; i++) printf("%e\n", x[i]);
 }
 
 static sint lanczos(scalar *diag, scalar *upper, scalar rr[3][4], sint ndim,
@@ -720,6 +749,7 @@ static int test_power_iteration_01(const scalar tol) {
 
 static int test_power_iteration_02(const scalar tol) {
   scalar A[3][3] = {{5, -10, -5}, {2, 14, 2}, {-4, -8, 6}};
+
   scalar evecs[9], evals[3];
   power_iteration(evecs, evals, 3, A, tol);
 
@@ -741,16 +771,16 @@ static int test_power_iteration_03(const scalar tol) {
   scalar A[3][3] = {
       {1.0, 0.0, 0.0}, {0.0, 5.0e-01, 8.660254e-01}, {0.0, 0.0, 0.0}};
 
-  scalar evals[3], evecs[9];
+  scalar evecs[9], evals[3];
   power_iteration(evecs, evals, 3, A, tol);
 
   sint err = 0;
   err |= (fabs((evals[0] - 1.0)) > tol);
   err |= (fabs((evals[1] - 0.5)) > tol);
   err |= (fabs((evals[2] - 0.0)) > tol);
+  err |= (fabs(dot(evecs, evecs, 3) - 1) > tol);
   err |= (fabs(dot(evecs + 3, evecs + 3, 3) - 1) > tol);
   err |= (fabs(dot(evecs + 6, evecs + 6, 3) - 1) > tol);
-  err |= (fabs(dot(evecs, evecs + 3, 3)) > tol);
   err |= (fabs(dot(evecs, evecs + 3, 3)) > tol);
   err |= (fabs(dot(evecs, evecs + 6, 3)) > tol);
   err |= (fabs(dot(evecs + 3, evecs + 6, 3)) > tol);
@@ -900,3 +930,4 @@ int test_automatic_periodic_face_match(slong *const gid, uint nf,
 
 #undef distance2D
 #undef distance3D
+#undef return_if_not_debug
