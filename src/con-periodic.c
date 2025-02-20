@@ -291,6 +291,67 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
   return 0;
 }
 
+static scalar normi(scalar *a, sint n) {
+  scalar norm = 0;
+  for (sint i = 0; i < n; i++)
+    if (norm < fabs(a[i])) norm = fabs(a[i]);
+  return norm;
+}
+
+#define FDGESVD GS_FORTRAN_UNPREFIXED(dgesvd, DGESVD)
+
+#if defined(PARRSB_BLAS)
+void FDGESVD(char *jobu, char *jobvt, sint *m, sint *n, scalar *a, sint *lda,
+             scalar *s, scalar *u, sint *ldu, scalar *vt, sint *ldvt,
+             scalar *work, sint *lwork, sint *info);
+#else
+void FDGESVD(char *jobu, char *jobvt, sint *m, sint *n, scalar *a, sint *lda,
+             scalar *s, scalar *u, sint *ldu, scalar *vt, sint *ldvt,
+             scalar *work, sint *lwork, sint *info) {
+  fprintf(stderr, "SVD: Build with BLAS support.\n");
+  exit(EXIT_FAILURE);
+}
+#endif
+
+static void svd(scalar U[3][3], scalar S[3], scalar V[3][3], sint ndim,
+                const scalar A[3][3], scalar tol) {
+  sint lda = 3, ldu = 3, ldv = 3;
+  sint lwrk = 6 * 3, info = 0;
+  scalar wrk[6 * 3];
+  char jobu = 'A', jobvt = 'A';
+
+  scalar A_[3][3];
+  for (int i = 0; i < 3; i++)
+    for (int j = 0; j < 3; j++) A_[j][i] = A[i][j];
+
+  FDGESVD(&jobu, &jobvt, &ndim, &ndim, (scalar *)A_, &lda, (scalar *)S,
+          (scalar *)U, &ldu, (scalar *)V, &ldv, wrk, &lwrk, &info);
+}
+
+#undef FDGESVD
+
+static void print_matrix(const scalar A[3][3], sint ndim) {
+  return_if_not_debug();
+
+  if (ndim == 3) {
+    printf("%e %e %e\n", A[0][0], A[0][1], A[0][2]);
+    printf("%e %e %e\n", A[1][0], A[1][1], A[1][2]);
+    printf("%e %e %e\n", A[2][0], A[2][1], A[2][2]);
+  }
+
+  if (ndim == 2) {
+    printf("%e %e\n", A[0][0], A[0][1]);
+    printf("%e %e\n", A[1][0], A[1][1]);
+  }
+}
+
+static void print_vector(const scalar A[3], sint ndim) {
+  return_if_not_debug();
+
+  if (ndim == 3) printf("%e %e %e\n", A[0], A[1], A[2]);
+  if (ndim == 2) printf("%e %e\n", A[0], A[1]);
+}
+
 // find the translation vector `t` and the rotation matrix `R` that maps the
 // face `face0` to the face `face1`.
 static scalar transform_face(scalar R[3][3], scalar t[3],
@@ -315,14 +376,14 @@ static scalar transform_face(scalar R[3][3], scalar t[3],
   }
 
   // Compute the SVD of the matrix C = USV^T.
-  scalar U[3][3], S[3][3], V[3][3];
+  scalar U[3][3], S[3], V[3][3];
   svd(U, S, V, ndim, C, tol);
 
   // Calculate the rotation matrix R = VU^T.
   for (sint i = 0; i < ndim; i++) {
     for (sint j = 0; j < ndim; j++) {
       R[i][j] = 0.0;
-      for (sint k = 0; k < ndim; k++) R[i][j] += V[i][k] * U[j][k];
+      for (sint k = 0; k < ndim; k++) R[i][j] += V[i][k] * U[k][j];
     }
   }
 
@@ -531,8 +592,8 @@ static int test_transform_face_00(const scalar tol) {
   for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
 
   sint err = 0;
-  err |= (normi(t_err, 3) > 1e-8);
-  err |= (normi(R_err, 9) > 1e-8);
+  err |= (normi(t_err, 3) > tol);
+  err |= (normi(R_err, 9) > tol);
   return err;
 }
 
@@ -556,8 +617,8 @@ static int test_transform_face_01(const scalar tol) {
   for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
 
   sint err = 0;
-  err |= (normi(t_err, 3) > 1e-8);
-  err |= (normi(R_err, 9) > 1e-8);
+  err |= (normi(t_err, 3) > tol);
+  err |= (normi(R_err, 9) > tol);
   return err;
 }
 
@@ -581,8 +642,8 @@ static int test_transform_face_02(const scalar tol) {
   for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
 
   sint err = 0;
-  err |= (normi(t_err, 3) > 1e-8);
-  err |= (normi(R_err, 9) > 1e-8);
+  err |= (normi(t_err, 3) > tol);
+  err |= (normi(R_err, 9) > tol);
   return err;
 }
 
@@ -592,32 +653,31 @@ static int test_transform_face_03(const scalar tol) {
 
   // Rotate by 60 degrees around the x-axis and translate by (1, 2, 3).
   scalar theta = M_PI / 3.0;
-  scalar R_orig[3][3] = {{1.0, 0.0, 0.0},
-                         {0.0, cos(theta), -sin(theta)},
-                         {0.0, sin(theta), cos(theta)}};
-  scalar t_orig[3] = {1.0, 2.0, 3.0};
+  scalar R_expected[3][3] = {{1.0, 0.0, 0.0},
+                             {0.0, cos(theta), -sin(theta)},
+                             {0.0, sin(theta), cos(theta)}};
+  scalar t_expected[3] = {1.0, 2.0, 3.0};
 
   scalar face1[4][3];
   for (sint i = 0; i < 4; i++) {
     for (sint j = 0; j < 3; j++) {
       face1[i][j] = 0;
-      for (sint k = 0; k < 3; k++) face1[i][j] += R_orig[j][k] * face0[i][k];
-      face1[i][j] += t_orig[j];
+      for (sint k = 0; k < 3; k++)
+        face1[i][j] += R_expected[j][k] * face0[i][k];
+      face1[i][j] += t_expected[j];
     }
   }
 
   scalar R[3][3], t[3];
   scalar error = transform_face(R, t, face1, face0, 4, 3, tol);
 
+  scalar R_err[9], t_err[3];
+  for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
+  for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
+
   sint err = 0;
-
-  scalar errs[12];
-  for (sint i = 0; i < 12; i++) errs[i] = R[0][i] - R_orig[0][i];
-  err |= (normi(errs, 12) > 1e-8);
-
-  for (sint i = 0; i < 3; i++) errs[i] = t[i] - t_orig[i];
-  err |= (normi(errs, 3) > 1e-8);
-
+  err |= (normi(t_err, 3) > tol);
+  err |= (normi(R_err, 9) > tol);
   return err;
 }
 

@@ -3,17 +3,12 @@
 #include <stdlib.h>
 #include <time.h>
 
-#if defined(PARRSB_UNDERSCORE)
-#define FNAME(x) TOKEN_PASTE(x, _)
-#else
-#define FNAME(x) x
-#endif
+#include "gslib.h"
 
-#define FDGETRF FNAME(dgetrf)
-#define FDGETRI FNAME(dgetri)
+#define FDGETRF GS_FORTRAN_UNPREFIXED(dgetrf, DGETRF)
+#define FDGETRI GS_FORTRAN_UNPREFIXED(dgetri, DGETRI)
 
 #if defined(PARRSB_BLAS)
-
 void FDGETRF(int *M, int *N, double *A, int *lda, int *IPIV, int *INFO);
 void FDGETRI(int *N, double *A, int *lda, int *IPIV, double *WORK, int *lwork,
              int *INFO);
@@ -34,13 +29,12 @@ void matrix_inverse(int N, double *A) {
   free(ipiv);
   free(work);
 }
-
 #else
-
-void matrix_inverse(int N, double *A) {}
-
-#endif // PARRSB_BLAS
+void matrix_inverse(int N, double *A) {
+  fprintf(stderr, "matrix_inverse: Build with BLAS support.\n");
+  exit(EXIT_FAILURE);
+}
+#endif
 
 #undef FDGETRF
 #undef FDGETRI
-#undef FNAME
