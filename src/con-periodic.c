@@ -3,15 +3,6 @@
 #include <math.h>
 #include <time.h>
 
-#define return_if_not_debug()                                                  \
-  {                                                                            \
-    char *dbg = getenv("DEBUG");                                               \
-    if (!dbg || atoi(dbg) == 0) return;                                        \
-  }
-
-//==============================================================================
-// Handle periodic BCs
-//
 int faces3D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{1, 5, 7, 3}, {2, 4, 8, 6},
                                                    {1, 2, 6, 5}, {3, 7, 8, 4},
                                                    {1, 3, 4, 2}, {5, 6, 8, 7}};
@@ -19,6 +10,15 @@ int faces3D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{1, 5, 7, 3}, {2, 4, 8, 6},
 int faces2D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{3, 1, 0, 0}, {2, 4, 0, 0},
                                                    {1, 2, 0, 0}, {4, 3, 0, 0},
                                                    {0, 0, 0, 0}, {0, 0, 0, 0}};
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+#define return_if_not_debug()                                                  \
+  {                                                                            \
+    char *dbg = getenv("DEBUG");                                               \
+    if (!dbg || atoi(dbg) == 0) return;                                        \
+  }
 
 #define distance2D(a, b) (diff_sqr(a.x[0], b.x[0]) + diff_sqr(a.x[1], b.x[1]))
 #define distance3D(a, b) (distance2D(a, b) + diff_sqr(a.x[2], b.x[2]))
@@ -408,7 +408,7 @@ static scalar transform_face(scalar R[3][3], scalar t[3],
   for (sint i = 0; i < nv; i++)
     for (sint j = 0; j < ndim; j++) err += diff_sqr(face1[i][j], face1_[i][j]);
 
-  return sqrt(err / (nv * ndim));
+  return sqrt(err / nv);
 }
 
 static sint calculate_R_and_t(scalar R[3][3], scalar t[3], slong *const gid,
@@ -429,7 +429,7 @@ static sint calculate_R_and_t(scalar R[3][3], scalar t[3], slong *const gid,
   comm_allreduce(c, gs_int, gs_min, &root, 1, &wrk);
 
   scalar face[4][3];
-  if (c->id != root) goto bcast_face;
+  if (c->id != (uint)root) goto bcast_face;
   for (sint i = 0; i < nv; i++)
     for (sint j = 0; j < ndim; j++) face[i][j] = coord[(index + i) * ndim + j];
 bcast_face:
@@ -472,10 +472,8 @@ bcast_R_and_t:
 // `coordo` should be zero initialized.
 static void transform_points(scalar *coordo, sint nf, const sint *const bid,
                              sint nv, sint ndim, const scalar *const coordi,
-                             const scalar R[4][3]) {
-  const scalar t[3] = {R[3][0], R[3][1], R[3][2]};
-
-  for (size_t i = 0; i < nf; i++) {
+                             const scalar R[3][3], const scalar t[3]) {
+  for (sint i = 0; i < nf; i++) {
     const size_t offset = i * (size_t)nv * (size_t)ndim;
     const scalar *coordi_i = &coordi[offset];
     scalar *coordo_i = &coordo[offset];
@@ -560,7 +558,7 @@ int automatic_periodic_face_match(slong *const gid, uint nf,
               "calculate_R_and_t failed.", &c);
 
   // Transform the points in bid = 1 set using R and t.
-  transform_points(transformed_coord, nf, bid, nv, ndim, coord, R);
+  transform_points(transformed_coord, nf, bid, nv, ndim, coord, R, t);
 
   // Globally number points:
   con_chk_err(
@@ -575,6 +573,9 @@ int automatic_periodic_face_match(slong *const gid, uint nf,
   return 0;
 }
 
+/*
+ * Test transform_face function.
+ */
 static int test_transform_face_00(const scalar tol) {
   scalar face1[4][3], face0[4][3];
   for (sint i = 0; i < 4; i++)
@@ -582,7 +583,7 @@ static int test_transform_face_00(const scalar tol) {
       face1[i][j] = face0[i][j] = rand() / (scalar)RAND_MAX;
 
   scalar R[3][3], t[3];
-  scalar error = transform_face(R, t, face1, face0, 4, 3, tol);
+  transform_face(R, t, face1, face0, 4, 3, tol);
 
   scalar R_expected[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
   scalar t_expected[3] = {0.0, 0.0, 0.0};
@@ -610,7 +611,7 @@ static int test_transform_face_01(const scalar tol) {
   scalar t_expected[3] = {10.0, 10.0, 10.0};
 
   scalar R[3][3], t[3];
-  scalar error = transform_face(R, t, face1, face0, 4, 3, tol);
+  transform_face(R, t, face1, face0, 4, 3, tol);
 
   scalar R_err[9], t_err[3];
   for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
@@ -635,7 +636,7 @@ static int test_transform_face_02(const scalar tol) {
   scalar t_expected[3] = {0.0, 1.0, 2.0};
 
   scalar R[3][3], t[3];
-  scalar error = transform_face(R, t, face1, face0, 4, 3, tol);
+  transform_face(R, t, face1, face0, 4, 3, tol);
 
   scalar R_err[9], t_err[3];
   for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
@@ -669,7 +670,7 @@ static int test_transform_face_03(const scalar tol) {
   }
 
   scalar R[3][3], t[3];
-  scalar error = transform_face(R, t, face1, face0, 4, 3, tol);
+  transform_face(R, t, face1, face0, 4, 3, tol);
 
   scalar R_err[9], t_err[3];
   for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
