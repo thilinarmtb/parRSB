@@ -1,5 +1,5 @@
 CC ?= mpicc
-CFLAGS ?= -Wall -Wextra -Wpedantic -Wno-unused-function -Wno-unused-parameter -std=c99 -g
+CFLAGS ?= -Wno-unused-function -Wno-unused-parameter -std=c99
 LDFLAGS ?=
 DEBUG ?= 0
 UNDERSCORE ?= 1
@@ -14,8 +14,8 @@ ifeq ($(GSLIBPATH),)
   $(error Specify GSLIBPATH=<path to gslib build>)
 endif
 
-MKFILEPATH := $(abspath $(lastword $(MAKEFILE_LIST)))
-SRCROOT := $(realpath $(patsubst %/,%,$(dir $(MKFILEPATH))))
+MKFILEPATH = $(abspath $(lastword $(MAKEFILE_LIST)))
+SRCROOT = $(realpath $(patsubst %/,%,$(dir $(MKFILEPATH))))
 SRCDIR = $(SRCROOT)/src
 EXAMPLEDIR = $(SRCROOT)/examples
 TESTDIR = $(SRCROOT)/tests
@@ -27,14 +27,17 @@ else
 	INSTALLROOT = $(SRCROOT)/install
 endif
 
-SRC = $(wildcard $(SRCDIR)/*.c)
-SRCOBJS = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%.o,$(SRC))
-EXAMPLES = $(wildcard $(EXAMPLEDIR)/*.c)
-EXAMPLEBINS = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%,$(EXAMPLES))
-TESTS = $(wildcard $(TESTDIR)/*.c)
-TESTBINS = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%,$(TESTS))
+ifeq ($(origin CC),default)
+	CC = mpicc
+endif
 
-LIB = $(BUILDROOT)/lib/libparRSB.a
+SRC.c = $(wildcard $(SRCDIR)/*.c)
+SRC.o = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%.o,$(SRC.c))
+EXAMPLES.c = $(wildcard $(EXAMPLEDIR)/*.c)
+EXAMPLE.out = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%,$(EXAMPLES.c))
+TESTS.c = $(wildcard $(TESTDIR)/*.c)
+TEST.out = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%,$(TESTS.c))
+LIB.a = $(BUILDROOT)/lib/libparRSB.a
 
 ifneq ($(DEBUG),0)
   PP += -DPARRSB_DEBUG
@@ -61,28 +64,28 @@ ifneq ($(BLAS),0)
   LDFLAGS += $(BLASFLAGS)
 endif
 
-INCFLAGS = -I$(SRCDIR) -I$(GSLIBPATH)/include
-CCCMD = $(CC) $(CFLAGS) $(INCFLAGS) $(PP)
+IFLAGS = -I$(SRCDIR) -I$(GSLIBPATH)/include
+CCCMD = $(CC) $(CFLAGS) $(IFLAGS) $(PP)
 LDFLAGS += -lm
 
 .PHONY: all lib install examples tests format clean
 
 all: lib install examples tests
 
-lib: $(SRCOBJS)
+lib: $(SRC.o)
 	@mkdir -p $(BUILDROOT)/lib
-	@$(AR) cr $(LIB) $?
-	@ranlib $(LIB)
+	@$(AR) cr $(LIB.a) $?
+	@ranlib $(LIB.a)
 
 install: lib
 	@mkdir -p $(INSTALLROOT)/lib 2>/dev/null
-	@cp -v $(LIB) $(INSTALLROOT)/lib 2>/dev/null
+	@cp -v $(LIB.a) $(INSTALLROOT)/lib 2>/dev/null
 	@mkdir -p $(INSTALLROOT)/include 2>/dev/null
 	@cp $(SRCDIR)/*.h $(INSTALLROOT)/include 2>/dev/null
 
-examples: lib install $(EXAMPLEBINS)
+examples: lib install $(EXAMPLE.out)
 
-tests: lib install $(TESTBINS)
+tests: lib install $(TEST.out)
 
 format:
 	find . -iname *.h -o -iname *.c | xargs clang-format -i

@@ -47,9 +47,6 @@ struct rsb_element {
   slong vertices[MAXNV];
 };
 
-int tqli(scalar *eVectors, scalar *eValues, sint n, scalar *diagonal,
-         scalar *upper, int id);
-
 void rsb(struct array *elements, int nv, const parrsb_options *const options,
          const struct comm *comms, buffer *bfr);
 

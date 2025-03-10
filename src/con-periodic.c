@@ -11,7 +11,7 @@ int faces2D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{3, 1, 0, 0}, {2, 4, 0, 0},
                                                    {1, 2, 0, 0}, {4, 3, 0, 0},
                                                    {0, 0, 0, 0}, {0, 0, 0, 0}};
 #ifndef M_PI
-#define M_PI 3.14159265358979323846
+#define M_PI (3.14159265358979323846)
 #endif
 
 #define return_if_not_debug()                                                  \
@@ -528,10 +528,18 @@ static void update_global_ids(slong *const gid, sint nf, sint nv,
   gs_free(gsh);
 }
 
-int automatic_periodic_face_match(slong *const gid, uint nf,
-                                  const sint *const bid, sint nv, sint ndim,
-                                  const scalar *const coord, scalar tol,
-                                  MPI_Comm comm) {
+//==============================================================================
+// int nf; // Number of faces, [input]
+// int nv; // number of vertices for a face, [input]
+// int *bid; // Periodic BC id (bid[i] is either 0 or 1), size = nf, [input]
+// int ndim; // dimension of the problem, [input]
+// double *coord; // face coordinates, size = nf * nv * ndim, [input]
+// double tol; // Tolerance similar to gencon, [input]
+// slong *gid; // global id of each face vertex, size = nf * nv, [output]
+int parrsb_match_periodic_faces(slong *const gid, uint nf,
+                                const sint *const bid, sint nv, sint ndim,
+                                const scalar *const coord, scalar tol,
+                                MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 
@@ -573,9 +581,6 @@ int automatic_periodic_face_match(slong *const gid, uint nf,
   return 0;
 }
 
-/*
- * Test transform_face function.
- */
 static int test_transform_face_00(const scalar tol) {
   scalar face1[4][3], face0[4][3];
   for (sint i = 0; i < 4; i++)
@@ -693,10 +698,7 @@ static int test_transform_face_03(const scalar tol) {
     }                                                                          \
   }
 
-int test_automatic_periodic_face_match(slong *const gid, uint nf,
-                                       const sint *const bid, sint nv,
-                                       sint ndim, const scalar *const coord,
-                                       scalar tol, MPI_Comm comm) {
+int test_transform_face(scalar tol, MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 

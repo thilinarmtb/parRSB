@@ -177,12 +177,17 @@ static int transfer_boundary_faces(Mesh mesh, struct comm *c) {
 }
 
 //==============================================================================
-// C interface to find_conn
-//
 // Input:
-//   nelt: Number of elements, nv: Number of vertices in an element
+//   nelt: Number of elements
+//   ndim: The dimension of the problem
+//   nv: Number of vertices in an element
+//     nv = 8 if ndim == 3 (Hex)
+//     nv = 4 if ndim = 2 (Quad)
+//   pinfo: Periodic BC information
+//   npinfo: Number of periodic BCs
+//   tol: Tolerance similar to gencon
 //   coord [nelt, nv, ndim]: Coordinates of elements vertices in preprocessor
-//     ordering, nv = 8 if ndim == 3 (Hex) or nv = 4 if ndim = 2 (Quad).
+//     ordering.
 // Output:
 //   vtx[nelt, nv]: Global numbering of vertices of elements
 int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
@@ -278,9 +283,7 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
   return 0;
 }
 
-//=============================================================================
 // Fortran interface
-//
 void fparrsb_conn_mesh(long long *vtx, double *coord, int *nelt, int *ndim,
                        long long *pinfo, int *npinfo, double *tol,
                        MPI_Fint *fcomm, int *err, int *verbose) {
