@@ -170,4 +170,11 @@ int face_check(Mesh mesh, struct comm *c, buffer *bfr);
  */
 int test_transform_face(scalar tol, MPI_Comm comm);
 
+/*
+ * Match periodic faces automatically.
+ */
+int parrsb_match_periodic_faces(slong *const gid, uint nf,
+                                const sint *const bid, sint nv, sint ndim,
+                                const scalar *const coord, scalar tol,
+                                MPI_Comm comm);
 #endif // _CON_IMPL_H_

@@ -352,6 +352,14 @@ static void print_vector(const scalar A[3], sint ndim) {
   if (ndim == 2) printf("%e %e\n", A[0], A[1]);
 }
 
+static scalar determinant(const scalar R[3][3]) {
+  scalar det = 0;
+  det += R[0][0] * (R[1][1] * R[2][2] - R[2][1] * R[1][2]);
+  det -= R[0][1] * (R[1][0] * R[2][2] - R[2][0] * R[1][2]);
+  det += R[0][2] * (R[1][0] * R[2][1] - R[2][0] * R[1][1]);
+  return det;
+}
+
 // find the translation vector `t` and the rotation matrix `R` that maps the
 // face `face0` to the face `face1`.
 static scalar transform_face(scalar R[3][3], scalar t[3],
@@ -387,6 +395,26 @@ static scalar transform_face(scalar R[3][3], scalar t[3],
     }
   }
 
+  // Check for reflection.
+  scalar det = determinant(R);
+  if (det < 0) {
+    scalar S[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, -1}};
+    scalar T[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+    for (sint i = 0; i < ndim; i++) {
+      for (sint j = 0; j < ndim; j++) {
+        T[i][j] = 0;
+        for (sint k = 0; k < ndim; k++) T[i][j] += S[i][k] * U[k][j];
+      }
+    }
+
+    for (sint i = 0; i < ndim; i++) {
+      for (sint j = 0; j < ndim; j++) {
+        R[i][j] = 0.0;
+        for (sint k = 0; k < ndim; k++) R[i][j] += V[i][k] * T[k][j];
+      }
+    }
+  }
+
   // Calculate the translation vector t (fix this).
   for (sint i = 0; i < ndim; i++) {
     t[i] = t1[i];
@@ -411,9 +439,9 @@ static scalar transform_face(scalar R[3][3], scalar t[3],
   return sqrt(err / nv);
 }
 
-static sint calculate_R_and_t(scalar R[3][3], scalar t[3], slong *const gid,
-                              uint nf, const sint *const bid, sint nv,
-                              sint ndim, const scalar *const coord, scalar tol,
+static sint calculate_R_and_t(scalar R[3][3], scalar t[3], uint nf,
+                              const sint *const bid, sint nv, sint ndim,
+                              const scalar *const coord, scalar tol,
                               struct comm *c) {
   srand(time(0));
 
@@ -562,7 +590,7 @@ int parrsb_match_periodic_faces(slong *const gid, uint nf,
   // calculate the rotation matrix and translation vector in case there is
   // a match.
   scalar R[3][3], t[3];
-  con_chk_err(calculate_R_and_t(R, t, gid, nf, bid, nv, ndim, coord, tol, &c),
+  con_chk_err(calculate_R_and_t(R, t, nf, bid, nv, ndim, coord, tol, &c),
               "calculate_R_and_t failed.", &c);
 
   // Transform the points in bid = 1 set using R and t.
@@ -687,26 +715,53 @@ static int test_transform_face_03(const scalar tol) {
   return err;
 }
 
-#define chk_test(call, count, c)                                               \
-  {                                                                            \
-    sint err = (call);                                                         \
-    sint wrk;                                                                  \
-    comm_allreduce(&(c), gs_int, gs_max, &err, 1, &wrk);                       \
-    if (err) {                                                                 \
-      if ((c).id == 0) fprintf(stderr, #call " failed.\n");                    \
-      (count)++;                                                               \
-    }                                                                          \
+static int test_transform_face_04(const scalar tol) {
+  scalar face0[4][3] = {
+      {0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, {0.0, 1.0, 1.0}, {0.0, 1.0, 0.0}};
+  scalar face1[4][3] = {
+      {1.0, 0.0, 0.0}, {1.0, 1.0, 0.0}, {1.0, 1.0, 1.0}, {1.0, 0.0, 1.0}};
+
+  scalar R[3][3], t[3];
+  transform_face(R, t, face1, face0, 4, 3, tol);
+
+  scalar face2[4][3];
+  for (sint i = 0; i < 4; i++) {
+    for (sint j = 0; j < 3; j++) {
+      face2[i][j] = 0;
+      for (sint k = 0; k < 3; k++) face2[i][j] += R[j][k] * face0[i][k];
+      face2[i][j] += t[j];
+    }
   }
+
+  scalar f_err[12];
+  for (sint i = 0; i < 12; i++) f_err[i] = face2[0][i] - face1[0][i];
+
+  return (normi(f_err, 12) > tol);
+}
 
 int test_transform_face(scalar tol, MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
+
+#define chk_test(call, count, c)                                               \
+  {                                                                            \
+    sint _err = (call);                                                        \
+    sint _wrk;                                                                 \
+    comm_allreduce(&(c), gs_int, gs_max, &_err, 1, &_wrk);                     \
+    if (_err) {                                                                \
+      if ((c).id == 0) fprintf(stderr, #call " failed.\n");                    \
+      (count)++;                                                               \
+    }                                                                          \
+  }
 
   sint errs = 0;
   chk_test(test_transform_face_00(tol), errs, c);
   chk_test(test_transform_face_01(tol), errs, c);
   chk_test(test_transform_face_02(tol), errs, c);
   chk_test(test_transform_face_03(tol), errs, c);
+  chk_test(test_transform_face_04(tol), errs, c);
+
+#undef chk_test
 
   comm_free(&c);
   return errs;
