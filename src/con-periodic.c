@@ -528,33 +528,17 @@ static int number_points(slong *const gid, sint nf, sint nv, sint ndim,
   struct mesh_t *mesh = mesh_init(nf, nv, ndim, nnbrs, coord, 0, 0, c);
 
   find_min_neighbor_distance(mesh);
-
   find_unique_vertices(mesh, c, tol, 0, bfr);
   set_global_id(mesh, c);
   send_back(mesh, c, bfr);
-
-  sint err = 0;
-  con_chk_err(face_check(mesh, c, bfr), err, c);
-  if (err) goto cleanup;
 
   Point ptr = mesh->elements.ptr;
   size_t size = (size_t)nf * (size_t)nv;
   for (size_t i = 0; i < size; i++) gid[i] = ptr[i].globalId + 1;
 
-cleanup:
+
   mesh_free(mesh);
-  return err;
-}
-
-static void update_global_ids(slong *const gid, sint nf, sint nv,
-                              const slong *const new_gid,
-                              const struct comm *const c, buffer *bfr) {
-  const size_t size = (size_t)nf * nv;
-  struct gs_data *gsh = gs_setup(new_gid, size, c, 0, gs_pairwise, 0);
-
-  gs(gid, gs_long, gs_min, 0, gsh, bfr);
-
-  gs_free(gsh);
+  return 0;
 }
 
 //==============================================================================
@@ -573,8 +557,6 @@ int parrsb_match_periodic_faces(slong *const gid, uint nf,
   comm_init(&c, comm);
 
   const size_t ngids = (size_t)nf * (size_t)nv;
-  slong *new_gid = tcalloc(slong, ngids);
-
   const size_t ncoords = (size_t)ngids * (size_t)ndim;
   scalar *new_coord = tcalloc(scalar, ncoords);
 
@@ -594,16 +576,14 @@ int parrsb_match_periodic_faces(slong *const gid, uint nf,
   transform_points(new_coord, nf, bid, nv, ndim, coord, R, t);
 
   // Globally number points:
-  con_chk_err(number_points(new_gid, nf, nv, ndim, new_coord, tol, &c, &bfr),
+  con_chk_err(number_points(gid, nf, nv, ndim, new_coord, tol, &c, &bfr),
               err, &c);
   if (err) goto cleanup;
 
-  // Update the global ids of the original points.
-  update_global_ids(gid, nf, nv, new_gid, &c, &bfr);
-
 cleanup:
-  free(new_coord), free(new_gid);
+  free(new_coord);
   buffer_free(&bfr), comm_free(&c);
+
   return err;
 }
 
