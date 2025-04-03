@@ -5,6 +5,8 @@
 static int PRE_TO_SYM_VERTEX[GC_MAX_VERTICES] = {0, 1, 3, 2, 4, 5, 7, 6};
 static int PRE_TO_SYM_FACE[GC_MAX_FACES] = {2, 1, 3, 0, 4, 5};
 
+#define tfree(ptr) free((ptr)), (ptr) = 0
+
 int main(int argc, char *argv[]) {
   scalar *pre_coord = NULL, *sym_coord = NULL, *face_coord = NULL;
   slong *bcs = NULL, *gid = NULL;
@@ -52,7 +54,7 @@ int main(int argc, char *argv[]) {
         sym_coord[offset + sym_v * ndim + d] = pre_coord[offset + v * ndim + d];
     }
   }
-  free(pre_coord);
+  tfree(pre_coord);
 
   slong out[2][1], wrk[2][1], in = nelt;
   comm_scan(out, &c, gs_long, gs_add, &in, 1, wrk);
@@ -75,7 +77,7 @@ int main(int argc, char *argv[]) {
     }
     offset_ += nvf * ndim;
   }
-  free(bcs), free(sym_coord);
+  tfree(bcs), tfree(sym_coord);
 
   gid = calloc(nf * nv, sizeof(slong));
 match:
@@ -83,8 +85,8 @@ match:
                               c.c);
 
 cleanup:
-  free(gid), free(bid), free(bcs);
-  free(pre_coord), free(sym_coord), free(face_coord);
+  tfree(gid), tfree(bid), tfree(bcs);
+  tfree(pre_coord), tfree(sym_coord), tfree(face_coord);
   parrsb_cmd_opts_free(params);
   comm_free(&c);
   MPI_Finalize();

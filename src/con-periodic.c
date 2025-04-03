@@ -415,7 +415,7 @@ static scalar transform_face(scalar R[3][3], scalar t[3],
     }
   }
 
-  // Calculate the translation vector t (fix this).
+  // Calculate the translation vector t.
   for (sint i = 0; i < ndim; i++) {
     t[i] = t1[i];
     for (sint j = 0; j < ndim; j++) t[i] -= R[i][j] * t0[j];
@@ -458,30 +458,27 @@ static sint calculate_R_and_t(scalar R[3][3], scalar t[3], uint nf,
 
   scalar face[4][3];
   if (c->id != (uint)root) goto bcast_face;
-  for (sint i = 0; i < nv; i++)
-    for (sint j = 0; j < ndim; j++) face[i][j] = coord[(index + i) * ndim + j];
+  for (uint i = 0; i < nv; i++)
+    for (uint j = 0; j < ndim; j++)
+      face[i][j] = coord[index * nv * ndim + i * ndim + j];
+
 bcast_face:
   comm_bcast(c, face, nv * ndim * sizeof(scalar), root);
 
-  scalar error = DBL_MAX;
-  index = UINT_MAX;
+  scalar err = DBL_MAX, err_i;
   for (uint i = 0; i < nf; i++) {
     if (bid[i] == 0) continue;
-    scalar error_i = transform_face(
+    err_i = transform_face(
         R, t, face, (const scalar(*)[3])(&coord[i * nv * ndim]), nv, ndim, tol);
-    if (error_i < error) {
-      error = error_i;
+    if (err_i < err) {
+      err = err_i;
       index = i;
     }
   }
 
-  scalar global_error = error;
-  comm_allreduce(c, gs_scalar, gs_min, &global_error, 1, &wrk);
-
-  if (global_error > tol) return 1;
-
+  // FIXME: Select a correct value for epsilon.
   const scalar eps = 1e-15;
-  if (fabs(global_error - error) < eps)
+  if (fabs(err) < eps)
     root = c->id;
   else
     root = INT_MAX;
@@ -497,25 +494,27 @@ bcast_R_and_t:
   return 0;
 }
 
-// `coordo` should be zero initialized.
-static void transform_points(scalar *coordo, sint nf, const sint *const bid,
-                             sint nv, sint ndim, const scalar *const coordi,
+static void transform_points(scalar *coordo, uint nf, const sint *const bid,
+                             uint nv, uint ndim, const scalar *const coordi,
                              const scalar R[3][3], const scalar t[3]) {
-  for (sint i = 0; i < nf; i++) {
-    const size_t offset = i * (size_t)nv * (size_t)ndim;
-    const scalar *coordi_i = &coordi[offset];
-    scalar *coordo_i = &coordo[offset];
+  for (uint i = 0; i < nf; i++) {
+    const size_t offset = (size_t)i * (size_t)nv * (size_t)ndim;
+    const scalar *coordi_ = &coordi[offset];
+    scalar *coordo_ = &coordo[offset];
 
     if (bid[i] == 0) {
-      for (int j = 0; j < nv; j++) {
-        for (int k = 0; k < ndim; k++)
-          coordo_i[j * nv + k] = coordi_i[j * nv + k];
+      for (uint j = 0; j < nv; j++) {
+        for (uint k = 0; k < ndim; k++)
+          coordo_[j * ndim + k] = coordi_[j * ndim + k];
       }
-    } else if (bid[i] == 1) {
-      for (int j = 0; j < nv; j++) {
-        for (int k = 0; k < ndim; k++) {
-          for (int l = 0; l < ndim; l++)
-            coordo_i[j * nv + l] += R[k][l] * coordi_i[j * nv + l] + t[l];
+    }
+    if (bid[i] == 1) {
+      for (uint j = 0; j < nv; j++) {
+        for (uint k = 0; k < ndim; k++) {
+          coordo_[j * ndim + k] = 0;
+          for (uint l = 0; l < ndim; l++)
+            coordo_[j * ndim + k] += R[k][l] * coordi_[j * ndim + l];
+          coordo_[j * ndim + k] += t[k];
         }
       }
     }
@@ -537,8 +536,11 @@ static int number_points(slong *const gid, sint nf, sint nv, sint ndim,
 #define cleanup_before_return()                                                \
   { mesh_free(mesh); }
 
-  con_chk_err(element_check(mesh, c, bfr), "element check failed.", c);
   con_chk_err(face_check(mesh, c, bfr), "face_check failed.", c);
+
+  Point ptr = mesh->elements.ptr;
+  size_t size = (size_t)nf * (size_t)nv;
+  for (size_t i = 0; i < size; i++) gid[i] = ptr[i].globalId + 1;
 
   cleanup_before_return();
 #undef cleanup_before_return
@@ -574,15 +576,15 @@ int parrsb_match_periodic_faces(slong *const gid, uint nf,
   const size_t ngids = (size_t)nf * (size_t)nv;
   slong *new_gid = tcalloc(slong, ngids);
 
-  const size_t ncoords = ngids * (size_t)ndim;
-  scalar *transformed_coord = tcalloc(scalar, ncoords);
+  const size_t ncoords = (size_t)ngids * (size_t)ndim;
+  scalar *new_coord = tcalloc(scalar, ncoords);
 
   buffer bfr;
   buffer_init(&bfr, 1024);
 
 #define cleanup_before_return()                                                \
   {                                                                            \
-    free(transformed_coord), free(new_gid);                                    \
+    free(new_coord), free(new_gid);                                            \
     buffer_free(&bfr), comm_free(&c);                                          \
   }
 
@@ -594,12 +596,11 @@ int parrsb_match_periodic_faces(slong *const gid, uint nf,
               "calculate_R_and_t failed.", &c);
 
   // Transform the points in bid = 1 set using R and t.
-  transform_points(transformed_coord, nf, bid, nv, ndim, coord, R, t);
+  transform_points(new_coord, nf, bid, nv, ndim, coord, R, t);
 
   // Globally number points:
-  con_chk_err(
-      number_points(new_gid, nf, nv, ndim, transformed_coord, tol, &c, &bfr),
-      "number_points failed.", &c);
+  con_chk_err(number_points(new_gid, nf, nv, ndim, new_coord, tol, &c, &bfr),
+              "number_points failed.", &c);
 
   // Update the global ids of the original points.
   update_global_ids(gid, nf, nv, new_gid, &c, &bfr);
