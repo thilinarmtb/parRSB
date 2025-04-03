@@ -533,18 +533,17 @@ static int number_points(slong *const gid, sint nf, sint nv, sint ndim,
   set_global_id(mesh, c);
   send_back(mesh, c, bfr);
 
-#define cleanup_before_return()                                                \
-  { mesh_free(mesh); }
-
-  con_chk_err(face_check(mesh, c, bfr), "face_check failed.", c);
+  sint err = 0;
+  con_chk_err(face_check(mesh, c, bfr), err, c);
+  if (err) goto cleanup;
 
   Point ptr = mesh->elements.ptr;
   size_t size = (size_t)nf * (size_t)nv;
   for (size_t i = 0; i < size; i++) gid[i] = ptr[i].globalId + 1;
 
-  cleanup_before_return();
-#undef cleanup_before_return
-  return 0;
+cleanup:
+  mesh_free(mesh);
+  return err;
 }
 
 static void update_global_ids(slong *const gid, sint nf, sint nv,
@@ -582,32 +581,30 @@ int parrsb_match_periodic_faces(slong *const gid, uint nf,
   buffer bfr;
   buffer_init(&bfr, 1024);
 
-#define cleanup_before_return()                                                \
-  {                                                                            \
-    free(new_coord), free(new_gid);                                            \
-    buffer_free(&bfr), comm_free(&c);                                          \
-  }
-
   // Match one periodic face from bid = 0 with all the faces of bid = 1 and
   // calculate the rotation matrix and translation vector in case there is
   // a match.
   scalar R[3][3], t[3];
-  con_chk_err(calculate_R_and_t(R, t, nf, bid, nv, ndim, coord, tol, &c),
-              "calculate_R_and_t failed.", &c);
+  sint err = 0;
+  con_chk_err(calculate_R_and_t(R, t, nf, bid, nv, ndim, coord, tol, &c), err,
+              &c);
+  if (err) goto cleanup;
 
   // Transform the points in bid = 1 set using R and t.
   transform_points(new_coord, nf, bid, nv, ndim, coord, R, t);
 
   // Globally number points:
   con_chk_err(number_points(new_gid, nf, nv, ndim, new_coord, tol, &c, &bfr),
-              "number_points failed.", &c);
+              err, &c);
+  if (err) goto cleanup;
 
   // Update the global ids of the original points.
   update_global_ids(gid, nf, nv, new_gid, &c, &bfr);
 
-  cleanup_before_return();
-#undef cleanup_before_return
-  return 0;
+cleanup:
+  free(new_coord), free(new_gid);
+  buffer_free(&bfr), comm_free(&c);
+  return err;
 }
 
 static int test_transform_face_00(const scalar tol) {

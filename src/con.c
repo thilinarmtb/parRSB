@@ -215,9 +215,6 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
   unsigned nnbrs = ndim;
   Mesh mesh = mesh_init(nelt, nv, ndim, nnbrs, coord, pinfo, npinfo, &c);
 
-#define cleanup_before_return()                                                \
-  { buffer_free(&bfr), mesh_free(mesh), comm_free(&c); }
-
   parrsb_print(&c, verbose - 1, "\t%s ...", name[0]);
   parrsb_barrier(&c), t = comm_time();
   transfer_boundary_faces(mesh, &c);
@@ -241,12 +238,21 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
 
   parrsb_print(&c, verbose - 1, "\t%s ...", name[4]);
   parrsb_barrier(&c), t = comm_time();
-  con_chk_err(element_check(mesh, &c, &bfr), "element_check failed.", &c);
+  sint err = 0;
+  con_chk_err(element_check(mesh, &c, &bfr), err, &c);
+  if (err) {
+    if (c.id == 0) fprintf(stderr, "parCon: element check failed !\n");
+    goto cleanup;
+  }
   duration[4] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...", name[5]);
   parrsb_barrier(&c), t = comm_time();
-  con_chk_err(face_check(mesh, &c, &bfr), "face_check failed.", &c);
+  con_chk_err(face_check(mesh, &c, &bfr), err, &c);
+  if (err) {
+    if (c.id == 0) fprintf(stderr, "parCon: face check failed !\n");
+    goto cleanup;
+  }
   duration[5] = comm_time() - t;
 
   parrsb_print(&c, verbose - 1, "\t%s ...", name[6]);
@@ -278,9 +284,10 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
   tall = comm_time() - tall;
   parrsb_print(&c, verbose, "parCon (tol = %e) finished in %g s", tol, tall);
 
-  cleanup_before_return();
-#undef cleanup_before_return
-  return 0;
+cleanup:
+  buffer_free(&bfr), mesh_free(mesh), comm_free(&c);
+
+  return err;
 }
 
 // Fortran interface
