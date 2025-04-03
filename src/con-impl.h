@@ -154,13 +154,6 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr);
   }
 
 /*
- * Connectivity sanity check functions.
- */
-int element_check(Mesh mesh, struct comm *c, buffer *bfr);
-
-int face_check(Mesh mesh, struct comm *c, buffer *bfr);
-
-/*
  * Tests for various connectivity functions.
  */
 int test_transform_face(scalar tol, MPI_Comm comm);
