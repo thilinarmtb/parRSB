@@ -1,7 +1,7 @@
 //=============================================================================
 // Generate partitions (.ma2) from Nek5000's mesh (.re2) file.
 //
-#include "parRSB.h"
+#include "parrsb.h"
 
 int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);

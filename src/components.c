@@ -1,5 +1,5 @@
 #include "metrics.h"
-#include "parrsb-impl.h"
+#include "parrsb_impl.h"
 #include "sort.h"
 
 // Find the number of disconnected components

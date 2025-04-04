@@ -1,5 +1,5 @@
 #include "metrics.h"
-#include "parrsb-impl.h"
+#include "parrsb_impl.h"
 #include "sort.h"
 
 extern int fiedler(struct array *elements, int nv,

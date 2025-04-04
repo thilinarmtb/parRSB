@@ -6,7 +6,7 @@
 #include <float.h>
 #include <stdlib.h>
 
-#include "parRSB.h"
+#include "parrsb.h"
 
 #ifdef scalar
 #undef scalar

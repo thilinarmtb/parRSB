@@ -1,6 +1,6 @@
 #include "metrics.h"
 #include "multigrid.h"
-#include "parrsb-impl.h"
+#include "parrsb_impl.h"
 #include "sort.h"
 
 #include <math.h>

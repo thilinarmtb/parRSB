@@ -1,6 +1,6 @@
 #include "mat.h"
 #include "multigrid.h"
-#include "parrsb-impl.h"
+#include "parrsb_impl.h"
 
 struct laplacian {
   int type, nv;
