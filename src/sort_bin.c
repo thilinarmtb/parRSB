@@ -1,4 +1,4 @@
-#include "sort-impl.h"
+#include "sort_impl.h"
 
 static uint *set_proc_from_val(struct sort *s, uint field,
                                const struct comm *c) {

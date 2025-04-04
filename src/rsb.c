@@ -2,9 +2,8 @@
 #include "parrsb_impl.h"
 #include "sort.h"
 
-extern int fiedler(struct array *elements, int nv,
-                   const parrsb_options *const options, struct comm *gsc,
-                   buffer *buf, int verbose);
+extern int fiedler(struct array *elements, int nv, const parrsb_options options,
+                   struct comm *gsc, buffer *buf, int verbose);
 
 static void test_component_versions(struct array *elements, struct comm *lc,
                                     unsigned nv, unsigned lvl, buffer *bfr) {
@@ -22,8 +21,8 @@ static void test_component_versions(struct array *elements, struct comm *lc,
   int color = (lc->id < lc->np / 2);
   comm_split(lc, color, lc->id, &tc0);
 
-  sint nc1 = get_components(NULL, elements, nv, &tc0, bfr, 0);
-  sint nc2 = get_components_v2(NULL, elements, nv, &tc0, bfr, 0);
+  sint nc1 = get_components(NULL, elements, nv, &tc0, bfr);
+  sint nc2 = get_components_v2(NULL, elements, nv, &tc0, bfr);
   if (nc1 != nc2) {
     if (tc0.id == 0) {
       fprintf(stderr, "Error: Level = %u SS BFS != MS BFS: %d %d\n", lvl, nc1,
@@ -59,7 +58,7 @@ static void check_disconnected_components(const int i, const struct comm *gc,
 }
 
 static void check_rsb_partition(const struct comm *gc,
-                                const parrsb_options *const opts) {
+                                const parrsb_options opts) {
   int max_levels = log2ll(gc->np);
   int miter = opts->rsb_max_iter, mpass = opts->rsb_max_passes;
 
@@ -259,7 +258,7 @@ static uint get_level_cuts(const uint level, const uint levels,
   return cuts;
 }
 
-void rsb(struct array *elements, int nv, const parrsb_options *const options,
+void rsb(struct array *elements, int nv, const parrsb_options options,
          const struct comm *comms, buffer *bfr) {
   const unsigned levels = options->levels;
   const sint verbose = options->verbose_level;
@@ -322,7 +321,7 @@ void rsb(struct array *elements, int nv, const parrsb_options *const options,
                    "\trsb: level = %d, cut = %d, Components ...", level + 1,
                    cut + 1);
       metric_tic(&lc, RSB_COMPONENTS);
-      uint ncomp = get_components_v2(NULL, elements, nv, &tc, bfr, verbose - 2);
+      uint ncomp = get_components_v2(NULL, elements, nv, &tc, bfr);
       metric_acc(RSB_COMPONENTS_NCOMP, ncomp);
       metric_toc(&lc, RSB_COMPONENTS);
 

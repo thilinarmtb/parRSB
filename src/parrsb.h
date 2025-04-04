@@ -15,36 +15,25 @@
 extern "C" {
 #endif
 
-//==============================================================================
-// Partitioning
-//
-typedef struct {
-  // General options
-  int partitioner; // Partition algo: 0 - RSB, 1 - RCB, 2 - RIB (Default: 0)
-  int tagged;      // Tagged partitioning: 0 - No, 1 - Yes (Default: 0)
-  int levels;      // Number of levels: 1, or 2 (Default: 2)
-  int find_disconnected_comps; // Find number of components: 0 - No, 1 - Yes
-                               // (Default: 1)
-  int repair; // Repair disconnected components: 0 - No, 1 - Yes (Default: 0)
-  int verbose_level; // Verbose level: 0, 1, 2, .. etc (Default: 1)
-  int profile_level; // Profile level: 0, 1, 2, .. etc (Default: 0)
-  // RSB common (Lanczos and MG) options
-  int rsb_algo; // RSB algo: 0 - Lanczos, 1 - MG (Default: 0)
-  int rsb_pre;  // RSB pre-partition : 0 - None, 1 - RCB , 2 - RIB (Default: 1)
-  int rsb_max_iter;   // Max iterations in Lanczos / MG (Default: 50)
-  int rsb_max_passes; // Max Lanczos restarts / Inverse iterations (Default: 50)
-  double rsb_tol;     // Tolerance for Lanczos or RQI (Default: 1e-5)
-  int rsb_dump_stats; // Dump partition statistics to a text file.
-  // RSB MG specific options
-  int rsb_mg_grammian; // MG Grammian: 0 or 1 (Default: 0)
-  int rsb_mg_factor;   // MG Coarsening factor (Default: 2, should be > 1)
-} parrsb_options;
+/*
+ * parRSB options:
+ */
+typedef struct parrsb_options *parrsb_options;
 
-extern parrsb_options parrsb_default_options;
+int parrsb_options_get_default(parrsb_options *options);
 
+int parrsb_options_copy(parrsb_options *dest, const parrsb_options src);
+
+void parrsb_options_print(const parrsb_options options);
+
+int parrsb_options_free(parrsb_options *options);
+
+/*
+ * parRSB partitioning algorithms.
+ */
 int parrsb_part_mesh(int *part, const long long *const vtx,
                      const double *const xyz, const int *const tag,
-                     const int nel, const int nv, parrsb_options *const options,
+                     const int nel, const int nv, const parrsb_options options,
                      MPI_Comm comm);
 
 void parrsb_part_solid(int *part, const long long *vtx2, unsigned nel2,
@@ -56,9 +45,9 @@ void parrsb_check_tagged_partitions(const long long *const eids,
                                     const unsigned nv, const uint ntags,
                                     const struct comm *const c,
                                     const int verbose);
-//==============================================================================
-// Connectivity
-//
+/*
+ * Connectivity calculation algorithms.
+ */
 int parrsb_conn_mesh(long long *vtx, double *coord, uint nel, unsigned nDim,
                      long long *periodicInfo, int nPeriodicFaces, double tol,
                      MPI_Comm comm);

@@ -23,7 +23,7 @@ void parrsb_print(const struct comm *c, int verbose, const char *fmt, ...) {
   }
 }
 
-parrsb_options parrsb_default_options = {
+static struct parrsb_options default_options = {
     // General options
     .partitioner = 0,
     .tagged = 0,
@@ -43,9 +43,48 @@ parrsb_options parrsb_default_options = {
     .rsb_mg_grammian = 0,
     .rsb_mg_factor = 2};
 
-static char *ALGO[3] = {"RSB", "RCB", "RIB"};
+int parrsb_options_get_default(parrsb_options *options) {
+  *options = tcalloc(struct parrsb_options, 1);
+  memcpy(*options, &default_options, sizeof(struct parrsb_options));
+  return 0;
+}
 
-static void update_options(parrsb_options *const options) {
+int parrsb_options_copy(parrsb_options *dest, const parrsb_options src) {
+  *dest = tcalloc(struct parrsb_options, 1);
+  memcpy(*dest, src, sizeof(struct parrsb_options));
+  return 0;
+}
+
+void parrsb_options_print(const parrsb_options options) {
+#define PRINT_OPTION(OPT, STR, FMT) printf("%s = " FMT "", STR, options->OPT)
+
+  PRINT_OPTION(partitioner, "PARRSB_PARTITIONER", "%d");
+  PRINT_OPTION(tagged, "PARRSB_TAGGED", "%d");
+  PRINT_OPTION(levels, "PARRSB_LEVELS", "%d");
+  PRINT_OPTION(find_disconnected_comps, "PARRSB_FIND_DISCONNECTED_COMPONENTS",
+               "%d");
+  PRINT_OPTION(repair, "PARRSB_REPAIR", "%d");
+  PRINT_OPTION(verbose_level, "PARRSB_VERBOSE_LEVEL", "%d");
+  PRINT_OPTION(profile_level, "PARRSB_PROFILE_LEVEL", "%d");
+  PRINT_OPTION(rsb_algo, "PARRSB_RSB_ALGO", "%d");
+  PRINT_OPTION(rsb_pre, "PARRSB_RSB_PRE", "%d");
+  PRINT_OPTION(rsb_max_iter, "PARRSB_RSB_MAX_ITER", "%d");
+  PRINT_OPTION(rsb_max_passes, "PARRSB_RSB_MAX_PASSES", "%d");
+  PRINT_OPTION(rsb_tol, "PARRSB_RSB_TOL", "%lf");
+  PRINT_OPTION(rsb_mg_grammian, "PARRSB_RSB_MG_GRAMMIAN", "%d");
+  PRINT_OPTION(rsb_mg_factor, "PARRSB_RSB_MG_FACTOR", "%d");
+
+#undef PRINT_OPTION
+}
+
+int parrsb_options_free(parrsb_options *options) {
+  if (!options) return 1;
+  if (*options) free(*options);
+  *options = 0;
+  return 0;
+}
+
+static void update_options(const parrsb_options options) {
 #define UPDATE_OPTION(OPT, STR, IS_INT)                                        \
   do {                                                                         \
     const char *val = getenv(STR);                                             \
@@ -76,29 +115,7 @@ static void update_options(parrsb_options *const options) {
 #undef UPDATE_OPTION
 }
 
-static void print_options(const struct comm *c,
-                          const parrsb_options *const options) {
-#define PRINT_OPTION(OPT, STR, FMT)                                            \
-  parrsb_print(c, options->verbose_level, "%s = " FMT "", STR, options->OPT)
-
-  PRINT_OPTION(partitioner, "PARRSB_PARTITIONER", "%d");
-  PRINT_OPTION(tagged, "PARRSB_TAGGED", "%d");
-  PRINT_OPTION(levels, "PARRSB_LEVELS", "%d");
-  PRINT_OPTION(find_disconnected_comps, "PARRSB_FIND_DISCONNECTED_COMPONENTS",
-               "%d");
-  PRINT_OPTION(repair, "PARRSB_REPAIR", "%d");
-  PRINT_OPTION(verbose_level, "PARRSB_VERBOSE_LEVEL", "%d");
-  PRINT_OPTION(profile_level, "PARRSB_PROFILE_LEVEL", "%d");
-  PRINT_OPTION(rsb_algo, "PARRSB_RSB_ALGO", "%d");
-  PRINT_OPTION(rsb_pre, "PARRSB_RSB_PRE", "%d");
-  PRINT_OPTION(rsb_max_iter, "PARRSB_RSB_MAX_ITER", "%d");
-  PRINT_OPTION(rsb_max_passes, "PARRSB_RSB_MAX_PASSES", "%d");
-  PRINT_OPTION(rsb_tol, "PARRSB_RSB_TOL", "%lf");
-  PRINT_OPTION(rsb_mg_grammian, "PARRSB_RSB_MG_GRAMMIAN", "%d");
-  PRINT_OPTION(rsb_mg_factor, "PARRSB_RSB_MG_FACTOR", "%d");
-
-#undef PRINT_OPTION
-}
+static char *ALGO[3] = {"RSB", "RCB", "RIB"};
 
 static size_t load_balance(struct array *elist, uint nel, int nv,
                            const double *const xyz, const long long *const vtx,
@@ -115,7 +132,7 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
   size_t unit_size;
   if (vtx == NULL) // RCB
     unit_size = sizeof(struct rcb_element);
-  else             // RSB
+  else // RSB
     unit_size = sizeof(struct rsb_element);
   parrsb_print(
       c, verbose, "load_balance: unit_size = %zu (rsb = %zu, rcb = %zu)",
@@ -157,7 +174,7 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
   sarray_transfer_(elist, unit_size, offsetof(struct rcb_element, proc), 1, cr);
   if (vtx == NULL) // RCB
     sarray_sort(struct rcb_element, elist->ptr, elist->n, globalId, 1, bfr);
-  else             // RSB
+  else // RSB
     sarray_sort(struct rsb_element, elist->ptr, elist->n, globalId, 1, bfr);
 
   free(pe);
@@ -170,7 +187,7 @@ static void restore_original(int *part, struct crystal *cr, struct array *elist,
   sarray_transfer_(elist, usize, offsetof(struct rcb_element, origin), 1, cr);
   uint nel = elist->n;
 
-  if (usize == sizeof(struct rsb_element))      // RSB
+  if (usize == sizeof(struct rsb_element)) // RSB
     sarray_sort(struct rsb_element, elist->ptr, nel, globalId, 1, bfr);
   else if (usize == sizeof(struct rcb_element)) // RCB
     sarray_sort(struct rcb_element, elist->ptr, nel, globalId, 1, bfr);
@@ -235,8 +252,7 @@ static void initialize_levels(struct comm *const comms, int *const levels_in,
 
 static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
                                 const double *const xyz, const uint nel,
-                                const unsigned nv,
-                                parrsb_options *const options,
+                                const unsigned nv, const parrsb_options options,
                                 const struct comm *const c,
                                 struct crystal *const cr, buffer *const bfr) {
   const int verbose = options->verbose_level;
@@ -379,7 +395,7 @@ void parrsb_check_tagged_partitions(const long long *const eids,
 static void parrsb_part_mesh_v1(int *part, const long long *const vtx,
                                 const double *const xyz, const int *const tag,
                                 const uint nel, const unsigned nv,
-                                parrsb_options *const options,
+                                const parrsb_options options,
                                 const struct comm *const c,
                                 struct crystal *const cr, buffer *const bfr) {
   const int verbose = options->verbose_level;
@@ -562,8 +578,7 @@ static void parrsb_part_mesh_v1(int *part, const long long *const vtx,
 
 static void update_frontier(sint *const target, sint *const hop,
                             sint *const frontier, const unsigned nv,
-                            const unsigned hid, const struct comm *c,
-                            buffer *const bfr) {
+                            const unsigned hid, buffer *const bfr) {
   // If target is already set, we don't update either target or hop.
   // We simply update frontier to previous target value and return.
   if (*target >= 0) {
@@ -784,7 +799,7 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
         assigned = 1;
         slong unassigned = 0;
         for (uint i = 0; i < nelt; i++) {
-          update_frontier(&target[i], &hop[i], &frontier[i * nv], nv, hid, &c,
+          update_frontier(&target[i], &hop[i], &frontier[i * nv], nv, hid,
                           &bfr);
           assigned = assigned && (target[i] >= 0);
           unassigned += (target[i] < 0);
@@ -852,7 +867,7 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
 
 int parrsb_part_mesh(int *part, const long long *const vtx,
                      const double *const xyz, const int *const tag,
-                     const int nel, const int nv, parrsb_options *const options,
+                     const int nel, const int nv, const parrsb_options options,
                      MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
@@ -868,8 +883,7 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
                  nelg);
   }
 
-  print_options(&c, options);
-
+  if (c.id == 0) parrsb_options_print(options);
   if (options->tagged == 1 && !tag) {
     parrsb_print(&c, verbose,
                  "Tagged partitioning requested but tag array is NULL..");

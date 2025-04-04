@@ -35,7 +35,7 @@ struct fiedler {
   int part0, part1;
 };
 
-int power_serial(double *y, uint N, double *A, int verbose) {
+int power_serial(double *y, uint N, double *A) {
   time_t t;
   srand((unsigned)time(&t));
 
@@ -72,19 +72,17 @@ int power_serial(double *y, uint N, double *A, int verbose) {
   return i;
 }
 
-int inv_power_serial(double *y, uint N, double *A, int verbose) {
+static int inv_power_serial(double *y, uint N, double *A) {
   double *Ainv = tcalloc(double, N *N);
-  for (uint j = 0; j < N; j++) {
+  for (uint j = 0; j < N; j++)
     for (uint k = 0; k < N; k++) Ainv[j * N + k] = A[k * N + j];
-  }
 
   matrix_inverse(N, Ainv);
 
   uint j;
-  for (j = 0; j < N; j++) {
+  for (j = 0; j < N; j++)
     for (uint k = 0; k < N; k++) A[j * N + k] = Ainv[k * N + j];
-  }
-  j = power_serial(y, N, Ainv, verbose);
+  j = power_serial(y, N, Ainv);
 
   free(Ainv);
 
@@ -145,7 +143,7 @@ static int project(scalar *x, uint n, scalar *b, struct laplacian *L,
     for (j = 0; j < n; j++) z0[j] = z[j];
 
     metric_tic(c, RSB_PROJECT_MG);
-    mg_vcycle(z, r, d, c, bfr);
+    mg_vcycle(z, r, d, bfr);
     metric_toc(c, RSB_PROJECT_MG);
 
     rzt = rz1;
@@ -213,7 +211,7 @@ static int inverse(scalar *y, struct array *elements, unsigned nv, scalar *z,
   // Setup LAMG preconditioner
   struct crystal cr;
   crystal_init(&cr, gsc);
-  struct par_mat *L = par_csr_setup_con(lelt, eid, vtx, nv, 1, gsc, &cr, buf);
+  struct par_mat *L = par_csr_setup_con(lelt, eid, vtx, nv, 1, &cr, buf);
   struct mg *d = mg_setup(L, factor, &cr, buf);
   crystal_free(&cr);
   metric_toc(gsc, RSB_INVERSE_SETUP);
@@ -291,7 +289,7 @@ static int inverse(scalar *y, struct array *elements, unsigned nv, scalar *z,
         comm_allreduce(gsc, gs_double, gs_add, M, N * N, buf->ptr);
 
         // Inverse power iterarion on M
-        inv_power_serial(v, N, M, 0);
+        inv_power_serial(v, N, M);
 
         for (j = 0; j < lelt; j++) z[j] = 0.0;
 
@@ -560,8 +558,8 @@ static int lanczos(scalar *fiedler, struct array *elements, unsigned nv,
   return (ipass - 1) * miter + iter;
 }
 
-int fiedler(struct array *elements, int nv, const parrsb_options *const opts,
-            struct comm *gsc, buffer *buf, int verbose) {
+int fiedler(struct array *elements, int nv, const parrsb_options opts,
+            struct comm *gsc, buffer *buf) {
   // Return if the number of processes is equal to 1.
   if (gsc->np == 1) return 0;
 

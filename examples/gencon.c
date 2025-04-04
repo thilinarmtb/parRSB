@@ -3,8 +3,7 @@
 //
 #include "parrsb.h"
 
-static void test_parcon(unsigned int neltp, long long *vlp, char *name,
-                        MPI_Comm comm) {
+static void test_parcon(long long *vlp, char *name, MPI_Comm comm) {
   unsigned int nelt;
   unsigned nv;
   long long *vls = NULL;
@@ -96,7 +95,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Turns on testing if test is on
-  if (in->test) test_parcon(nelt, vl, in->mesh, world);
+  if (in->test) test_parcon(vl, in->mesh, world);
 
   // Free resources
   free(vl), free(coord), free(bcs);

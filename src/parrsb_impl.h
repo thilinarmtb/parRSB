@@ -22,6 +22,31 @@
 #define MAXDIM 3 // Maximum dimension of the mesh.
 #define MAXNV 8  // Maximum number of vertices per element.
 
+//==============================================================================
+// Partitioning
+//
+struct parrsb_options {
+  // General options
+  int partitioner; // Partition algo: 0 - RSB, 1 - RCB, 2 - RIB (Default: 0)
+  int tagged;      // Tagged partitioning: 0 - No, 1 - Yes (Default: 0)
+  int levels;      // Number of levels: 1, or 2 (Default: 2)
+  int find_disconnected_comps; // Find number of components: 0 - No, 1 - Yes
+                               // (Default: 1)
+  int repair; // Repair disconnected components: 0 - No, 1 - Yes (Default: 0)
+  int verbose_level; // Verbose level: 0, 1, 2, .. etc (Default: 1)
+  int profile_level; // Profile level: 0, 1, 2, .. etc (Default: 0)
+  // RSB common (Lanczos and MG) options
+  int rsb_algo; // RSB algo: 0 - Lanczos, 1 - MG (Default: 0)
+  int rsb_pre;  // RSB pre-partition : 0 - None, 1 - RCB , 2 - RIB (Default: 1)
+  int rsb_max_iter;   // Max iterations in Lanczos / MG (Default: 50)
+  int rsb_max_passes; // Max Lanczos restarts / Inverse iterations (Default: 50)
+  double rsb_tol;     // Tolerance for Lanczos or RQI (Default: 1e-5)
+  int rsb_dump_stats; // Dump partition statistics to a text file.
+  // RSB MG specific options
+  int rsb_mg_grammian; // MG Grammian: 0 or 1 (Default: 0)
+  int rsb_mg_factor;   // MG Coarsening factor (Default: 2, should be > 1)
+};
+
 //------------------------------------------------------------------------------
 // RCB / RIB.
 // `struct rcb_element` is used for RCB and RIB partitioning.
@@ -46,16 +71,16 @@ struct rsb_element {
   slong vertices[MAXNV];
 };
 
-void rsb(struct array *elements, int nv, const parrsb_options *const options,
+void rsb(struct array *elements, int nv, const parrsb_options options,
          const struct comm *comms, buffer *bfr);
 
 //------------------------------------------------------------------------------
 // Find number of components.
 //
 uint get_components(sint *component, struct array *elems, unsigned nv,
-                    struct comm *c, buffer *buf, int verbose);
+                    struct comm *c, buffer *buf);
 uint get_components_v2(sint *component, struct array *elems, unsigned nv,
-                       const struct comm *ci, buffer *bfr, int verbose);
+                       const struct comm *ci, buffer *bfr);
 
 //------------------------------------------------------------------------------
 // Dump partition statistics.
@@ -63,7 +88,7 @@ uint get_components_v2(sint *component, struct array *elems, unsigned nv,
 void parrsb_dump_stats_start(const uint nv_);
 
 void parrsb_dump_stats(const struct comm *const gc, const struct comm *const lc,
-                       const struct array *const elems, buffer *bfr);
+                       const struct array *const elems);
 
 void parrsb_dump_stats_end(const struct comm *const gc, const char *prefix);
 

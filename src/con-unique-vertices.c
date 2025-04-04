@@ -67,8 +67,7 @@ static void sort_segments_local(struct array *local, int dim) {
   struct point_t *const pts = (struct point_t *const)local->ptr;
   uint s = 0, e;
   while (s < npts) {
-    for (e = s + 1; e < npts && pts[e].ifSegment == 0; e++)
-      ;
+    for (e = s + 1; e < npts && pts[e].ifSegment == 0; e++);
 
     if (s < npts - 1 && e - s > 1) {
       switch (dim) {
@@ -333,13 +332,11 @@ static void separate_local_segments(struct array *local, struct array *shared,
   // Find the first non-zero `ifSegment` value.
   struct point_t *pts = (struct point_t *)shared->ptr;
   uint s = 0;
-  for (; s < shared->n && pts[s].ifSegment == 0; s++)
-    ;
+  for (; s < shared->n && pts[s].ifSegment == 0; s++);
   sint lcheck = 0;
   while (s < shared->n) {
     uint e = s + 1;
-    for (; e < shared->n && pts[e].ifSegment == 0; e++)
-      ;
+    for (; e < shared->n && pts[e].ifSegment == 0; e++);
     if (e < shared->n) {
       for (uint i = s; i < e; i++) {
         array_cat(struct point_t, local, &pts[i], 1);

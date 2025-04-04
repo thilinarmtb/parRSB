@@ -1,7 +1,7 @@
 #include "parrsb_impl.h"
 #include "sort.h"
 
-extern int power_serial(double *y, int N, double *A, int verbose);
+extern int power_serial(double *y, int N, double *A);
 
 static void get_rib_axis(char *elems, uint nel, size_t unit_size, int ndim,
                          struct comm *c) {
@@ -43,8 +43,8 @@ static void get_rib_axis(char *elems, uint nel, size_t unit_size, int ndim,
 
   if (c != NULL) comm_allreduce(c, gs_double, gs_add, I, 9, buf);
 
-  double ev[3];                           // ev[2] = 0 if 2D
-  power_serial(ev, ndim, (double *)I, 0); // FIXME: 2D does not work
+  double ev[3];                        // ev[2] = 0 if 2D
+  power_serial(ev, ndim, (double *)I); // FIXME: 2D does not work
 
   for (i = 0; i < nel; i++) {
     elem = (struct rcb_element *)(elems + i * unit_size);

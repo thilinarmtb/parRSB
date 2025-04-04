@@ -4,7 +4,7 @@
 
 // Find the number of disconnected components
 uint get_components(sint *component, struct array *elems, unsigned nv,
-                    struct comm *c, buffer *buf, int verbose) {
+                    struct comm *c, buffer *buf) {
   uint nelt = elems->n;
   struct rsb_element *pe = (struct rsb_element *)elems->ptr;
 
@@ -158,7 +158,7 @@ static sint find_or_insert(struct array *cids, struct cmp_t *t) {
 }
 
 uint get_components_v2(sint *component, struct array *elems, unsigned nv,
-                       const struct comm *ci, buffer *bfr, int verbose) {
+                       const struct comm *ci, buffer *bfr) {
   uint nelt = elems->n;
   struct rsb_element *pe = (struct rsb_element *)elems->ptr;
 

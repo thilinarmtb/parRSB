@@ -240,8 +240,7 @@ struct mg *mg_setup(const struct par_mat *M, const int factor,
 //==============================================================================
 // MG V-cycle and related functions
 //
-void mg_vcycle(scalar *u1, scalar *rhs, struct mg *d, struct comm *c,
-               buffer *bfr) {
+void mg_vcycle(scalar *u1, scalar *rhs, struct mg *d, buffer *bfr) {
   if (d->nlevels == 0) return;
 
   uint *lvl_off = d->level_off, nnz = lvl_off[d->nlevels];

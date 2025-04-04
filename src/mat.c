@@ -749,8 +749,7 @@ static int compress_mij(struct array *eij, struct array *entries, buffer *bfr) {
 
 struct par_mat *par_csr_setup_con(const uint nelt, const ulong *eid,
                                   const slong *vtx, int nv, int sep,
-                                  struct comm *c, struct crystal *cr,
-                                  buffer *bfr) {
+                                  struct crystal *cr, buffer *bfr) {
   struct array nbrs, eij;
   find_nbrs(&nbrs, eid, vtx, nelt, nv, cr, bfr);
   compress_nbrs(&eij, &nbrs, bfr);

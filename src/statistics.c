@@ -136,7 +136,7 @@ void parrsb_dump_stats_start(const uint nv_) {
 }
 
 void parrsb_dump_stats(const struct comm *const gc, const struct comm *const lc,
-                       const struct array *const elems, buffer *bfr) {
+                       const struct array *const elems) {
   if (!pgeom_initialized) return;
 
   const struct rsb_element *const pe =

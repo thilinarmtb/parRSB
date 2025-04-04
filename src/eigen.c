@@ -34,11 +34,13 @@ void matrix_inverse(int N, double *A) {
   free(ipiv);
   free(work);
 }
-
 #else
-
-void matrix_inverse(int N, double *A) {}
-
+void matrix_inverse(int N, double *A) {
+  (void)N;
+  (void)A;
+  fprintf(stderr, "Error: Compile parRSB with BLAS enabled !\n");
+  exit(EXIT_FAILURE);
+}
 #endif // PARRSB_BLAS
 
 #undef FDGETRF

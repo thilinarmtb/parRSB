@@ -120,9 +120,8 @@ static void re2_coord(double **coord_, unsigned int nelt, int nv, MPI_File file,
   free(buf);
 }
 
-static void re2_boundary(unsigned int *nbcs_, long long **bcs_,
-                         unsigned int nelt, int nv, ulong nelgt, MPI_File file,
-                         struct comm *c) {
+static void re2_boundary(unsigned int *nbcs_, long long **bcs_, int nv,
+                         ulong nelgt, MPI_File file, struct comm *c) {
   uint rank = c->id, size = c->np;
   MPI_Comm comm = c->c;
 
@@ -227,7 +226,7 @@ static void read_geometry(unsigned *nelt, unsigned *nv, double **coord,
   ulong nelgt, nelgv;
   re2_header(nelt, nv, &nelgt, &nelgv, file, c);
   re2_coord(coord, *nelt, *nv, file, c);
-  re2_boundary(nbcs, bcs, *nelt, *nv, nelgt, file, c);
+  re2_boundary(nbcs, bcs, *nv, nelgt, file, c);
 
   check_mpi_call(MPI_File_close(&file), "MPI_File_close", c);
   check_mpi_call(MPI_Info_free(&info), "MPI_Info_free", c);
