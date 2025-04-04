@@ -1,24 +1,20 @@
 #include "parrsb_impl.h"
 
-static struct parrsb_options default_options = {
-    // General options
-    .partitioner = 0,
-    .tagged = 0,
-    .levels = 2,
-    .find_disconnected_comps = 1,
-    .repair = 0,
-    .verbose_level = 1,
-    .profile_level = 0,
-    // RSB common (Lanczos and MG) options
-    .rsb_algo = 0,
-    .rsb_pre = 1,
-    .rsb_max_iter = 50,
-    .rsb_max_passes = 50,
-    .rsb_tol = 1e-5,
-    .rsb_dump_stats = 0,
-    // RSB MG specific options
-    .rsb_mg_grammian = 0,
-    .rsb_mg_factor = 2};
+static struct parrsb_options default_options = {.partitioner = 0,
+                                                .tagged = 0,
+                                                .levels = 2,
+                                                .find_disconnected_comps = 1,
+                                                .repair = 0,
+                                                .verbose_level = 1,
+                                                .profile_level = 0,
+                                                .rsb_algo = 0,
+                                                .rsb_pre = 1,
+                                                .rsb_max_iter = 50,
+                                                .rsb_max_passes = 50,
+                                                .rsb_tol = 1e-5,
+                                                .rsb_dump_stats = 0,
+                                                .rsb_mg_grammian = 0,
+                                                .rsb_mg_factor = 2};
 
 int parrsb_options_get_default(parrsb_options *options) {
   *options = tcalloc(struct parrsb_options, 1);
