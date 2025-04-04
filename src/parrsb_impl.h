@@ -3,10 +3,11 @@
 
 #define _POSIX_C_SOURCE 200809L
 
+#include "parrsb.h"
+
 #include <float.h>
 #include <stdlib.h>
 
-#include "parrsb.h"
 
 #ifdef scalar
 #undef scalar

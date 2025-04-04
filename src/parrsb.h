@@ -36,15 +36,6 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
                      const int nel, const int nv, const parrsb_options options,
                      MPI_Comm comm);
 
-void parrsb_part_solid(int *part, const long long *vtx2, unsigned nel2,
-                       const long long *vtx1, unsigned nel1, unsigned nv,
-                       MPI_Comm comm);
-
-void parrsb_check_tagged_partitions(const long long *const eids,
-                                    const long long *const vtx, const uint nel,
-                                    const unsigned nv, const uint ntags,
-                                    const struct comm *const c,
-                                    const int verbose);
 /*
  * Connectivity calculation algorithms.
  */
@@ -58,9 +49,9 @@ void fparrsb_conn_mesh(long long *vtx, double *coord, int *nel, int *nDim,
                        long long *periodicInfo, int *nPeriodicFaces,
                        double *tol, MPI_Fint *fcomm, int *err);
 
-//==============================================================================
-// I/O routines
-//
+/*
+ * I/O routines.
+ */
 int parrsb_read_mesh(unsigned *nel, unsigned *nv, long long **vl,
                      double **coord, unsigned *nbcs, long long **bcs,
                      char *name, MPI_Comm comm, int read);
@@ -71,9 +62,9 @@ int parrsb_dump_con(char *name, unsigned nelt, unsigned nv, long long *vl,
 int parrsb_dump_map(char *name, unsigned nelt, unsigned nv, long long *vl,
                     MPI_Comm comm);
 
-//==============================================================================
-// Auxiliary functions
-//
+/*
+ * Auxiliary functions.
+ */
 typedef struct {
   char *mesh;  // Mesh name, required.
   double tol;  // gencon tolerance, default: 0.2
