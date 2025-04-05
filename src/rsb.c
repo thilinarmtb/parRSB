@@ -5,6 +5,115 @@
 extern int fiedler(struct array *elements, int nv, const parrsb_options options,
                    struct comm *gsc, buffer *buf, int verbose);
 
+static uint get_partition(const struct comm *const gc,
+                          const struct comm *const lc) {
+  // Find the partition id. A partition is a group of processors sharing the
+  // same local communicator.
+  sint out[2][1], wrk[2][1], root = (lc->id == 0);
+  comm_scan(out, gc, gs_int, gs_add, &root, 1, wrk);
+  sint part = out[0][0] * (lc->id == 0);
+  comm_allreduce(lc, gs_int, gs_max, &part, 1, wrk);
+  return part;
+}
+
+static uint get_neighbors(const struct array *const elems, const unsigned nv,
+                          const struct comm *const gc,
+                          const struct comm *const lc, buffer *bfr) {
+  const uint n = elems->n;
+  const uint size = elems->n * nv;
+
+  struct vertex_t {
+    ulong v;
+    uint p, partition;
+  };
+
+  struct array vertices;
+  array_init(struct vertex_t, &vertices, size);
+
+  const struct rsb_element *const pe =
+      (const struct rsb_element *const)elems->ptr;
+  struct vertex_t vt = {.partition = get_partition(gc, lc)};
+  for (uint i = 0; i < n; i++) {
+    for (uint v = 0; v < nv; v++) {
+      vt.v = pe[i].vertices[v], vt.p = vt.v % gc->np;
+      array_cat(struct vertex_t, &vertices, &vt, 1);
+    }
+  }
+
+  struct crystal cr;
+  crystal_init(&cr, gc);
+
+  sarray_transfer(struct vertex_t, &vertices, p, 1, &cr);
+  sarray_sort(struct vertex_t, vertices.ptr, vertices.n, v, 1, bfr);
+
+  struct array neighbors;
+  array_init(struct vertex_t, &neighbors, vertices.n * 27);
+
+  const struct vertex_t *const pv = (const struct vertex_t *const)vertices.ptr;
+  uint s = 0;
+  while (s < vertices.n) {
+    uint e = s + 1;
+    while (e < vertices.n && pv[s].v == pv[e].v) e++;
+    for (uint i = s; i < e; i++) {
+      struct vertex_t vt = pv[i];
+      for (uint j = s; j < e; j++) {
+        vt.partition = pv[j].partition;
+        array_cat(struct vertex_t, &neighbors, &vt, 1);
+      }
+    }
+    s = e;
+  }
+  array_free(&vertices);
+
+  sarray_transfer(struct vertex_t, &neighbors, p, 0, &cr);
+  crystal_free(&cr);
+  sarray_sort(struct vertex_t, neighbors.ptr, neighbors.n, partition, 0, bfr);
+
+  // Now, extract out different partition ids found locally into an array.
+  struct unique_t {
+    uint p, partition;
+  };
+
+  struct array unique;
+  array_init(struct unique_t, &unique, 27);
+
+  if (neighbors.n > 0) {
+    const struct vertex_t *const pn =
+        (const struct vertex_t *const)neighbors.ptr;
+    struct unique_t ut = {.partition = pn[0].partition,
+                          .p = pn[0].partition % lc->np};
+    array_cat(struct unique_t, &unique, &ut, 1);
+    for (uint i = 1; i < neighbors.n; i++) {
+      if (pn[i].partition > pn[i - 1].partition) {
+        ut.partition = pn[i].partition, ut.p = ut.partition % lc->np;
+        array_cat(struct unique_t, &unique, &ut, 1);
+      }
+    }
+  }
+  array_free(&neighbors);
+
+  crystal_init(&cr, lc);
+  sarray_transfer(struct unique_t, &unique, p, 0, &cr);
+  crystal_free(&cr);
+
+  sarray_sort(struct unique_t, unique.ptr, unique.n, partition, 0, bfr);
+  sint un = 0;
+  if (unique.n > 0) {
+    un = 1;
+    struct unique_t *pu = (struct unique_t *)unique.ptr;
+    for (uint i = 1; i < unique.n; i++) {
+      if (pu[i].partition > pu[un - 1].partition) pu[un] = pu[i], un++;
+    }
+  }
+  array_free(&unique);
+
+  sint wrk;
+  comm_allreduce(lc, gs_int, gs_add, &un, 1, &wrk);
+  assert(un >= 1);
+
+  return un - 1;
+}
+
 static void test_component_versions(struct array *elements, struct comm *lc,
                                     unsigned nv, unsigned lvl, buffer *bfr) {
   // Send elements to % P processor to create disconnected components.
@@ -338,7 +447,7 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
                    level + 1, cut + 1);
       comm_free(&lc), comm_dup(&lc, &tc), comm_free(&tc);
 
-      const uint nbrs = parrsb_get_neighbors(elements, nv, gc, &lc, bfr);
+      const uint nbrs = get_neighbors(elements, nv, gc, &lc, bfr);
       metric_acc(RSB_NEIGHBORS, nbrs);
       metric_push_level();
     }
