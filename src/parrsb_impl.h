@@ -116,12 +116,14 @@ INTERN int laplacian(scalar *v, struct laplacian *l, scalar *u, buffer *buf);
 INTERN void laplacian_free(struct laplacian *l);
 
 /*
- * Misc.
+ * Helper routines.
  */
-INTERN int log2ll(long long n);
-
 INTERN void parrsb_barrier(struct comm *c);
 
 INTERN void parrsb_print(const struct comm *c, int verbose, const char *fmt,
                          ...);
+
+INTERN void parrsb_print_stack(void);
+
+INTERN int log2ll(long long n);
 #endif

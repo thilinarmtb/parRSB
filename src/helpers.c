@@ -1,9 +1,33 @@
 #include "parrsb_impl.h"
-#include <getopt.h>
 
+#include <getopt.h>
+#include <stdarg.h>
 #include <sys/resource.h>
 
+void parrsb_barrier(struct comm *c) {
+#if defined(PARRSB_SYNC_BY_REDUCTION)
+  sint dummy = c->id, wrk;
+  comm_allreduce(c, gs_int, gs_max, &dummy, 1, &wrk);
+#else
+  comm_barrier(c);
+#endif
+}
+
+void parrsb_print(const struct comm *c, int verbose, const char *fmt, ...) {
+  comm_barrier(c);
+
+  va_list vargs;
+  if (c->id == 0 && verbose > 0) {
+    va_start(vargs, fmt);
+    vprintf(fmt, vargs);
+    va_end(vargs);
+    printf("\n");
+    fflush(stdout);
+  }
+}
+
 #if defined __GLIBC__
+
 #include <execinfo.h>
 
 // Obtain a backtrace and print it to stdout.
@@ -314,15 +338,6 @@ void parrsb_check_error_(int err, char *file, int line, MPI_Comm comm) {
     MPI_Finalize();
     exit(EXIT_FAILURE);
   }
-}
-
-void parrsb_barrier(struct comm *c) {
-#if defined(PARRSB_SYNC_BY_REDUCTION)
-  sint dummy = c->id, wrk;
-  comm_allreduce(c, gs_int, gs_max, &dummy, 1, &wrk);
-#else
-  comm_barrier(c);
-#endif
 }
 
 #define WRITE_T(dest, val, T, nunits)                                          \

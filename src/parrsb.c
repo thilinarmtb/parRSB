@@ -2,26 +2,12 @@
 #include "parrsb_impl.h"
 
 #include <ctype.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-void parrsb_print(const struct comm *c, int verbose, const char *fmt, ...) {
-  comm_barrier(c);
-
-  va_list vargs;
-  if (c->id == 0 && verbose > 0) {
-    va_start(vargs, fmt);
-    vprintf(fmt, vargs);
-    va_end(vargs);
-    printf("\n");
-    fflush(stdout);
-  }
-}
-
-static void parrsb_options_update(const parrsb_options options) {
+static void parrsb_options_update(parrsb_options options) {
 #define UPDATE_OPTION(OPT, STR, IS_INT)                                        \
   do {                                                                         \
     const char *val = getenv(STR);                                             \
