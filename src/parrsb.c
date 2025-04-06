@@ -8,8 +8,6 @@
 #include <string.h>
 #include <time.h>
 
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-
 void parrsb_print(const struct comm *c, int verbose, const char *fmt, ...) {
   comm_barrier(c);
 
@@ -857,5 +855,3 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
 
   return 0;
 }
-
-#undef MIN

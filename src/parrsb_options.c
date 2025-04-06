@@ -52,7 +52,6 @@ void parrsb_options_print(const parrsb_options options) {
 
 int parrsb_options_free(parrsb_options *options) {
   if (!options) return 1;
-  if (*options) free(*options);
-  *options = 0;
+  if (*options) free(*options), *options = 0;
   return 0;
 }

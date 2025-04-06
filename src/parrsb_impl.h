@@ -8,6 +8,9 @@
 #include <float.h>
 #include <stdlib.h>
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 struct parrsb_options {
   // General options
   int partitioner; // Partition algo: 0 - RSB, 1 - RCB, 2 - RIB (Default: 0)
@@ -95,13 +98,8 @@ struct rsb_element {
 INTERN void rsb(struct array *elements, int nv, const parrsb_options options,
                 const struct comm *comms, buffer *bfr);
 
-/*
- * Find the number of disconnected components generated after partitioning.
- */
-INTERN uint get_components(sint *component, struct array *elems, unsigned nv,
-                           struct comm *c, buffer *buf);
-INTERN uint get_components_v2(sint *component, struct array *elems, unsigned nv,
-                              const struct comm *ci, buffer *bfr);
+INTERN int fiedler(struct array *elements, int nv, const parrsb_options options,
+                   struct comm *gsc, buffer *buf);
 
 /*
  * Laplacian.
