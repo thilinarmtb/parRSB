@@ -6,25 +6,21 @@
 #include <math.h>
 #include <time.h>
 
-#define MM 500
-
 inline static scalar dot(scalar *y, scalar *x, uint n) {
   scalar result = 0.0;
   for (uint i = 0; i < n; i++) result += x[i] * y[i];
-
   return result;
 }
 
 inline static void ortho(scalar *q, uint lelt, ulong n, struct comm *c) {
-  uint i;
   scalar sum = 0.0;
-  for (i = 0; i < lelt; i++) sum += q[i];
+  for (uint i = 0; i < lelt; i++) sum += q[i];
 
-  scalar buf;
-  comm_allreduce(c, gs_double, gs_add, &sum, 1, &buf);
+  scalar wrk;
+  comm_allreduce(c, gs_double, gs_add, &sum, 1, &wrk);
   sum /= n;
 
-  for (i = 0; i < lelt; i++) q[i] -= sum;
+  for (uint i = 0; i < lelt; i++) q[i] -= sum;
 }
 
 static int project(scalar *x, uint n, scalar *b, laplacian L, struct mg *d,
@@ -302,11 +298,6 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint lelt,
     pap_old = pap, pap = dot(w, p, lelt);
     comm_allreduce(gsc, gs_double, gs_add, &pap, 1, buf);
 
-    // if (gsc->id == 0) {
-    //   printf("host iter = %d beta = %lf pp = %lf pap = %lf\n", iter, beta,
-    //   pp, pap);
-    // }
-
     alpha = rtz1 / pap;
     // vec_axpby(r, r, 1.0, w, -1.0 * alpha);
     for (i = 0; i < lelt; i++) r[i] = r[i] - alpha * w[i];
@@ -354,7 +345,8 @@ static int lanczos(scalar *fiedler, struct array *elements, unsigned nv,
 
   if (nelg < miter) miter = nelg;
 
-  scalar *alpha = tcalloc(scalar, 2 * miter - 1), *beta = alpha + miter;
+  scalar *alpha = tcalloc(scalar, 2 * miter - 1);
+  scalar *beta = alpha + miter;
   scalar *rr = tcalloc(scalar, (miter + 1) * lelt);
   scalar *eVectors = tcalloc(scalar, miter * miter);
   scalar *eValues = tcalloc(scalar, miter);
