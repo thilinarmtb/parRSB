@@ -270,8 +270,9 @@ static sint find_or_insert(struct array *cids, struct cmp_t *t) {
   return -1;
 }
 
-static uint get_components_v2(sint *component, struct array *elems, unsigned nv,
-                              const struct comm *ci, buffer *bfr) {
+static slong get_components_v2(sint *component, struct array *elems,
+                               unsigned nv, const struct comm *ci,
+                               buffer *bfr) {
   metric_tic(ci, RSB_COMPONENTS);
 
   slong nc = 0;
@@ -440,8 +441,6 @@ static uint get_components_v2(sint *component, struct array *elems, unsigned nv,
 
 exit_early:
   metric_toc(ci, RSB_COMPONENTS);
-  metric_acc(RSB_COMPONENTS_NCOMP, nc);
-
   return nc;
 }
 
@@ -549,20 +548,13 @@ static void check_rsb_partition(const struct comm *gc,
   }
 }
 
-static inline int check_bin_val(int bin) {
-  if (bin < 0 || bin > 1) return 1;
-  return 0;
-}
-
 static int balance_partitions(struct array *elements, unsigned nv,
                               struct comm *lc, struct comm *gc, int bin,
                               buffer *bfr) {
-  // Return if there is only one processor (or partition).
-  if (gc->np == 1 || gc->np == lc->np) return 0;
-  // Check if the bin value is valid.
-  assert(check_bin_val(bin) == 0 && "Invalid bin value !");
-
   metric_tic(lc, RSB_BALANCE);
+
+  // Return if there is only one processor (or partition).
+  if (gc->np == 1 || gc->np == lc->np) goto early_exit;
 
   struct ielem_t {
     uint index, orig;
@@ -584,17 +576,15 @@ static int balance_partitions(struct array *elements, unsigned nv,
   size_t size = ne * nv;
   slong *ids = tcalloc(slong, size);
   struct rsb_element *elems = (struct rsb_element *)elements->ptr;
-  for (uint e = 0; e < ne; e++) {
+  for (uint e = 0; e < ne; e++)
     for (uint v = 0; v < nv; v++) ids[e * nv + v] = elems[e].vertices[v];
-  }
   struct gs_data *gsh = gs_setup(ids, size, gc, 0, gs_pairwise, 0);
 
   sint *input = (sint *)ids;
-  if (send_cnt > 0) {
+  if (send_cnt > 0)
     for (uint e = 0; e < size; e++) input[e] = 0;
-  } else {
+  else
     for (uint e = 0; e < size; e++) input[e] = 1;
-  }
 
   gs(input, gs_int, gs_add, 0, gsh, bfr);
 
@@ -666,6 +656,7 @@ static int balance_partitions(struct array *elements, unsigned nv,
   }
 
   free(ids), gs_free(gsh);
+early_exit:
   metric_toc(lc, RSB_BALANCE);
   return 0;
 }
@@ -743,15 +734,16 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
                     bfr);
       metric_toc(&lc, RSB_SORT);
 
-      // Get the bin of the current process and create a temporary communicator
-      // `tc`.
+      // Get the bin of the current process and create a temporary communicator.
       sint bin = get_bin(&lc, level, levels, comms);
       struct comm tc;
       comm_split(&lc, bin, lc.id, &tc);
 
       // Find the number of disconnected components.
-      if (options->find_disconnected_comps == 1)
-        get_components_v2(NULL, elements, nv, &tc, bfr);
+      if (options->find_disconnected_comps == 1) {
+        slong nc = get_components_v2(NULL, elements, nv, &tc, bfr);
+        metric_acc(RSB_COMPONENTS_NCOMP, nc);
+      }
 
       // Bisect and balance.
       balance_partitions(elements, nv, &tc, &lc, bin, bfr);
@@ -761,6 +753,7 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
 
       const uint nbrs = get_neighbors(elements, nv, gc, &lc, bfr);
       metric_acc(RSB_NEIGHBORS, nbrs);
+
       metric_push_level();
     }
     comm_free(&lc);
