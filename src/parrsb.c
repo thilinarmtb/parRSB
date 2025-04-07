@@ -41,31 +41,25 @@ static char *ALGO[3] = {"RSB", "RCB", "RIB"};
 
 static size_t load_balance(struct array *elist, uint nel, int nv,
                            const double *const xyz, const long long *const vtx,
-                           int verbose, struct crystal *cr, buffer *bfr) {
+                           struct crystal *cr, buffer *bfr) {
   struct comm *c = &cr->comm;
+
   slong out[2][1], wrk[2][1], in = nel;
   comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
   slong start = out[0][0], nelg = out[1][0];
-  parrsb_print(c, verbose, "load_balance: nelg = %lld", nelg);
 
-  uint nstar = nelg / c->np, nrem = nelg - nstar * c->np;
+  uint nstar = nelg / c->np;
+  uint nrem = nelg - nstar * c->np;
   slong lower = (nstar + 1) * nrem;
 
-  size_t unit_size;
-  if (vtx == NULL) // RCB
-    unit_size = sizeof(struct rcb_element);
-  else // RSB
-    unit_size = sizeof(struct rsb_element);
-  parrsb_print(
-      c, verbose, "load_balance: unit_size = %zu (rsb = %zu, rcb = %zu)",
-      unit_size, sizeof(struct rsb_element), sizeof(struct rcb_element));
+  size_t unit_size = sizeof(struct rsb_element);
+  if (vtx == NULL) unit_size = sizeof(struct rcb_element);
 
   array_init_(elist, nel, unit_size, __FILE__, __LINE__);
 
+  int ndim = nv_to_ndim(nv);
   struct rcb_element *pe = (struct rcb_element *)calloc(1, unit_size);
   pe->origin = c->id;
-
-  int ndim = (nv == 8) ? 3 : 2;
   for (uint e = 0; e < nel; ++e) {
     slong eg = pe->globalId = start + e + 1;
     if (nstar == 0)
@@ -86,17 +80,16 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
     array_cat_(unit_size, elist, pe, 1, __FILE__, __LINE__);
   }
 
-  if (vtx != NULL) { // RSB
+  if (vtx != NULL) {
     struct rsb_element *pr = (struct rsb_element *)elist->ptr;
-    for (uint e = 0; e < nel; e++) {
+    for (uint e = 0; e < nel; e++)
       for (int v = 0; v < nv; v++) pr[e].vertices[v] = vtx[e * nv + v];
-    }
   }
 
   sarray_transfer_(elist, unit_size, offsetof(struct rcb_element, proc), 1, cr);
-  if (vtx == NULL) // RCB
+  if (vtx == NULL)
     sarray_sort(struct rcb_element, elist->ptr, elist->n, globalId, 1, bfr);
-  else // RSB
+  else
     sarray_sort(struct rsb_element, elist->ptr, elist->n, globalId, 1, bfr);
 
   free(pe);
@@ -184,7 +177,7 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   if (xyz == NULL) options->rsb_pre = 0;
 
   struct array elist;
-  size_t esize = load_balance(&elist, nel, nv, xyz, vtx, verbose, cr, bfr);
+  size_t esize = load_balance(&elist, nel, nv, xyz, vtx, cr, bfr);
 
   struct comm ca;
   comm_split(c, elist.n > 0, c->id, &ca);
