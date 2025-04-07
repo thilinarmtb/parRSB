@@ -8,9 +8,9 @@ struct laplacian {
   void *data;
 };
 
-//------------------------------------------------------------------------------
-// Laplacian - as a `struct par_mat` in CSR mat
-//
+/*
+ * Laplacian - CSR based implementation.
+ */
 struct csr_laplacian {
   struct par_mat *M;
   struct gs_data *gsh;
@@ -65,7 +65,7 @@ static void find_nbrs_rsb(struct array *arr, const struct rsb_element *elems,
   array_free(&vertices);
 }
 
-static int par_csr_init(struct laplacian *l, const struct rsb_element *elems,
+static int par_csr_init(laplacian l, const struct rsb_element *elems,
                         const uint nelt, const int nv, const struct comm *c,
                         buffer *bfr) {
   struct crystal cr;
@@ -90,8 +90,7 @@ static int par_csr_init(struct laplacian *l, const struct rsb_element *elems,
   return 0;
 }
 
-static int par_csr(scalar *v, const struct laplacian *l, scalar *u,
-                   buffer *bfr) {
+static int par_csr(scalar *v, const laplacian l, scalar *u, buffer *bfr) {
   struct csr_laplacian *L = (struct csr_laplacian *)l->data;
   if (L != NULL) {
     mat_vec_csr(v, u, L->M, L->gsh, L->buf, bfr);
@@ -100,7 +99,7 @@ static int par_csr(scalar *v, const struct laplacian *l, scalar *u,
   return 1;
 }
 
-static int par_csr_free(struct laplacian *l) {
+static int par_csr_free(laplacian l) {
   if (l->data != NULL) {
     struct csr_laplacian *L = (struct csr_laplacian *)l->data;
     par_mat_free(L->M), gs_free(L->gsh), free(L->buf);
@@ -109,15 +108,15 @@ static int par_csr_free(struct laplacian *l) {
   return 0;
 }
 
-//------------------------------------------------------------------------------
-// Laplacian - GS
-//
+/*
+ * Laplacian - GS based implementation.
+ */
 struct gs_laplacian {
   scalar *diag, *u;
   struct gs_data *gsh;
 };
 
-static int gs_weighted_init(struct laplacian *l, struct rsb_element *elems,
+static int gs_weighted_init(laplacian l, struct rsb_element *elems,
                             const uint lelt, const unsigned nv, struct comm *c,
                             buffer *buf) {
 
@@ -146,7 +145,7 @@ static int gs_weighted_init(struct laplacian *l, struct rsb_element *elems,
   return 0;
 }
 
-static int gs_weighted(scalar *v, struct laplacian *l, scalar *u, buffer *bfr) {
+static int gs_weighted(scalar *v, laplacian l, scalar *u, buffer *bfr) {
   uint lelt = l->nel;
   unsigned nv = l->nv;
   struct gs_laplacian *gl = l->data;
@@ -165,7 +164,7 @@ static int gs_weighted(scalar *v, struct laplacian *l, scalar *u, buffer *bfr) {
   return 0;
 }
 
-static int gs_weighted_free(struct laplacian *l) {
+static int gs_weighted_free(laplacian l) {
   struct gs_laplacian *gl = l->data;
   if (gl->u != NULL) free(gl->u);
   if (gl->diag != NULL) free(gl->diag);
@@ -174,42 +173,45 @@ static int gs_weighted_free(struct laplacian *l) {
   return 0;
 }
 
-//------------------------------------------------------------------------------
-// Laplacian
-//
-struct laplacian *laplacian_init(struct rsb_element *elems, uint nel, int nv,
-                                 int type, struct comm *c, buffer *buf) {
-  struct laplacian *l = tcalloc(struct laplacian, 1);
+/*
+ * Laplacian - user API.
+ */
+int laplacian_init(laplacian *l_, struct rsb_element *elems, uint nel, int nv,
+                   int type, struct comm *c, buffer *buf) {
+  laplacian l = *l_ = tcalloc(struct laplacian, 1);
   l->type = type;
   l->nv = nv;
   l->nel = nel;
 
-  if (type & CSR)
-    par_csr_init(l, elems, nel, nv, c, buf);
-  else if (type & GS)
-    gs_weighted_init(l, elems, nel, nv, c, buf);
-  else
-    return NULL;
-
-  return l;
-}
-
-int laplacian(scalar *v, struct laplacian *l, scalar *u, buffer *buf) {
-  if (l->type & CSR)
-    par_csr(v, l, u, buf);
-  else if (l->type & GS)
-    gs_weighted(v, l, u, buf);
-  else
-    return 1;
+  switch (type) {
+  case CSR: par_csr_init(l, elems, nel, nv, c, buf); break;
+  case GS: gs_weighted_init(l, elems, nel, nv, c, buf); break;
+  default: return 1; break;
+  }
 
   return 0;
 }
 
-void laplacian_free(struct laplacian *l) {
-  if (l) {
-    if (l->type & CSR)
-      par_csr_free(l);
-    else if (l->type & GS) { gs_weighted_free(l); }
-    free(l);
+int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *buf) {
+  switch (l->type) {
+  case CSR: par_csr(v, l, u, buf); break;
+  case GS: gs_weighted(v, l, u, buf); break;
+  default: return 1; break;
   }
+
+  return 0;
+}
+
+int laplacian_free(laplacian *l_) {
+  if (!l_ || !(*l_)) return 1;
+
+  laplacian l = *l_;
+  switch (l->type) {
+  case GS: gs_weighted_free(l); break;
+  case CSR: par_csr_free(l); break;
+  default: return 1; break;
+  }
+
+  free(l), l = 0;
+  return 0;
 }

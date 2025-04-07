@@ -89,9 +89,9 @@ static int inv_power_serial(double *y, uint N, double *A) {
   return j;
 }
 
-static int project(scalar *x, uint n, scalar *b, struct laplacian *L,
-                   struct mg *d, struct comm *c, unsigned miter, double tol,
-                   int null_space, int verbose, buffer *bfr) {
+static int project(scalar *x, uint n, scalar *b, laplacian L, struct mg *d,
+                   struct comm *c, unsigned miter, double tol, int null_space,
+                   int verbose, buffer *bfr) {
   slong out[2][1], buf[2][1], in = n;
   comm_scan(out, c, gs_long, gs_add, &in, 1, buf);
   ulong ng = out[1][0];
@@ -123,7 +123,7 @@ static int project(scalar *x, uint n, scalar *b, struct laplacian *L,
   for (i = 0; i < miter; i++) {
     // mat_vec_csr(w, p, S, gsh, wrk, bfr);
     metric_tic(c, RSB_PROJECT_AX);
-    laplacian(w, L, p, bfr);
+    laplacian_op(w, L, p, bfr);
     metric_toc(c, RSB_PROJECT_AX);
 
     scalar pw = dot(p, w, n);
@@ -190,7 +190,10 @@ static int inverse(scalar *y, struct array *elements, unsigned nv, scalar *z,
   metric_tic(gsc, RSB_INVERSE_SETUP);
   uint lelt = elements->n;
   struct rsb_element *elems = (struct rsb_element *)elements->ptr;
-  struct laplacian *wl = laplacian_init(elems, lelt, nv, GS, gsc, buf);
+
+  laplacian wl;
+  int err_ = laplacian_init(&wl, elems, lelt, nv, GS, gsc, buf);
+  assert(err_ == 0);
 
   // Reserve enough memory in buffer
   size_t wrk = sizeof(ulong) * lelt + sizeof(slong) * nv * lelt;
@@ -278,7 +281,7 @@ static int inverse(scalar *y, struct array *elements, unsigned nv, scalar *z,
 
         // M=Z(1:k,:)*G*Z(1:k,:);
         for (j = 0; j < N; j++) {
-          laplacian(GZ, wl, &Z[j * lelt], buf);
+          laplacian_op(GZ, wl, &Z[j * lelt], buf);
           for (k = 0; k < N; k++) {
             M[k * N + j] = 0.0;
             for (l = 0; l < lelt; l++) M[k * N + j] += Z[k * lelt + l] * GZ[l];
@@ -307,7 +310,7 @@ static int inverse(scalar *y, struct array *elements, unsigned nv, scalar *z,
   }
   metric_toc(gsc, RSB_INVERSE);
 
-  laplacian_free(wl);
+  laplacian_free(&wl);
   if (L) {
     par_mat_free(L);
     free(L);
@@ -431,7 +434,7 @@ static int tqli(scalar *eVectors, scalar *eValues, sint n, scalar *diagonal,
 
 static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint lelt,
                        ulong nelg, int niter, double tol, scalar *f,
-                       struct laplacian *gl, struct comm *gsc, buffer *bfr) {
+                       laplacian gl, struct comm *gsc, buffer *bfr) {
   scalar *r = tcalloc(scalar, 3 * lelt), *p = r + lelt, *w = p + lelt;
   // vec_copy(r, f);
   uint i;
@@ -467,7 +470,7 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint lelt,
     // vec_ortho(gsc, p, nelg);
     ortho(p, lelt, nelg, gsc);
 
-    laplacian(w, gl, p, bfr);
+    laplacian_op(w, gl, p, bfr);
 
     pap_old = pap, pap = dot(w, p, lelt);
     comm_allreduce(gsc, gs_double, gs_add, &pap, 1, buf);
@@ -512,9 +515,14 @@ static int lanczos(scalar *fiedler, struct array *elements, unsigned nv,
                    scalar *initv, struct comm *gsc, unsigned miter,
                    unsigned mpass, double tol, slong nelg, buffer *bfr) {
   metric_tic(gsc, RSB_LANCZOS_SETUP);
+
   uint lelt = elements->n;
   struct rsb_element *elems = (struct rsb_element *)elements->ptr;
-  struct laplacian *wl = laplacian_init(elems, lelt, nv, GS, gsc, bfr);
+
+  laplacian wl;
+  int err_ = laplacian_init(&wl, elems, lelt, nv, GS, gsc, bfr);
+  assert(err_ == 0);
+
   metric_toc(gsc, RSB_LANCZOS_SETUP);
 
   if (nelg < miter) miter = nelg;
@@ -553,7 +561,7 @@ static int lanczos(scalar *fiedler, struct array *elements, unsigned nv,
   }
 
   free(alpha), free(rr), free(eVectors), free(eValues);
-  laplacian_free(wl);
+  laplacian_free(&wl);
 
   return (ipass - 1) * miter + iter;
 }
