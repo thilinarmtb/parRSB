@@ -1,5 +1,5 @@
 CC ?= mpicc
-CFLAGS ?= -Wall -Wextra -Wpedantic -Wno-unused-function -std=c99 -g
+CFLAGS ?= -std=c99 -g -Wall -Wextra -Wpedantic -Wno-unused-function
 LDFLAGS ?=
 DEBUG ?= 0
 UNDERSCORE ?= 1
