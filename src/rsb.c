@@ -693,6 +693,22 @@ static uint get_level_cuts(const uint level, const uint levels,
   return cuts;
 }
 
+static void run_pre_partitioner(struct array *elements, int ndim,
+                                const struct comm *lc,
+                                const parrsb_options options, buffer *bfr) {
+  metric_tic(lc, RSB_PRE);
+  switch (options->rsb_pre) {
+  case 0:
+    parallel_sort(struct rsb_element, elements, globalId, gs_long, 0, 1, lc,
+                  bfr);
+    break;
+  case 1: rcb(elements, sizeof(struct rsb_element), ndim, lc, bfr); break;
+  case 2: rib(elements, sizeof(struct rsb_element), ndim, lc, bfr); break;
+  default: break;
+  }
+  metric_toc(lc, RSB_PRE);
+}
+
 void rsb(struct array *elements, int nv, const parrsb_options options,
          const struct comm *comms, buffer *bfr) {
   const unsigned levels = options->levels;
@@ -705,18 +721,7 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
     struct comm lc;
     comm_dup(&lc, &comms[level]);
     for (uint cut = 0; cut < ncuts; cut++) {
-      // Run the pre-partitioner.
-      metric_tic(&lc, RSB_PRE);
-      switch (options->rsb_pre) {
-      case 0:
-        parallel_sort(struct rsb_element, elements, globalId, gs_long, 0, 1,
-                      &lc, bfr);
-        break;
-      case 1: rcb(elements, sizeof(struct rsb_element), ndim, &lc, bfr); break;
-      case 2: rib(elements, sizeof(struct rsb_element), ndim, &lc, bfr); break;
-      default: break;
-      }
-      metric_toc(&lc, RSB_PRE);
+      run_pre_partitioner(elements, ndim, &lc, options, bfr);
 
       struct rsb_element *const pe = (struct rsb_element *const)elements->ptr;
       for (unsigned i = 0; i < elements->n; i++) pe[i].proc = lc.id;
