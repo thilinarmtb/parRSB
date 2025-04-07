@@ -37,7 +37,7 @@ int power_iter(double *y, uint N, double *A) {
   }
   free(Ay);
 
-  return i;
+  return 0;
 }
 
 int inv_power_iter(double *y, uint N, double *A) {
@@ -45,16 +45,20 @@ int inv_power_iter(double *y, uint N, double *A) {
   for (uint j = 0; j < N; j++)
     for (uint k = 0; k < N; k++) Ainv[j * N + k] = A[k * N + j];
 
-  matrix_inverse(N, Ainv);
+  int err = matrix_inverse(N, Ainv);
+  if (err != 0) {
+    fprintf(stderr, "Matrix inverse failed!\n");
+    fflush(stderr);
+    return err;
+  }
 
-  uint j;
-  for (j = 0; j < N; j++)
+  for (uint j = 0; j < N; j++)
     for (uint k = 0; k < N; k++) A[j * N + k] = Ainv[k * N + j];
-  j = power_iter(y, N, Ainv);
+  power_iter(y, N, Ainv);
 
   free(Ainv);
 
-  return j;
+  return 0;
 }
 
 inline static double sign(scalar a, scalar b) {
