@@ -2,10 +2,8 @@ CC ?= mpicc
 CFLAGS ?= -std=c99 -g -Wall -Wextra -Wpedantic -Wno-unused-function
 LDFLAGS ?=
 DEBUG ?= 0
-UNDERSCORE ?= 1
 SYNC_BY_REDUCTION ?= 1
 BLAS ?= 0
-BLASDIR ?=
 BLASFLAGS ?= -lblas -llapack
 GSLIBPATH ?=
 
@@ -14,8 +12,8 @@ ifeq ($(GSLIBPATH),)
   $(error Specify GSLIBPATH=<path to gslib build>)
 endif
 
-MKFILEPATH := $(abspath $(lastword $(MAKEFILE_LIST)))
-SRCROOT := $(realpath $(patsubst %/,%,$(dir $(MKFILEPATH))))
+MKFILEPATH = $(abspath $(lastword $(MAKEFILE_LIST)))
+SRCROOT = $(realpath $(patsubst %/,%,$(dir $(MKFILEPATH))))
 SRCDIR = $(SRCROOT)/src
 EXAMPLEDIR = $(SRCROOT)/examples
 BUILDROOT = $(SRCROOT)/build
@@ -33,16 +31,9 @@ EXAMPLEBINS = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%,$(EXAMPLES))
 LIB = $(BUILDROOT)/lib/libparRSB.a
 
 ifneq ($(DEBUG),0)
-  PP += -DPARRSB_DEBUG
   CFLAGS += -g
 else
   CFLAGS += -O2
-endif
-
-PP += -DPARRSB_MPI
-
-ifneq ($(UNDERSCORE),0)
-  PP += -DPARRSB_UNDERSCORE
 endif
 
 ifneq ($(SYNC_BY_REDUCTION),0)
@@ -51,9 +42,6 @@ endif
 
 ifneq ($(BLAS),0)
   PP += -DPARRSB_BLAS
-  ifneq ($(BLASDIR),)
-    LDFLAGS+= -L$(BLASDIR)
-  endif
   LDFLAGS += $(BLASFLAGS)
 endif
 
