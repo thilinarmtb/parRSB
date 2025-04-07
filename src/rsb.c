@@ -272,15 +272,16 @@ static sint find_or_insert(struct array *cids, struct cmp_t *t) {
 
 static uint get_components_v2(sint *component, struct array *elems, unsigned nv,
                               const struct comm *ci, buffer *bfr) {
-  uint nelt = elems->n;
-  struct rsb_element *pe = (struct rsb_element *)elems->ptr;
+  metric_tic(ci, RSB_COMPONENTS);
 
-  slong out[2][1], wrk[2][1], in = nelt;
+  slong nc = 0;
+
+  slong out[2][1], wrk[2][1], in = elems->n;
   comm_scan(out, ci, gs_long, gs_add, &in, 1, wrk);
   ulong nelg = out[1][0];
+  if (nelg == 0) goto exit_early;
 
-  if (nelg == 0) return 0;
-
+  const uint nelt = elems->n;
   const uint nev = nelt * nv;
   sint *p0 = tcalloc(sint, nev);
   sint *p = tcalloc(sint, nev);
@@ -292,9 +293,9 @@ static uint get_components_v2(sint *component, struct array *elems, unsigned nv,
 
   for (uint e = 0; e < nelt; e++) component[e] = -1;
 
+  struct rsb_element *pe = (struct rsb_element *)elems->ptr;
   struct comm c;
   ulong nmkd = 0;
-  slong nc = 0;
   do {
     // Copy unmarked elements to ids.
     uint unmkd = 0;
@@ -437,6 +438,10 @@ static uint get_components_v2(sint *component, struct array *elems, unsigned nv,
   if (null_input == 1) free(component);
   free(p0), free(p), free(ids), free(inds);
 
+exit_early:
+  metric_toc(ci, RSB_COMPONENTS);
+  metric_acc(RSB_COMPONENTS_NCOMP, nc);
+
   return nc;
 }
 
@@ -554,8 +559,10 @@ static int balance_partitions(struct array *elements, unsigned nv,
                               buffer *bfr) {
   // Return if there is only one processor (or partition).
   if (gc->np == 1 || gc->np == lc->np) return 0;
-
+  // Check if the bin value is valid.
   assert(check_bin_val(bin) == 0 && "Invalid bin value !");
+
+  metric_tic(lc, RSB_BALANCE);
 
   struct ielem_t {
     uint index, orig;
@@ -659,6 +666,7 @@ static int balance_partitions(struct array *elements, unsigned nv,
   }
 
   free(ids), gs_free(gsh);
+  metric_toc(lc, RSB_BALANCE);
   return 0;
 }
 
@@ -724,12 +732,10 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
       run_pre_partitioner(elements, ndim, &lc, options, bfr);
 
       struct rsb_element *const pe = (struct rsb_element *const)elements->ptr;
-      for (unsigned i = 0; i < elements->n; i++) pe[i].proc = lc.id;
+      for (uint i = 0; i < elements->n; i++) pe[i].proc = lc.id;
 
       // Find the Fiedler vector.
-      metric_tic(&lc, RSB_FIEDLER);
       fiedler(elements, nv, options, &lc, bfr);
-      metric_toc(&lc, RSB_FIEDLER);
 
       // Sort by Fiedler value.
       metric_tic(&lc, RSB_SORT);
@@ -737,25 +743,18 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
                     bfr);
       metric_toc(&lc, RSB_SORT);
 
-      // Get the bin of the current process.
+      // Get the bin of the current process and create a temporary communicator
+      // `tc`.
       sint bin = get_bin(&lc, level, levels, comms);
-
-      // Create the new communicator `tc`.
       struct comm tc;
       comm_split(&lc, bin, lc.id, &tc);
 
       // Find the number of disconnected components.
-      if (options->find_disconnected_comps == 0) goto bisect_and_balance;
-      metric_tic(&lc, RSB_COMPONENTS);
-      uint ncomp = get_components_v2(NULL, elements, nv, &tc, bfr);
-      metric_acc(RSB_COMPONENTS_NCOMP, ncomp);
-      metric_toc(&lc, RSB_COMPONENTS);
+      if (options->find_disconnected_comps == 1)
+        get_components_v2(NULL, elements, nv, &tc, bfr);
 
-    bisect_and_balance:
       // Bisect and balance.
-      metric_tic(&lc, RSB_BALANCE);
       balance_partitions(elements, nv, &tc, &lc, bin, bfr);
-      metric_toc(&lc, RSB_BALANCE);
 
       // Split the communicator and recurse on the sub-problems.
       comm_free(&lc), comm_dup(&lc, &tc), comm_free(&tc);
