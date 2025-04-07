@@ -15,7 +15,7 @@ static uint get_partition(const struct comm *const gc,
   return part;
 }
 
-static uint get_neighbors(const struct array *const elems, const unsigned nv,
+static uint get_neighbors(const struct array *const elems, const uint nv,
                           const struct comm *const gc,
                           const struct comm *const lc, buffer *bfr) {
   const uint n = elems->n;
@@ -116,7 +116,7 @@ static uint get_neighbors(const struct array *const elems, const unsigned nv,
 /*
  * Find the number of disconnected components.
  */
-static uint get_components(sint *component, struct array *elems, unsigned nv,
+static uint get_components(sint *component, struct array *elems, uint nv,
                            struct comm *c, buffer *buf) {
   uint nelt = elems->n;
   struct rsb_element *pe = (struct rsb_element *)elems->ptr;
@@ -265,14 +265,13 @@ static sint find_or_insert(struct array *cids, struct cmp_t *t) {
   pc[n] = t0, cids->n++;
 
   // Sanity check.
-  for (unsigned i = 1; i < cids->n; i++) assert(pc[i - 1].c < pc[i].c);
+  for (uint i = 1; i < cids->n; i++) assert(pc[i - 1].c < pc[i].c);
 
   return -1;
 }
 
-static slong get_components_v2(sint *component, struct array *elems,
-                               unsigned nv, const struct comm *ci,
-                               buffer *bfr) {
+static slong get_components_v2(sint *component, struct array *elems, uint nv,
+                               const struct comm *ci, buffer *bfr) {
   metric_tic(ci, RSB_COMPONENTS);
 
   slong nc = 0;
@@ -445,14 +444,13 @@ exit_early:
 }
 
 static void test_component_versions(struct array *elements, struct comm *lc,
-                                    unsigned nv, unsigned lvl, buffer *bfr) {
+                                    uint nv, uint lvl, buffer *bfr) {
   // Send elements to % P processor to create disconnected components.
   struct crystal cr;
   crystal_init(&cr, lc);
 
   struct rsb_element *pe = (struct rsb_element *)elements->ptr;
-  for (unsigned e = 0; e < elements->n; e++)
-    pe[e].proc = pe[e].globalId % lc->np;
+  for (uint e = 0; e < elements->n; e++) pe[e].proc = pe[e].globalId % lc->np;
 
   sarray_transfer(struct rsb_element, elements, proc, 1, &cr);
 
@@ -549,9 +547,8 @@ static void check_rsb_partition(const struct comm *gc,
   }
 }
 
-static int balance_partitions(struct array *elements, unsigned nv,
-                              struct comm *lc, struct comm *gc, int bin,
-                              buffer *bfr) {
+static int balance_partitions(struct array *elements, uint nv, struct comm *lc,
+                              struct comm *gc, int bin, buffer *bfr) {
   metric_tic(lc, RSB_BALANCE);
 
   // Return if there is only one processor (or partition).
@@ -711,7 +708,7 @@ static void run_pre_partitioner(struct array *elements, int ndim,
 
 void rsb(struct array *elements, int nv, const parrsb_options options,
          const struct comm *comms, buffer *bfr) {
-  const unsigned levels = options->levels;
+  const uint levels = options->levels;
   const uint ndim = nv_to_ndim(nv);
   const struct comm *gc = &comms[0];
   for (uint level = 0; level < levels; level++) {
