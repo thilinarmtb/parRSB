@@ -481,29 +481,18 @@ static void test_component_versions(struct array *elements, struct comm *lc,
   crystal_free(&cr);
 }
 
-static void check_disconnected_components(const int i, const struct comm *gc,
-                                          void *bfr) {
-  sint minc = (sint)metric_get_value(i, RSB_COMPONENTS_NCOMP), maxc = minc;
-  comm_allreduce(gc, gs_int, gs_min, &minc, 1, (void *)bfr);
-  comm_allreduce(gc, gs_int, gs_max, &maxc, 1, (void *)bfr);
-
-  if (maxc > 1 && gc->id == 0) {
-    fprintf(stderr,
-            "Warning: Partition created %d/%d (min/max) disconnected "
-            "components in Level=%d!\n",
-            minc, maxc, i);
-    fflush(stderr);
-  }
-}
-
 static void check_rsb_partition(const struct comm *gc,
                                 const parrsb_options opts) {
-  int max_levels = log2ll(gc->np);
-  int miter = opts->rsb_max_iter, mpass = opts->rsb_max_passes;
+  sint max_levels = metric_get_levels();
+  uint miter = opts->rsb_max_iter;
+  uint mpass = opts->rsb_max_passes;
 
-  for (int i = 0; i < max_levels; i++) {
+  slong wrk[4];
+  comm_allreduce(gc, gs_int, gs_max, &max_levels, 1, (void *)wrk);
+
+  for (sint i = 0; i < max_levels; i++) {
     sint converged = 1;
-    int val = (int)metric_get_value(i, RSB_FIEDLER_CALC_NITER);
+    uint val = (uint)metric_get_value(i, RSB_FIEDLER_CALC_NITER);
     if (opts->rsb_algo == 0) {
       if (val == miter * mpass) converged = 0;
     } else if (opts->rsb_algo == 1) {
@@ -512,39 +501,51 @@ static void check_rsb_partition(const struct comm *gc,
 
     struct comm c;
     comm_split(gc, converged, gc->id, &c);
+    if (converged == 1) goto print_components;
 
-    slong bfr[4];
-    if (converged == 0) {
-      if (opts->rsb_algo == 0) {
-        double init = metric_get_value(i, TOL_INIT);
-        comm_allreduce(&c, gs_double, gs_min, &init, 1, (void *)bfr);
+    if (opts->rsb_algo == 0) {
+      double init = metric_get_value(i, TOL_INIT);
+      comm_allreduce(&c, gs_double, gs_min, &init, 1, (void *)wrk);
 
-        double target = metric_get_value(i, TOL_TGT);
-        comm_allreduce(&c, gs_double, gs_min, &target, 1, (void *)bfr);
+      double target = metric_get_value(i, TOL_TGT);
+      comm_allreduce(&c, gs_double, gs_min, &target, 1, (void *)wrk);
 
-        double final = metric_get_value(i, TOL_FNL);
-        comm_allreduce(&c, gs_double, gs_min, &final, 1, (void *)bfr);
-        if (c.id == 0) {
-          fprintf(stderr,
-                  "Warning: Lanczos reached a residual of %lf (target: %lf) "
-                  "after %d x %d iterations in Level=%d!\n",
-                  final, target, mpass, miter, i);
-          fflush(stderr);
-        }
-      } else if (opts->rsb_algo == 1) {
-        if (c.id == 0) {
-          fprintf(stderr,
-                  "Warning: Inverse iteration didn't converge after %d "
-                  "iterations in Level = %d\n",
-                  mpass, i);
-          fflush(stderr);
-        }
+      double final = metric_get_value(i, TOL_FNL);
+      comm_allreduce(&c, gs_double, gs_min, &final, 1, (void *)wrk);
+
+      if (c.id == 0) {
+        fprintf(stderr,
+                "Warning: Lanczos reached a residual of %lf (target: %lf) "
+                "after %u x %u iterations in Level=%d!\n",
+                final, target, mpass, miter, i);
+        fflush(stderr);
+      }
+    } else if (opts->rsb_algo == 1) {
+      if (c.id == 0) {
+        fprintf(stderr,
+                "Warning: Inverse iteration didn't converge after %d "
+                "iterations in Level = %d\n",
+                mpass, i);
+        fflush(stderr);
       }
     }
     comm_free(&c);
 
-    if (opts->find_disconnected_comps == 1)
-      check_disconnected_components(i, gc, (void *)bfr);
+  print_components:
+    if (opts->find_disconnected_comps == 0) continue;
+
+    slong minc = (slong)metric_get_value(i, RSB_COMPONENTS_NCOMP);
+    slong maxc = minc;
+    comm_allreduce(gc, gs_int, gs_min, &minc, 1, (void *)wrk);
+    comm_allreduce(gc, gs_int, gs_max, &maxc, 1, (void *)wrk);
+
+    if (maxc > 1 && gc->id == 0) {
+      fprintf(stderr,
+              "Warning: Partition created %lld/%lld (min/max) disconnected "
+              "components in Level=%d!\n",
+              minc, maxc, i);
+      fflush(stderr);
+    }
   }
 }
 
