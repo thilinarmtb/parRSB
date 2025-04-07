@@ -12,7 +12,7 @@ inline static scalar dot(scalar *y, scalar *x, uint n) {
   return result;
 }
 
-inline static void ortho(scalar *q, uint lelt, ulong n, struct comm *c) {
+inline static void ortho(scalar *q, uint lelt, ulong n, const struct comm *c) {
   scalar sum = 0.0;
   for (uint i = 0; i < lelt; i++) sum += q[i];
 
@@ -24,8 +24,8 @@ inline static void ortho(scalar *q, uint lelt, ulong n, struct comm *c) {
 }
 
 static int project(scalar *x, uint n, scalar *b, laplacian L, struct mg *d,
-                   struct comm *c, unsigned miter, double tol, int null_space,
-                   int verbose, buffer *bfr) {
+                   const struct comm *c, unsigned miter, double tol,
+                   int null_space, int verbose, buffer *bfr) {
   slong out[2][1], buf[2][1], in = n;
   comm_scan(out, c, gs_long, gs_add, &in, 1, buf);
   ulong ng = out[1][0];
@@ -119,8 +119,9 @@ static int project(scalar *x, uint n, scalar *b, laplacian L, struct mg *d,
 // Input z should be orthogonal to 1-vector, have unit norm.
 // inverse iteration should not change z.
 static int inverse(scalar *y, struct array *elements, unsigned nv, scalar *z,
-                   struct comm *gsc, unsigned miter, unsigned mpass, double tol,
-                   int factor, int grammian, slong nelg, buffer *buf) {
+                   const struct comm *gsc, unsigned miter, unsigned mpass,
+                   double tol, int factor, int grammian, slong nelg,
+                   buffer *buf) {
   metric_tic(gsc, RSB_INVERSE_SETUP);
   uint lelt = elements->n;
   struct rsb_element *elems = (struct rsb_element *)elements->ptr;
@@ -257,7 +258,7 @@ static int inverse(scalar *y, struct array *elements, unsigned nv, scalar *z,
 
 static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint lelt,
                        ulong nelg, int niter, double tol, scalar *f,
-                       laplacian gl, struct comm *gsc, buffer *bfr) {
+                       laplacian gl, const struct comm *gsc, buffer *bfr) {
   scalar *r = tcalloc(scalar, 3 * lelt), *p = r + lelt, *w = p + lelt;
   // vec_copy(r, f);
   uint i;
@@ -330,7 +331,7 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint lelt,
 }
 
 static int lanczos(scalar *fiedler, struct array *elements, unsigned nv,
-                   scalar *initv, struct comm *gsc, unsigned miter,
+                   scalar *initv, const struct comm *gsc, unsigned miter,
                    unsigned mpass, double tol, slong nelg, buffer *bfr) {
   metric_tic(gsc, RSB_LANCZOS_SETUP);
 
@@ -386,11 +387,13 @@ static int lanczos(scalar *fiedler, struct array *elements, unsigned nv,
 }
 
 int fiedler(struct array *elements, int nv, const parrsb_options opts,
-            struct comm *gsc, buffer *buf) {
+            const struct comm *gsc, buffer *buf) {
   // Return if the number of processes is equal to 1.
   if (gsc->np == 1) return 0;
 
+  metric_tic(gsc, RSB_FIEDLER);
   metric_tic(gsc, RSB_FIEDLER_SETUP);
+
   uint lelt = elements->n;
   slong out[2][1], wrk[2][1], in = lelt;
   comm_scan(out, gsc, gs_long, gs_add, &in, 1, wrk);
@@ -408,9 +411,11 @@ int fiedler(struct array *elements, int nv, const parrsb_options opts,
 
   rni = 1.0 / sqrt(rtr);
   for (uint i = 0; i < lelt; i++) initv[i] *= rni;
+
   metric_toc(gsc, RSB_FIEDLER_SETUP);
 
   metric_tic(gsc, RSB_FIEDLER_CALC);
+
   int iter = 0;
   scalar *f = tcalloc(scalar, lelt);
   switch (opts->rsb_algo) {
@@ -425,6 +430,7 @@ int fiedler(struct array *elements, int nv, const parrsb_options opts,
     break;
   default: break;
   }
+
   metric_toc(gsc, RSB_FIEDLER_CALC);
   metric_acc(RSB_FIEDLER_CALC_NITER, iter);
 
@@ -442,5 +448,7 @@ int fiedler(struct array *elements, int nv, const parrsb_options opts,
 
   if (initv) free(initv);
   if (f) free(f);
+
+  metric_toc(gsc, RSB_FIEDLER);
   return 0;
 }

@@ -21,12 +21,12 @@ void metric_acc(metric m, double val) { metrics[m] += val; }
 
 void metric_set(metric m, double val) { metrics[m] = val; }
 
-void metric_tic(struct comm *c, metric m) {
+void metric_tic(const struct comm *c, metric m) {
   comm_barrier(c);
   metrics[m] -= comm_time();
 }
 
-void metric_toc(struct comm *c, metric m) {
+void metric_toc(const struct comm *c, metric m) {
   metrics[m] += comm_time();
   comm_barrier(c);
 }
@@ -49,7 +49,7 @@ void metric_push_level(void) {
 
 uint metric_get_levels(void) { return stack_size; }
 
-static void metric_print_aux(double *wrk, struct comm *c) {
+static void metric_print_aux(double *wrk, const struct comm *c) {
   double *min = wrk, *max = min + MAXSIZE, *sum = max + MAXSIZE;
   double *buf = sum + MAXSIZE;
 
@@ -65,7 +65,7 @@ static void metric_print_aux(double *wrk, struct comm *c) {
 #define SUMMARY(i, m)                                                          \
   sum[i * MAXMETS + m], min[i * MAXMETS + m], max[i * MAXMETS + m]
 
-void metric_rsb_print(struct comm *c, int profile_level) {
+void metric_rsb_print(const struct comm *c, int profile_level) {
   double *wrk = tcalloc(double, 4 * MAXSIZE);
   metric_print_aux(wrk, c);
   double *min = wrk, *max = min + MAXSIZE, *sum = max + MAXSIZE;
@@ -105,7 +105,7 @@ void metric_rsb_print(struct comm *c, int profile_level) {
   if (wrk) free(wrk);
 }
 
-void metric_crs_print(struct comm *c, int profile_level) {
+void metric_crs_print(const struct comm *c, int profile_level) {
   double *wrk = tcalloc(double, 4 * MAXSIZE);
   metric_print_aux(wrk, c);
   double *min = wrk, *max = min + MAXSIZE, *sum = max + MAXSIZE;

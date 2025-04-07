@@ -113,8 +113,8 @@ static int rcb_level(struct array *a, size_t unit_size, int ndim,
   return 0;
 }
 
-int rcb(struct array *elements, size_t unit_size, int ndim, struct comm *ci,
-        buffer *bfr) {
+int rcb(struct array *elements, size_t unit_size, int ndim,
+        const struct comm *ci, buffer *bfr) {
   struct comm c;
   comm_dup(&c, ci);
 

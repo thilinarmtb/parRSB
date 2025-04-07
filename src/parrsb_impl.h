@@ -70,9 +70,9 @@ struct rcb_element {
 };
 
 INTERN int rcb(struct array *elements, size_t unit_size, int ndim,
-               struct comm *c, buffer *bfr);
+               const struct comm *c, buffer *bfr);
 INTERN int rib(struct array *elements, size_t unit_size, int ndim,
-               struct comm *c, buffer *bfr);
+               const struct comm *c, buffer *bfr);
 
 /*
  * RSB. `struct rsb_element` = `struct rcb_element` + `vertices`. Order is
@@ -89,7 +89,7 @@ INTERN void rsb(struct array *elements, int nv, const parrsb_options options,
                 const struct comm *comms, buffer *bfr);
 
 INTERN int fiedler(struct array *elements, int nv, const parrsb_options options,
-                   struct comm *gsc, buffer *buf);
+                   const struct comm *gsc, buffer *buf);
 
 /*
  * Laplacian.
@@ -99,7 +99,7 @@ INTERN int fiedler(struct array *elements, int nv, const parrsb_options options,
 
 typedef struct laplacian *laplacian;
 INTERN int laplacian_init(laplacian *l, struct rsb_element *elems, uint nel,
-                          int nv, int type, struct comm *c, buffer *bfr);
+                          int nv, int type, const struct comm *c, buffer *bfr);
 INTERN int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *bfr);
 INTERN int laplacian_free(laplacian *l);
 

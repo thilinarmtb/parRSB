@@ -85,8 +85,8 @@ static int rib_level(struct array *a, size_t unit_size, int ndim,
   return 0;
 }
 
-int rib(struct array *elements, size_t unit_size, int ndim, struct comm *ci,
-        buffer *bfr) {
+int rib(struct array *elements, size_t unit_size, int ndim,
+        const struct comm *ci, buffer *bfr) {
   struct comm c;
   comm_dup(&c, ci);
 

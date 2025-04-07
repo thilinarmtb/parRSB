@@ -117,8 +117,8 @@ struct gs_laplacian {
 };
 
 static int gs_weighted_init(laplacian l, struct rsb_element *elems,
-                            const uint lelt, const unsigned nv, struct comm *c,
-                            buffer *buf) {
+                            const uint lelt, const unsigned nv,
+                            const struct comm *c, buffer *buf) {
 
   uint npts = nv * lelt;
   slong *vertices = tcalloc(slong, npts);
@@ -177,7 +177,7 @@ static int gs_weighted_free(laplacian l) {
  * Laplacian - user API.
  */
 int laplacian_init(laplacian *l_, struct rsb_element *elems, uint nel, int nv,
-                   int type, struct comm *c, buffer *buf) {
+                   int type, const struct comm *c, buffer *buf) {
   laplacian l = *l_ = tcalloc(struct laplacian, 1);
   l->type = type;
   l->nv = nv;
