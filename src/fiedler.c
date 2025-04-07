@@ -388,10 +388,11 @@ static int lanczos(scalar *fiedler, struct array *elements, unsigned nv,
 
 int fiedler(struct array *elements, int nv, const parrsb_options opts,
             const struct comm *gsc, buffer *buf) {
-  // Return if the number of processes is equal to 1.
-  if (gsc->np == 1) return 0;
-
   metric_tic(gsc, RSB_FIEDLER);
+
+  // Return if the number of processes is equal to 1.
+  if (gsc->np == 1) goto early_exit;
+
   metric_tic(gsc, RSB_FIEDLER_SETUP);
 
   uint lelt = elements->n;
@@ -428,7 +429,6 @@ int fiedler(struct array *elements, int nv, const parrsb_options opts,
                    opts->rsb_max_passes, opts->rsb_tol, opts->rsb_mg_factor,
                    opts->rsb_mg_grammian, nelg, buf);
     break;
-  default: break;
   }
 
   metric_toc(gsc, RSB_FIEDLER_CALC);
@@ -449,6 +449,7 @@ int fiedler(struct array *elements, int nv, const parrsb_options opts,
   if (initv) free(initv);
   if (f) free(f);
 
+early_exit:
   metric_toc(gsc, RSB_FIEDLER);
   return 0;
 }
