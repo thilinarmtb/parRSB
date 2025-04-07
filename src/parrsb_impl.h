@@ -120,4 +120,7 @@ INTERN void matrix_inverse(int N, double *A);
 INTERN int power_iter(double *y, uint N, double *A);
 
 INTERN int inv_power_iter(double *y, uint N, double *A);
+
+INTERN int tqli(scalar *evectors, scalar *evalues, sint n, scalar *diagonal,
+                scalar *upper, int id);
 #endif
