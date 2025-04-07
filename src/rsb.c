@@ -443,42 +443,6 @@ exit_early:
   return nc;
 }
 
-static void test_component_versions(struct array *elements, struct comm *lc,
-                                    uint nv, uint lvl, buffer *bfr) {
-  // Send elements to % P processor to create disconnected components.
-  struct crystal cr;
-  crystal_init(&cr, lc);
-
-  struct rsb_element *pe = (struct rsb_element *)elements->ptr;
-  for (uint e = 0; e < elements->n; e++) pe[e].proc = pe[e].globalId % lc->np;
-
-  sarray_transfer(struct rsb_element, elements, proc, 1, &cr);
-
-  struct comm tc0;
-  int color = (lc->id < lc->np / 2);
-  comm_split(lc, color, lc->id, &tc0);
-
-  sint nc1 = get_components(NULL, elements, nv, &tc0, bfr);
-  sint nc2 = get_components_v2(NULL, elements, nv, &tc0, bfr);
-  if (nc1 != nc2) {
-    if (tc0.id == 0) {
-      fprintf(stderr, "Error: Level = %u SS BFS != MS BFS: %d %d\n", lvl, nc1,
-              nc2);
-      fflush(stderr);
-    }
-    exit(EXIT_FAILURE);
-  }
-  if (nc1 > 1) {
-    if (tc0.id == 0)
-      printf("Warning: Level = %u has %d disconnected components.\n", lvl, nc1);
-    fflush(stdout);
-  }
-
-  comm_free(&tc0);
-  sarray_transfer(struct rsb_element, elements, proc, 0, &cr);
-  crystal_free(&cr);
-}
-
 static void check_rsb_partition(const struct comm *gc,
                                 const parrsb_options opts) {
   sint max_levels = metric_get_levels();
