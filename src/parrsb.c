@@ -102,16 +102,16 @@ static void restore_original(int *part, struct crystal *cr, struct array *elist,
   sarray_transfer_(elist, usize, offsetof(struct rcb_element, origin), 1, cr);
   uint nel = elist->n;
 
-  if (usize == sizeof(struct rsb_element)) // RSB
+  if (usize == sizeof(struct rsb_element))
     sarray_sort(struct rsb_element, elist->ptr, nel, globalId, 1, bfr);
-  else if (usize == sizeof(struct rcb_element)) // RCB
+  else if (usize == sizeof(struct rcb_element))
     sarray_sort(struct rcb_element, elist->ptr, nel, globalId, 1, bfr);
 
   struct rcb_element *element;
   uint e;
   for (e = 0; e < nel; e++) {
     element = (struct rcb_element *)((char *)elist->ptr + e * usize);
-    part[e] = element->origin; // element[e].origin;
+    part[e] = element->origin;
   }
 }
 
