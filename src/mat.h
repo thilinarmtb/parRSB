@@ -3,15 +3,7 @@
 
 #include <gslib.h>
 
-#ifdef scalar
-#undef scalar
-#endif
-#define scalar double
-
-#ifdef SCALAR_MAX
-#undef SCALAR_MAX
-#endif
-#define SCALAR_MAX DBL_MAX
+#include "types.h"
 
 struct nbr {
   ulong r, c;

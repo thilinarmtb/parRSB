@@ -4,6 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "parrsb.h"
+#include "types.h"
 
 #include <float.h>
 #include <stdlib.h>
@@ -55,17 +56,6 @@ struct parrsb_options {
 #else
 #define INTERN extern VISIBILITY(hidden)
 #endif
-
-#ifdef scalar
-#undef scalar
-#endif
-#define scalar double
-
-#ifdef SCALAR_MAX
-#undef SCALAR_MAX
-#endif
-#define SCALAR_MAX DBL_MAX
-#define SCALAR_TOL 1e-12
 
 #define MAXDIM 3 // Maximum dimension of the mesh.
 #define MAXNV 8  // Maximum number of vertices per element.
@@ -124,4 +114,10 @@ INTERN void parrsb_print(const struct comm *c, int verbose, const char *fmt,
 INTERN void parrsb_print_stack(void);
 
 INTERN int log2ll(long long n);
+
+INTERN void matrix_inverse(int N, double *A);
+
+INTERN int power_iter(double *y, uint N, double *A);
+
+INTERN int inv_power_iter(double *y, uint N, double *A);
 #endif

@@ -8,8 +8,6 @@
 
 #define MM 500
 
-extern void matrix_inverse(int N, double *A);
-
 inline static scalar dot(scalar *y, scalar *x, uint n) {
   scalar result = 0.0;
   for (uint i = 0; i < n; i++) result += x[i] * y[i];
@@ -27,66 +25,6 @@ inline static void ortho(scalar *q, uint lelt, ulong n, struct comm *c) {
   sum /= n;
 
   for (i = 0; i < lelt; i++) q[i] -= sum;
-}
-
-struct fiedler {
-  scalar fiedler;
-  uint proc, seq;
-  int part0, part1;
-};
-
-int power_serial(double *y, uint N, double *A) {
-  time_t t;
-  srand((unsigned)time(&t));
-
-  scalar norm = 0.0;
-  for (uint i = 0; i < N; i++) {
-    y[i] = (rand() % 50) / 50.0;
-    norm += y[i] * y[i];
-  }
-
-  scalar normi = 1.0 / sqrt(norm);
-  for (uint i = 0; i < N; i++) y[i] *= normi;
-
-  double *Ay = tcalloc(double, N);
-  scalar err = 1.0, lambda;
-  unsigned i;
-  for (i = 0; i < 100; i++) {
-    norm = 0.0;
-    for (uint j = 0; j < N; j++) {
-      Ay[j] = 0.0;
-      for (uint k = 0; k < N; k++) { Ay[j] += A[j * N + k] * y[k]; }
-      norm += Ay[j] * Ay[j];
-    }
-
-    if (i > 0) err = (sqrt(norm) - lambda) / lambda;
-    lambda = sqrt(norm);
-
-    normi = 1.0 / sqrt(norm);
-    for (uint j = 0; j < N; j++) y[j] = Ay[j] * normi;
-
-    if (fabs(err) < 1e-12) break;
-  }
-  free(Ay);
-
-  return i;
-}
-
-static int inv_power_serial(double *y, uint N, double *A) {
-  double *Ainv = tcalloc(double, N *N);
-  for (uint j = 0; j < N; j++)
-    for (uint k = 0; k < N; k++) Ainv[j * N + k] = A[k * N + j];
-
-  matrix_inverse(N, Ainv);
-
-  uint j;
-  for (j = 0; j < N; j++)
-    for (uint k = 0; k < N; k++) A[j * N + k] = Ainv[k * N + j];
-  j = power_serial(y, N, Ainv);
-
-  free(Ainv);
-
-  return j;
 }
 
 static int project(scalar *x, uint n, scalar *b, laplacian L, struct mg *d,
@@ -292,7 +230,7 @@ static int inverse(scalar *y, struct array *elements, unsigned nv, scalar *z,
         comm_allreduce(gsc, gs_double, gs_add, M, N * N, buf->ptr);
 
         // Inverse power iterarion on M
-        inv_power_serial(v, N, M);
+        inv_power_iter(v, N, M);
 
         for (j = 0; j < lelt; j++) z[j] = 0.0;
 
