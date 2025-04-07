@@ -525,7 +525,7 @@ static int balance_partitions(struct array *elements, uint nv, struct comm *lc,
   };
 
   // Calculate expected # of elements per processor.
-  size_t ne = elements->n;
+  uint ne = elements->n;
   slong nelgt = ne, nglob = ne, wrk;
   comm_allreduce(lc, gs_long, gs_add, &nelgt, 1, &wrk);
   comm_allreduce(gc, gs_long, gs_add, &nglob, 1, &wrk);
@@ -535,7 +535,7 @@ static int balance_partitions(struct array *elements, uint nv, struct comm *lc,
   slong send_cnt = (nelgt - nelgt_exp) > 0 ? (nelgt - nelgt_exp) : 0;
 
   // Setup gather-scatter.
-  size_t size = ne * nv;
+  uint size = ne * nv;
   slong *ids = tcalloc(slong, size);
   struct rsb_element *elems = (struct rsb_element *)elements->ptr;
   for (uint e = 0; e < ne; e++)
