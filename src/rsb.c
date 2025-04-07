@@ -2,10 +2,12 @@
 #include "parrsb_impl.h"
 #include "sort.h"
 
+/*
+ * Find the partition id. A partition is a group of processors sharing the same
+ * local communicator.
+ */
 static uint get_partition(const struct comm *const gc,
                           const struct comm *const lc) {
-  // Find the partition id. A partition is a group of processors sharing the
-  // same local communicator.
   sint out[2][1], wrk[2][1], root = (lc->id == 0);
   comm_scan(out, gc, gs_int, gs_add, &root, 1, wrk);
   sint part = out[0][0] * (lc->id == 0);
@@ -694,23 +696,16 @@ static uint get_level_cuts(const uint level, const uint levels,
 void rsb(struct array *elements, int nv, const parrsb_options options,
          const struct comm *comms, buffer *bfr) {
   const unsigned levels = options->levels;
-  const sint verbose = options->verbose_level;
-  const uint ndim = (nv == 8) ? 3 : 2;
+  const uint ndim = nv_to_ndim(nv);
   const struct comm *gc = &comms[0];
   for (uint level = 0; level < levels; level++) {
     // Find the maximum number of RSB cuts in current level.
     uint ncuts = get_level_cuts(level, levels, comms);
-    parrsb_print(gc, verbose, "rsb: Level=%u/%u number of cuts = %u", level + 1,
-                 levels, ncuts);
 
     struct comm lc;
     comm_dup(&lc, &comms[level]);
     for (uint cut = 0; cut < ncuts; cut++) {
       // Run the pre-partitioner.
-      parrsb_print(gc, verbose - 1,
-                   "\trsb: level = %d, cut = %d, Pre-partition ...", level + 1,
-                   cut + 1);
-
       metric_tic(&lc, RSB_PRE);
       switch (options->rsb_pre) {
       case 0:
@@ -727,15 +722,11 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
       for (unsigned i = 0; i < elements->n; i++) pe[i].proc = lc.id;
 
       // Find the Fiedler vector.
-      parrsb_print(gc, verbose - 1, "\trsb: level = %d, cut = %d, Fiedler ... ",
-                   level + 1, cut + 1);
       metric_tic(&lc, RSB_FIEDLER);
       fiedler(elements, nv, options, &lc, bfr);
       metric_toc(&lc, RSB_FIEDLER);
 
       // Sort by Fiedler value.
-      parrsb_print(gc, verbose - 1, "\trsb: level = %d, cut = %d, Sort ...",
-                   level + 1, cut + 1);
       metric_tic(&lc, RSB_SORT);
       parallel_sort(struct rsb_element, elements, fiedler, gs_double, 0, 1, &lc,
                     bfr);
@@ -750,9 +741,6 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
 
       // Find the number of disconnected components.
       if (options->find_disconnected_comps == 0) goto bisect_and_balance;
-      parrsb_print(gc, verbose - 1,
-                   "\trsb: level = %d, cut = %d, Components ...", level + 1,
-                   cut + 1);
       metric_tic(&lc, RSB_COMPONENTS);
       uint ncomp = get_components_v2(NULL, elements, nv, &tc, bfr);
       metric_acc(RSB_COMPONENTS_NCOMP, ncomp);
@@ -760,15 +748,11 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
 
     bisect_and_balance:
       // Bisect and balance.
-      parrsb_print(gc, verbose - 1, "\trsb: level = %d, cut = %d, Balance ...",
-                   level + 1, cut + 1);
       metric_tic(&lc, RSB_BALANCE);
       balance_partitions(elements, nv, &tc, &lc, bin, bfr);
       metric_toc(&lc, RSB_BALANCE);
 
       // Split the communicator and recurse on the sub-problems.
-      parrsb_print(gc, verbose - 1, "\trsb: level = %d, cut = %d, Bisect ...",
-                   level + 1, cut + 1);
       comm_free(&lc), comm_dup(&lc, &tc), comm_free(&tc);
 
       const uint nbrs = get_neighbors(elements, nv, gc, &lc, bfr);

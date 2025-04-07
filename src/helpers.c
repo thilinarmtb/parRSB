@@ -4,6 +4,8 @@
 #include <stdarg.h>
 #include <sys/resource.h>
 
+int nv_to_ndim(int nv) { return (nv == 8) ? 3 : 2; }
+
 void parrsb_barrier(struct comm *c) {
 #if defined(PARRSB_SYNC_BY_REDUCTION)
   sint dummy = c->id, wrk;
@@ -78,7 +80,7 @@ int parrsb_dist_mesh(unsigned int *nelt_, long long **vl_, double **coord_,
   }
   assert(elements.n == nelt);
 
-  unsigned ndim = (nv == 8) ? 3 : 2;
+  unsigned ndim = nv_to_ndim(nv);
   elem_data *ed = elements.ptr;
   double *coord = (coord_ == NULL ? NULL : *coord_);
   if (coord != NULL) {
@@ -131,7 +133,7 @@ int parrsb_setup_mesh(unsigned *nelt, unsigned *nv, long long **vl,
   err = (*vl == NULL);
   parrsb_check_error(err, comm);
 
-  int ndim = (*nv == 8 ? 3 : 2);
+  int ndim = nv_to_ndim(*nv);
   err = parrsb_conn_mesh(*vl, *coord, *nelt, ndim, bcs, nbcs, in->tol, comm);
   parrsb_check_error(err, comm);
 
@@ -368,7 +370,7 @@ int parrsb_vector_dump(const char *fname, scalar *y, struct rsb_element *elm,
   comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
   slong nelgt = out[1][0];
 
-  int ndim = (nv == 8) ? 3 : 2;
+  int ndim = nv_to_ndim(nv);
   uint write_size = ((ndim + 1) * sizeof(double) + sizeof(slong)) * nelt;
   if (rank == 0) write_size += sizeof(long) + sizeof(int); // for nelgt and ndim
 
