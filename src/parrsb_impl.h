@@ -115,8 +115,16 @@ INTERN void parrsb_print_stack(void);
 
 INTERN int log2ll(long long n);
 
-INTERN void matrix_inverse(int N, double *A);
+INTERN int get_ndim(int nv);
 
+/*
+ * Matrix inverse (local to MPI process).
+ */
+INTERN int matrix_inverse(int N, scalar *A);
+
+/*
+ * General eigenvalue related.
+ */
 INTERN int power_iter(double *y, uint N, double *A);
 
 INTERN int inv_power_iter(double *y, uint N, double *A);
