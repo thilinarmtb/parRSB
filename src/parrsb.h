@@ -36,6 +36,10 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
                      const int nel, const int nv, const parrsb_options options,
                      MPI_Comm comm);
 
+int parrsb_part_graph(int *part, size_t num_nodes, long long *nodes,
+                      size_t *offsets, long long *neighbors,
+                      const parrsb_options options, MPI_Comm comm);
+
 /*
  * Connectivity calculation algorithms.
  */

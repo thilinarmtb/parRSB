@@ -782,14 +782,14 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
 
   options_update(options);
 
-  // Check verboity and print a message.
   const int verbose = options->verbose_level;
+  if (c.id == 0 && verbose) parrsb_options_print(options);
+
   slong nelg = nel, wrk;
   comm_allreduce(&c, gs_long, gs_add, &nelg, 1, &wrk);
   parrsb_print(&c, verbose, "Running parRSB ..., nv = %d, nelg = %lld", nv,
                nelg);
 
-  if (c.id == 0 && verbose) parrsb_options_print(options);
   if (options->tagged == 1 && !tag) {
     if (c.id == 0) {
       fprintf(
@@ -816,6 +816,141 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
   if (options->tagged == 0)
     parrsb_part_mesh_v0(part, vtx, xyz, nel, nv, options, &c, &cr, &bfr);
 
+  parrsb_print(&c, verbose, "par%s finished in %g seconds.",
+               ALGO[options->partitioner], comm_time() - t);
+
+  metric_rsb_print(&c, options->profile_level);
+  metric_finalize();
+
+  crystal_free(&cr);
+  buffer_free(&bfr);
+  comm_free(&c);
+
+  return 0;
+}
+
+typedef struct {
+  uint nn;
+  ulong *nodes;
+  uint *origin;
+  uint *offsets;
+  ulong *neighbors;
+} graph_t;
+
+static int graph_free(graph_t *graph) {
+  if (!graph) return 1;
+  if (graph->nodes) free(graph->nodes), graph->nodes = 0;
+  if (graph->origin) free(graph->origin), graph->origin = 0;
+  if (graph->offsets) free(graph->offsets), graph->offsets = 0;
+  if (graph->neighbors) free(graph->neighbors), graph->neighbors = 0;
+  graph->nn = 0;
+  return 0;
+}
+
+static int graph_load_balance(graph_t *graph, uint nn, long long *nodes,
+                              size_t *offsets, long long *neighbors,
+                              struct crystal *const cr, buffer *bfr) {
+  const struct comm *c = &cr->comm;
+
+  slong out[2][1], wrk[2][1], in = nn;
+  comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
+  slong start = out[0][0], ng = out[1][0];
+
+  uint nstar = ng / c->np;
+  uint nrem = ng - (slong)nstar * (slong)c->np;
+  slong threshold = (nstar + 1) * nrem;
+
+  typedef struct {
+    ulong u, v;
+    uint p;
+  } pair_t;
+
+  struct array arr;
+  array_init(pair_t, &arr, nn * 27);
+
+  pair_t p;
+  for (uint i = 0; i < nn; i++) {
+    slong ig = start + i;
+    if (nstar == 0)
+      p.p = ig;
+    else if (ig < threshold)
+      p.p = ig / (nstar + 1);
+    else
+      p.p = nrem + (ig - threshold) / nstar;
+
+    p.u = nodes[i];
+    for (uint j = offsets[i], je = offsets[i + 1]; j < je; j++) {
+      p.v = neighbors[j];
+      array_cat(pair_t, &arr, &p, 1);
+    }
+  }
+
+  sarray_transfer(pair_t, &arr, p, 1, cr);
+  sarray_sort_2(pair_t, arr.ptr, arr.n, u, 1, v, 1, bfr);
+
+  graph->nn = (arr.n != 0);
+  if (graph->nn == 0) goto cleanup;
+
+  const pair_t *const pa = (const pair_t *)arr.ptr;
+  for (uint i = 1; i < arr.n; i++)
+    if (pa[i - 1].u != pa[i].u) graph->nn++;
+
+  graph->nodes = tcalloc(ulong, graph->nn);
+  graph->origin = tcalloc(uint, graph->nn);
+  graph->offsets = tcalloc(uint, graph->nn + 1);
+  graph->neighbors = tcalloc(ulong, arr.n);
+
+  graph->nodes[0] = pa[0].u;
+  graph->origin[0] = pa[0].p;
+  graph->offsets[0] = 0;
+  graph->neighbors[0] = pa[0].v;
+  uint nn_ = 1;
+  for (uint i = 1; i < arr.n; i++) {
+    graph->neighbors[i] = pa[i].v;
+    if (pa[i - 1].u == pa[i].u) continue;
+    graph->nodes[nn_] = pa[i].u;
+    graph->offsets[nn_] = i;
+    graph->origin[nn_] = pa[i].p;
+    nn_++;
+  }
+  assert(graph->nn == nn_);
+
+cleanup:
+  array_free(&arr);
+
+  return 0;
+}
+
+int parrsb_part_graph(int *part, size_t num_nodes, long long *nodes,
+                      size_t *offsets, long long *neighbors,
+                      const parrsb_options options, MPI_Comm comm) {
+  struct comm c;
+  comm_init(&c, comm);
+
+  options_update(options);
+
+  int verbose = options->verbose_level;
+  if (c.id == 0 && verbose) parrsb_options_print(options);
+
+  slong n = num_nodes, wrk;
+  comm_allreduce(&c, gs_long, gs_add, &n, 1, &wrk);
+  parrsb_print(&c, verbose, "Running parRSB ..., n = %lld", n);
+
+  buffer bfr;
+  buffer_init(&bfr, (num_nodes + 1) * 27);
+
+  struct crystal cr;
+  crystal_init(&cr, &c);
+
+  metric_init();
+
+  parrsb_barrier(&c);
+  double t = comm_time();
+
+  graph_t graph;
+  graph_load_balance(&graph, num_nodes, nodes, offsets, neighbors, &cr, &bfr);
+
+  graph_free(&graph);
   parrsb_print(&c, verbose, "par%s finished in %g seconds.",
                ALGO[options->partitioner], comm_time() - t);
 
