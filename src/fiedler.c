@@ -419,25 +419,25 @@ int fiedler(struct array *elems, int nv, const parrsb_options opts,
   laplacian_init(&wl, (struct rsb_element *)elems->ptr, lelt, nv, GS, gsc, buf);
   metric_toc(gsc, RSB_LAPLACIAN_SETUP);
 
+  metric_tic(gsc, RSB_FIEDLER_CALC);
+
   int iter = 0;
   scalar *f = tcalloc(scalar, lelt);
   switch (opts->rsb_algo) {
   case 0: iter = lanczos(f, wl, initv, gsc, opts, nelg, buf); break;
   case 1: iter = inverse(f, wl, elems, nv, initv, gsc, opts, nelg, buf); break;
   }
-  laplacian_free(&wl);
-
-  metric_toc(gsc, RSB_FIEDLER_CALC);
   metric_acc(RSB_FIEDLER_CALC_NITER, iter);
 
   scalar norm = 0;
   for (uint i = 0; i < lelt; i++) norm += f[i] * f[i];
-
-  scalar normi;
-  comm_allreduce(gsc, gs_double, gs_add, &norm, 1, &normi);
-  normi = 1.0 / sqrt(norm);
-
+  comm_allreduce(gsc, gs_double, gs_add, &norm, 1, wrk);
+  scalar normi = 1.0 / sqrt(norm);
   for (uint i = 0; i < lelt; i++) f[i] *= normi;
+
+  metric_toc(gsc, RSB_FIEDLER_CALC);
+
+  laplacian_free(&wl);
 
   struct rsb_element *pe = (struct rsb_element *)elems->ptr;
   for (uint i = 0; i < lelt; i++) pe[i].fiedler = f[i];
