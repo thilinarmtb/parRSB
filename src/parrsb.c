@@ -7,15 +7,17 @@
 #include <string.h>
 #include <time.h>
 
+static char *ALGO[3] = {"RSB", "RCB", "RIB"};
+
 static void options_update(parrsb_options options) {
-#define OPT_UPDATE(OPT, STR, IS_INT)                                           \
+#define OPT_UPDATE(opt, var, is_int)                                           \
   do {                                                                         \
-    const char *val = getenv(STR);                                             \
+    const char *val = getenv(var);                                             \
     if (val != NULL) {                                                         \
-      if (IS_INT)                                                              \
-        options->OPT = atoi(val);                                              \
+      if (is_int)                                                              \
+        options->opt = atoi(val);                                              \
       else                                                                     \
-        options->OPT = atof(val);                                              \
+        options->opt = atof(val);                                              \
     }                                                                          \
   } while (0)
 
@@ -36,8 +38,6 @@ static void options_update(parrsb_options options) {
 
 #undef OPT_UPDATE
 }
-
-static char *ALGO[3] = {"RSB", "RCB", "RIB"};
 
 static size_t load_balance(struct array *elist, uint nel, int nv,
                            const double *const xyz, const long long *const vtx,
@@ -107,9 +107,8 @@ static void restore_original(int *part, struct crystal *cr, struct array *elist,
   else if (usize == sizeof(struct rcb_element))
     sarray_sort(struct rcb_element, elist->ptr, nel, globalId, 1, bfr);
 
-  struct rcb_element *element;
-  uint e;
-  for (e = 0; e < nel; e++) {
+  struct rcb_element *element = 0;
+  for (uint e = 0; e < nel; e++) {
     element = (struct rcb_element *)((char *)elist->ptr + e * usize);
     part[e] = element->origin;
   }
