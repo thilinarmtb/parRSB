@@ -39,9 +39,53 @@ static void options_update(parrsb_options options) {
 #undef OPT_UPDATE
 }
 
-static size_t load_balance(struct array *elist, uint nel, int nv,
-                           const double *const xyz, const long long *const vtx,
-                           struct crystal *cr, buffer *bfr) {
+static void initialize_node_comm(struct comm *c, const struct comm *const gc) {
+  MPI_Comm node;
+  MPI_Comm_split_type(gc->c, MPI_COMM_TYPE_SHARED, gc->id, MPI_INFO_NULL,
+                      &node);
+  comm_init(c, node);
+  MPI_Comm_free(&node);
+}
+
+static void initialize_levels(struct comm *const comms, int *const levels_in,
+                              const struct comm *const c, const int verbose) {
+  // Level 1 communicator is the global communicator.
+  comm_dup(&comms[0], c);
+  // Node level communicator is the last level communicator.
+  struct comm nc;
+  initialize_node_comm(&nc, c);
+
+  // Find the number of nodes under the global communicator.
+  sint in = (nc.id == 0), wrk;
+  comm_allreduce(c, gs_int, gs_add, &in, 1, &wrk);
+  uint nn = in;
+
+  // Number of MPI ranks in the node level communicator.
+  uint rpn = nc.np;
+
+  // Check invariant: rpn should be the same across all the nodes.
+  sint max = rpn, min = rpn;
+  comm_allreduce(&comms[0], gs_int, gs_max, &max, 1, &wrk);
+  comm_allreduce(&comms[0], gs_int, gs_min, &min, 1, &wrk);
+  assert(max == min);
+
+  // Check invariant: rpn must be larger than 0.
+  assert(rpn > 0);
+  parrsb_print(c, verbose, "parRSB: nodes = %u, ranks per node = %u", nn, rpn);
+
+  // Hardcode the maximum number of levels to two for now.
+  sint levels = 2;
+  *levels_in = levels = MIN(levels, *levels_in);
+  if (levels > 1) comm_dup(&comms[levels - 1], &nc);
+  comm_free(&nc);
+
+  parrsb_print(c, verbose, "parRSB: levels = %u", levels);
+}
+
+static size_t mesh_load_balance(struct array *elist, uint nel, int nv,
+                                const double *const xyz,
+                                const long long *const vtx, struct crystal *cr,
+                                buffer *bfr) {
   struct comm *c = &cr->comm;
 
   slong out[2][1], wrk[2][1], in = nel;
@@ -97,8 +141,8 @@ static size_t load_balance(struct array *elist, uint nel, int nv,
   return unit_size;
 }
 
-static void restore_original(int *part, struct crystal *cr, struct array *elist,
-                             size_t usize, buffer *bfr) {
+static void mesh_restore(int *part, struct crystal *cr, struct array *elist,
+                         size_t usize, buffer *bfr) {
   sarray_transfer_(elist, usize, offsetof(struct rcb_element, origin), 1, cr);
   uint nel = elist->n;
 
@@ -112,52 +156,8 @@ static void restore_original(int *part, struct crystal *cr, struct array *elist,
     element = (struct rcb_element *)((char *)elist->ptr + e * usize);
     part[e] = element->origin;
   }
-}
 
-static void initialize_node_aux(struct comm *c, const struct comm *const gc) {
-  MPI_Comm node;
-  MPI_Comm_split_type(gc->c, MPI_COMM_TYPE_SHARED, gc->id, MPI_INFO_NULL,
-                      &node);
-  comm_init(c, node);
-  MPI_Comm_free(&node);
-}
-
-static void initialize_levels(struct comm *const comms, int *const levels_in,
-                              const struct comm *const c, const int verbose) {
-  // Level 1 communicator is the global communicator.
-  comm_dup(&comms[0], c);
-  // Node level communicator is the last level communicator.
-  struct comm nc;
-  initialize_node_aux(&nc, c);
-
-  // Find the number of nodes under the global communicator and number of MPI
-  // ranks in the node level communicator.
-  uint num_nodes, nranks_per_node;
-  {
-    sint in = (nc.id == 0), wrk;
-    comm_allreduce(c, gs_int, gs_add, &in, 1, &wrk);
-    num_nodes = in;
-
-    nranks_per_node = nc.np;
-    // Check invariant: nranks_per_node should be the same across all the nodes.
-    sint nranks_max = nranks_per_node, nranks_min = nranks_per_node;
-    comm_allreduce(&comms[0], gs_int, gs_max, &nranks_max, 1, &wrk);
-    comm_allreduce(&comms[0], gs_int, gs_min, &nranks_min, 1, &wrk);
-    assert(nranks_max == nranks_min);
-    // Check invariant: nranks_per_node must be larger than 0.
-    assert(nranks_per_node > 0);
-    parrsb_print(c, verbose,
-                 "initialize_levels: num_nodes = %u, num_ranks_per_node = %u",
-                 num_nodes, nranks_per_node);
-  }
-
-  // Hardcode the maximum number of levels to two for now.
-  sint levels = 2;
-  *levels_in = levels = MIN(levels, *levels_in);
-  if (levels > 1) comm_dup(&comms[levels - 1], &nc);
-  comm_free(&nc);
-
-  parrsb_print(c, verbose, "initialize_levels: levels = %u", levels);
+  array_free(elist);
 }
 
 static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
@@ -176,7 +176,7 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   if (xyz == NULL) options->rsb_pre = 0;
 
   struct array elist;
-  size_t esize = load_balance(&elist, nel, nv, xyz, vtx, cr, bfr);
+  size_t esize = mesh_load_balance(&elist, nel, nv, xyz, vtx, cr, bfr);
 
   struct comm ca;
   comm_split(c, elist.n > 0, c->id, &ca);
@@ -210,9 +210,7 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   for (uint l = 0; l < (uint)options->levels; l++) comm_free(&comms[l]);
 
   parrsb_print(c, verbose, "parrsb_part_mesh_v0: restore original input");
-  restore_original(part, cr, &elist, esize, bfr);
-
-  array_free(&elist);
+  mesh_restore(part, cr, &elist, esize, bfr);
 }
 
 void parrsb_check_tagged_partitions(const long long *const eids,
