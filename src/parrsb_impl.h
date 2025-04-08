@@ -34,6 +34,8 @@ struct parrsb_options {
   int rsb_mg_factor;   // MG Coarsening factor (Default: 2, should be > 1)
 };
 
+typedef struct laplacian *laplacian;
+
 /*
  * Set the visibility of a symbol.
  */
@@ -91,13 +93,15 @@ INTERN void rsb(struct array *elements, int nv, const parrsb_options options,
 INTERN int fiedler(struct array *elements, int nv, const parrsb_options options,
                    const struct comm *gsc, buffer *buf);
 
+INTERN int fiedler1(scalar *fiedler, laplacian l, const parrsb_options opts,
+                    const struct comm *gsc, buffer *buf);
+
 /*
  * Laplacian.
  */
 #define GS 1
 #define CSR 2
 
-typedef struct laplacian *laplacian;
 INTERN int laplacian_init(laplacian *l, struct rsb_element *elems, uint nel,
                           int nv, int type, const struct comm *c, buffer *bfr);
 INTERN uint laplacian_get_size(laplacian wl);
