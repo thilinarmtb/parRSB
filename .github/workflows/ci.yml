@@ -7,7 +7,7 @@ on:
 env:
   GITHUB.TOKEN: ${{ secrets.token }}
   CIDIR: parRSB-github-ci
-  EXAMPLESDIR: build/examples
+  EXAMPLEDIR: build/example
   MPIEXE: "mpirun --oversubscribe"
 jobs:
   parRSB:
@@ -39,14 +39,14 @@ jobs:
 
           # Build parRSB
           export GSLIBPATH=`pwd`/gslib/build/
-          make -j4 examples
+          make -j4 example
 
           # Clone tests
           git clone https://github.com/thilinarmtb/${CIDIR}.git
       - name: gencon
         shell: bash
         run: |
-          cp ${EXAMPLESDIR}/gencon ${CIDIR}/${{ matrix.test }}
+          cp ${EXAMPLEDIR}/gencon ${CIDIR}/${{ matrix.test }}
           cd ${CIDIR}/${{ matrix.test }}
 
           tol=(`cat test.txt | grep tol`); tol=${tol[2]}
@@ -59,7 +59,7 @@ jobs:
           export PARRSB_RSB_ALGO=0
           export PARRSB_VERBOSE_LEVEL=2
 
-          cp ${EXAMPLESDIR}/genmap ${CIDIR}/${{ matrix.test }}
+          cp ${EXAMPLEDIR}/genmap ${CIDIR}/${{ matrix.test }}
           cd ${CIDIR}/${{ matrix.test }}
 
           tol=(`cat test.txt | grep tol`); tol=${tol[2]}
@@ -73,7 +73,7 @@ jobs:
           export PARRSB_RSB_MG_FACTOR=2
           export PARRSB_VERBOSE_LEVEL=2
 
-          cp ${EXAMPLESDIR}/genmap ${CIDIR}/${{ matrix.test }}
+          cp ${EXAMPLEDIR}/genmap ${CIDIR}/${{ matrix.test }}
           cd ${CIDIR}/${{ matrix.test }}
 
           tol=(`cat test.txt | grep tol`); tol=${tol[2]}
@@ -87,7 +87,7 @@ jobs:
           export PARRSB_RSB_MG_FACTOR=4
           export PARRSB_VERBOSE_LEVEL=2
 
-          cp ${EXAMPLESDIR}/genmap ${CIDIR}/${{ matrix.test }}
+          cp ${EXAMPLEDIR}/genmap ${CIDIR}/${{ matrix.test }}
           cd ${CIDIR}/${{ matrix.test }}
 
           tol=(`cat test.txt | grep tol`); tol=${tol[2]}
