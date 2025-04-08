@@ -118,17 +118,17 @@ static int project(scalar *x, uint n, scalar *b, laplacian L, struct mg *d,
 
 // Input z should be orthogonal to 1-vector, have unit norm.
 // inverse iteration should not change z.
-static int inverse(scalar *y, struct array *elements, unsigned nv, scalar *z,
-                   const struct comm *gsc, unsigned miter, unsigned mpass,
-                   double tol, int factor, int grammian, slong nelg,
-                   buffer *buf) {
+static int inverse(scalar *y, laplacian wl, struct array *elements, unsigned nv,
+                   scalar *z, const struct comm *gsc, parrsb_options opts,
+                   slong nelg, buffer *buf) {
   metric_tic(gsc, RSB_INVERSE_SETUP);
-  uint lelt = elements->n;
-  struct rsb_element *elems = (struct rsb_element *)elements->ptr;
 
-  laplacian wl;
-  int err_ = laplacian_init(&wl, elems, lelt, nv, GS, gsc, buf);
-  assert(err_ == 0);
+  uint miter = opts->rsb_max_iter;
+  uint mpass = opts->rsb_max_passes;
+  double tol = opts->rsb_tol;
+  int factor = opts->rsb_mg_factor;
+  int grammian = opts->rsb_mg_grammian;
+  uint lelt = laplacian_get_size(wl);
 
   // Reserve enough memory in buffer
   size_t wrk = sizeof(ulong) * lelt + sizeof(slong) * nv * lelt;
@@ -138,6 +138,8 @@ static int inverse(scalar *y, struct array *elements, unsigned nv, scalar *z,
   comm_scan(out, gsc, gs_long, gs_add, &in, 1, bfr);
   slong start = out[0][0];
 
+  const struct rsb_element *const elems =
+      (const struct rsb_element *)elements->ptr;
   ulong *eid = (ulong *)buf->ptr;
   slong *vtx = (slong *)(eid + lelt);
   uint i, j, k, l;
@@ -245,11 +247,7 @@ static int inverse(scalar *y, struct array *elements, unsigned nv, scalar *z,
   }
   metric_toc(gsc, RSB_INVERSE);
 
-  laplacian_free(&wl);
-  if (L) {
-    par_mat_free(L);
-    free(L);
-  }
+  if (L) par_mat_free(L), free(L);
   mg_free(d);
   if (err) free(err);
 
@@ -330,35 +328,36 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint lelt,
   return iter;
 }
 
-static int lanczos(scalar *fiedler, struct array *elements, unsigned nv,
-                   scalar *initv, const struct comm *gsc, unsigned miter,
-                   unsigned mpass, double tol, slong nelg, buffer *bfr) {
+static int lanczos(scalar *fiedler, laplacian wl, scalar *initv,
+                   const struct comm *gsc, const parrsb_options opts,
+                   slong nelg, buffer *bfr) {
   metric_tic(gsc, RSB_LANCZOS_SETUP);
 
-  uint lelt = elements->n;
-  struct rsb_element *elems = (struct rsb_element *)elements->ptr;
-
-  laplacian wl;
-  int err_ = laplacian_init(&wl, elems, lelt, nv, GS, gsc, bfr);
-  assert(err_ == 0);
-
-  metric_toc(gsc, RSB_LANCZOS_SETUP);
+  uint miter = opts->rsb_max_iter;
+  uint mpass = opts->rsb_max_passes;
+  double tol = opts->rsb_tol;
+  uint lelt = laplacian_get_size(wl);
 
   if (nelg < miter) miter = nelg;
 
   scalar *alpha = tcalloc(scalar, 2 * miter - 1);
   scalar *beta = alpha + miter;
   scalar *rr = tcalloc(scalar, (miter + 1) * lelt);
+
   scalar *eVectors = tcalloc(scalar, miter * miter);
   scalar *eValues = tcalloc(scalar, miter);
+
+  metric_toc(gsc, RSB_LANCZOS_SETUP);
+
   uint iter = miter, ipass;
   for (ipass = 0; iter == miter && ipass < mpass; ipass++) {
-    double t = comm_time();
+    metric_tic(gsc, RSB_LANCZOS);
     iter = lanczos_aux(alpha, beta, rr, lelt, nelg, miter, tol, initv, wl, gsc,
                        bfr);
-    metric_acc(RSB_LANCZOS, comm_time() - t);
+    metric_toc(gsc, RSB_LANCZOS);
 
-    t = comm_time();
+    metric_tic(gsc, RSB_LANCZOS_TQLI);
+
     // Use TQLI and find the minimum eigenvalue and associated vector
     tqli(eVectors, eValues, iter, alpha, beta, gsc->id);
     scalar eValMin = fabs(eValues[0]);
@@ -377,16 +376,16 @@ static int lanczos(scalar *fiedler, struct array *elements, unsigned nv,
     }
     ortho(fiedler, lelt, nelg, gsc);
     for (uint i = 0; i < lelt; i++) initv[i] = fiedler[i];
-    metric_acc(RSB_LANCZOS_TQLI, comm_time() - t);
+
+    metric_toc(gsc, RSB_LANCZOS_TQLI);
   }
 
   free(alpha), free(rr), free(eVectors), free(eValues);
-  laplacian_free(&wl);
 
   return (ipass - 1) * miter + iter;
 }
 
-int fiedler(struct array *elements, int nv, const parrsb_options opts,
+int fiedler(struct array *elems, int nv, const parrsb_options opts,
             const struct comm *gsc, buffer *buf) {
   metric_tic(gsc, RSB_FIEDLER);
 
@@ -395,7 +394,7 @@ int fiedler(struct array *elements, int nv, const parrsb_options opts,
 
   metric_tic(gsc, RSB_FIEDLER_SETUP);
 
-  uint lelt = elements->n;
+  uint lelt = elems->n;
   slong out[2][1], wrk[2][1], in = lelt;
   comm_scan(out, gsc, gs_long, gs_add, &in, 1, wrk);
   slong start = out[0][0], nelg = out[1][0];
@@ -415,21 +414,18 @@ int fiedler(struct array *elements, int nv, const parrsb_options opts,
 
   metric_toc(gsc, RSB_FIEDLER_SETUP);
 
-  metric_tic(gsc, RSB_FIEDLER_CALC);
+  metric_tic(gsc, RSB_LAPLACIAN_SETUP);
+  laplacian wl;
+  laplacian_init(&wl, (struct rsb_element *)elems->ptr, lelt, nv, GS, gsc, buf);
+  metric_toc(gsc, RSB_LAPLACIAN_SETUP);
 
   int iter = 0;
   scalar *f = tcalloc(scalar, lelt);
   switch (opts->rsb_algo) {
-  case 0:
-    iter = lanczos(f, elements, nv, initv, gsc, opts->rsb_max_iter,
-                   opts->rsb_max_passes, opts->rsb_tol, nelg, buf);
-    break;
-  case 1:
-    iter = inverse(f, elements, nv, initv, gsc, opts->rsb_max_iter,
-                   opts->rsb_max_passes, opts->rsb_tol, opts->rsb_mg_factor,
-                   opts->rsb_mg_grammian, nelg, buf);
-    break;
+  case 0: iter = lanczos(f, wl, initv, gsc, opts, nelg, buf); break;
+  case 1: iter = inverse(f, wl, elems, nv, initv, gsc, opts, nelg, buf); break;
   }
+  laplacian_free(&wl);
 
   metric_toc(gsc, RSB_FIEDLER_CALC);
   metric_acc(RSB_FIEDLER_CALC_NITER, iter);
@@ -443,8 +439,8 @@ int fiedler(struct array *elements, int nv, const parrsb_options opts,
 
   for (uint i = 0; i < lelt; i++) f[i] *= normi;
 
-  struct rsb_element *elems = (struct rsb_element *)elements->ptr;
-  for (uint i = 0; i < lelt; i++) elems[i].fiedler = f[i];
+  struct rsb_element *pe = (struct rsb_element *)elems->ptr;
+  for (uint i = 0; i < lelt; i++) pe[i].fiedler = f[i];
 
   if (initv) free(initv);
   if (f) free(f);

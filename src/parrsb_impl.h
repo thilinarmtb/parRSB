@@ -100,6 +100,7 @@ INTERN int fiedler(struct array *elements, int nv, const parrsb_options options,
 typedef struct laplacian *laplacian;
 INTERN int laplacian_init(laplacian *l, struct rsb_element *elems, uint nel,
                           int nv, int type, const struct comm *c, buffer *bfr);
+INTERN uint laplacian_get_size(laplacian wl);
 INTERN int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *bfr);
 INTERN int laplacian_free(laplacian *l);
 

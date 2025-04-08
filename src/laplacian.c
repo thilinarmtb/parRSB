@@ -192,6 +192,8 @@ int laplacian_init(laplacian *l_, struct rsb_element *elems, uint nel, int nv,
   return 0;
 }
 
+uint laplacian_get_size(laplacian wl) { return wl->nel; }
+
 int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *buf) {
   switch (l->type) {
   case CSR: par_csr(v, l, u, buf); break;
