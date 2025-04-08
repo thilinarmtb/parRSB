@@ -787,17 +787,19 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
 
   // Check verboity and print a message.
   const int verbose = options->verbose_level;
-  {
-    slong nelg = nel, wrk;
-    comm_allreduce(&c, gs_long, gs_add, &nelg, 1, &wrk);
-    parrsb_print(&c, verbose, "Running parRSB ..., nv = %d, nelg = %lld", nv,
-                 nelg);
-  }
+  slong nelg = nel, wrk;
+  comm_allreduce(&c, gs_long, gs_add, &nelg, 1, &wrk);
+  parrsb_print(&c, verbose, "Running parRSB ..., nv = %d, nelg = %lld", nv,
+               nelg);
 
-  if (c.id == 0) parrsb_options_print(options);
+  if (c.id == 0 && verbose) parrsb_options_print(options);
   if (options->tagged == 1 && !tag) {
-    parrsb_print(&c, verbose,
-                 "Tagged partitioning requested but tag array is NULL..");
+    if (c.id == 0) {
+      fprintf(
+          stderr,
+          "parRSB: Tagged partitioning requested but the tag array is NULL!");
+      fflush(stderr);
+    }
     return 1;
   }
 

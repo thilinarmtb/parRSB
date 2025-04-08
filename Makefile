@@ -1,5 +1,5 @@
 CC ?= mpicc
-CFLAGS ?= -std=c99 -g -Wall -Wextra -Wpedantic -Wno-unused-function
+CFLAGS ?= -std=c99 -Wall -Wextra -Wpedantic -Wno-unused-function -Wno-c23-extensions
 LDFLAGS ?=
 DEBUG ?= 0
 SYNC_BY_REDUCTION ?= 1
@@ -9,26 +9,8 @@ GSLIBPATH ?=
 
 ########################## Don't touch what follows ###########################
 ifeq ($(GSLIBPATH),)
-  $(error Specify GSLIBPATH=<path to gslib build>)
+	$(error Specify GSLIBPATH=<path to gslib build>)
 endif
-
-MKFILEPATH = $(abspath $(lastword $(MAKEFILE_LIST)))
-SRCROOT = $(realpath $(patsubst %/,%,$(dir $(MKFILEPATH))))
-SRCDIR = $(SRCROOT)/src
-EXAMPLEDIR = $(SRCROOT)/examples
-BUILDROOT = $(SRCROOT)/build
-ifneq (,$(strip $(DESTDIR)))
-INSTALLROOT = $(DESTDIR)
-else
-INSTALLROOT = $(SRCROOT)/install
-endif
-
-SRCS = $(wildcard $(SRCDIR)/*.c)
-SRCOBJS = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%.o,$(SRCS))
-EXAMPLES = $(wildcard $(EXAMPLEDIR)/*.c)
-EXAMPLEBINS = $(patsubst $(SRCROOT)/%.c,$(BUILDROOT)/%,$(EXAMPLES))
-
-LIB = $(BUILDROOT)/lib/libparRSB.a
 
 ifneq ($(DEBUG),0)
   CFLAGS += -g
@@ -36,6 +18,7 @@ else
   CFLAGS += -O2
 endif
 
+PP =
 ifneq ($(SYNC_BY_REDUCTION),0)
   PP += -DPARRSB_SYNC_BY_REDUCTION
 endif
@@ -45,32 +28,46 @@ ifneq ($(BLAS),0)
   LDFLAGS += $(BLASFLAGS)
 endif
 
+MKFILEPATH = $(abspath $(lastword $(MAKEFILE_LIST)))
+
+PROJDIR = $(realpath $(patsubst %/,%,$(dir $(MKFILEPATH))))
+SRCDIR = $(PROJDIR)/src
+EXAMPLEDIR = $(PROJDIR)/example
+BUILDDIR = $(PROJDIR)/build
+INSTALLDIR = $(PROJDIR)/install
+ifneq ($(strip $(DESTDIR)),)
+	INSTALLDIR = $(DESTDIR)
+endif
+
+SRC.c = $(wildcard $(SRCDIR)/*.c)
+SRC.o = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%.o,$(SRC.c))
+EXAMPLE.c = $(wildcard $(EXAMPLEDIR)/*.c)
+EXAMPLE.bin = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%,$(EXAMPLE.c))
+LIB = $(BUILDDIR)/lib/libparRSB.a
+
 INCFLAGS = -I$(SRCDIR) -I$(GSLIBPATH)/include
 CCCMD = $(CC) $(CFLAGS) $(INCFLAGS) $(PP)
-LDFLAGS += -lm
+LDFLAGS += -L$(INSTALLDIR)/lib -lparRSB -L$(GSLIBPATH)/lib -lgs -lm
 
-.PHONY: all lib install examples format clean
+.PHONY: all lib install example format clean
 
-all: lib install examples
+all: lib install example
 
-lib: $(SRCOBJS)
-	@mkdir -p $(BUILDROOT)/lib
+lib: $(SRC.o) | $(BUILDDIR)
 	@$(AR) cr $(LIB) $?
 	@ranlib $(LIB)
 
-install: lib
-	@mkdir -p $(INSTALLROOT)/lib 2>/dev/null
-	@cp -v $(LIB) $(INSTALLROOT)/lib 2>/dev/null
-	@mkdir -p $(INSTALLROOT)/include 2>/dev/null
-	@cp $(SRCDIR)/*.h $(INSTALLROOT)/include 2>/dev/null
+install: lib | $(INSTALLDIR)
+	@cp -v $(LIB) $(INSTALLDIR)/lib 2>/dev/null
+	@cp $(SRCDIR)/*.h $(INSTALLDIR)/include 2>/dev/null
 
-examples: lib install $(EXAMPLEBINS)
+example: $(EXAMPLE.bin) | lib install
 
 format:
-	find . -iname *.h -o -iname *.c -o -iname *.okl | xargs clang-format -i
+	find . -iname *.h -o -iname *.c | xargs clang-format -i
 
 clean:
-	@$(RM) -rf $(BUILDROOT)
+	@$(RM) -rf $(BUILDDIR)
 
 print-%:
 	$(info [ variable name]: $*)
@@ -80,12 +77,17 @@ print-%:
 	$(info)
 	@true
 
-$(BUILDROOT)/%.o: $(SRCROOT)/%.c
+$(BUILDDIR)/%.o: $(PROJDIR)/%.c | $(BUILDDIR)
 	$(CCCMD) -c $< -o $@
 
-$(BUILDROOT)/%: $(SRCROOT)/%.c | lib install
-	$(CCCMD) $< -o $@ -L$(INSTALLROOT)/lib -lparRSB -L$(GSLIBPATH)/lib -lgs \
-		$(LDFLAGS)
+$(BUILDDIR)/%: $(PROJDIR)/%.c | lib install
+	$(CCCMD) $< -o $@ $(LDFLAGS)
 
-$(shell mkdir -p $(BUILDROOT)/examples)
-$(shell mkdir -p $(BUILDROOT)/src)
+$(BUILDDIR):
+	@mkdir -p $(BUILDDIR)/lib
+	@mkdir -p $(BUILDDIR)/src
+	@mkdir -p $(BUILDDIR)/example
+
+$(INSTALLDIR):
+	@mkdir -p $(INSTALLDIR)/lib 2>/dev/null
+	@mkdir -p $(INSTALLDIR)/include 2>/dev/null
