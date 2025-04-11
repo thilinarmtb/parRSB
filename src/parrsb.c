@@ -47,8 +47,10 @@ static void initialize_node_comm(struct comm *c, const struct comm *const gc) {
   MPI_Comm_free(&node);
 }
 
-static void initialize_levels(struct comm *const comms, int *const levels_in,
-                              const struct comm *const c, const int verbose) {
+static void initialize_levels(struct comm *const comms, parrsb_options options,
+                              const struct comm *const c) {
+  const int verbose = options->verbose_level;
+
   // Level 1 communicator is the global communicator.
   comm_dup(&comms[0], c);
   // Node level communicator is the last level communicator.
@@ -74,12 +76,13 @@ static void initialize_levels(struct comm *const comms, int *const levels_in,
   parrsb_print(c, verbose, "parRSB: nodes = %u, ranks per node = %u", nn, rpn);
 
   // Hardcode the maximum number of levels to two for now.
-  sint levels = 2;
-  *levels_in = levels = MIN(levels, *levels_in);
+  sint levels = MIN(2, options->levels);
   if (levels > 1) comm_dup(&comms[levels - 1], &nc);
   comm_free(&nc);
 
-  parrsb_print(c, verbose, "parRSB: levels = %u", levels);
+  parrsb_print(c, verbose, "parRSB: levels requested %u, enabled = %u",
+               options->levels, levels);
+  options->levels = levels;
 }
 
 static size_t mesh_load_balance(struct array *elist, uint nel, int nv,
@@ -182,18 +185,8 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   comm_split(c, elist.n > 0, c->id, &ca);
 
   // Setup communicators for each level of the partitioning.
-  struct comm comms[9];
-  {
-    // Check invariant: levels > 0 and levels <= sizeof(comms) /
-    // sizeof(comms[0]).
-    const uint levels = options->levels;
-    assert(levels <= sizeof(comms) / sizeof(comms[0]));
-    initialize_levels(comms, &options->levels, &ca, verbose);
-    parrsb_print(
-        c, verbose,
-        "parrsb_part_mesh_v0: levels requested = %d, levels enabled = %d",
-        levels, options->levels);
-  }
+  struct comm comms[8];
+  initialize_levels(comms, options, &ca);
 
   parrsb_print(c, verbose, "parrsb_part_mesh_v0: running partitioner ...");
   if (elist.n > 0) {
@@ -205,9 +198,9 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
     default: break;
     }
   }
-  comm_free(&ca);
 
-  for (uint l = 0; l < (uint)options->levels; l++) comm_free(&comms[l]);
+  for (int l = 0; l < options->levels; l++) comm_free(&comms[l]);
+  comm_free(&ca);
 
   parrsb_print(c, verbose, "parrsb_part_mesh_v0: restore original input");
   mesh_restore(part, cr, &elist, esize, bfr);
@@ -928,13 +921,15 @@ int parrsb_part_graph(int *part, size_t num_nodes, long long *nodes,
   comm_init(&c, comm);
 
   options_update(options);
-
   int verbose = options->verbose_level;
   if (c.id == 0 && verbose) parrsb_options_print(options);
 
   slong n = num_nodes, wrk;
   comm_allreduce(&c, gs_long, gs_add, &n, 1, &wrk);
-  parrsb_print(&c, verbose, "Running parRSB ..., n = %lld", n);
+  parrsb_print(&c, verbose, "Running parRSB ..., n = %lld\n", n);
+
+  parrsb_barrier(&c);
+  double t = comm_time();
 
   buffer bfr;
   buffer_init(&bfr, (num_nodes + 1) * 27);
@@ -944,21 +939,29 @@ int parrsb_part_graph(int *part, size_t num_nodes, long long *nodes,
 
   metric_init();
 
-  parrsb_barrier(&c);
-  double t = comm_time();
-
   graph_t graph;
   graph_load_balance(&graph, num_nodes, nodes, offsets, neighbors, &cr, &bfr);
 
+  struct comm ca;
+  comm_split(&c, graph.nn > 0, c.id, &ca);
+
+  struct comm comms[8];
+  initialize_levels(comms, options, &ca);
+
+  for (int i = 0; i < options->levels; i++) comm_free(&comms[i]);
+  comm_free(&ca);
+
   graph_free(&graph);
-  parrsb_print(&c, verbose, "par%s finished in %g seconds.",
-               ALGO[options->partitioner], comm_time() - t);
+  crystal_free(&cr);
+  buffer_free(&bfr);
 
   metric_rsb_print(&c, options->profile_level);
   metric_finalize();
 
-  crystal_free(&cr);
-  buffer_free(&bfr);
+  t = comm_time() - t;
+  parrsb_print(&c, verbose, "par%s finished in %g seconds.",
+               ALGO[options->partitioner], t);
+
   comm_free(&c);
 
   return 0;
