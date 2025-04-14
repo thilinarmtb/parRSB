@@ -674,7 +674,10 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
          const struct comm *comms, buffer *bfr) {
   const uint levels = options->levels;
   const uint ndim = nv_to_ndim(nv);
+
   const struct comm *gc = &comms[0];
+  scalar *f = tcalloc(scalar, elements->n + 1);
+
   for (uint level = 0; level < levels; level++) {
     // Find the maximum number of RSB cuts in current level.
     uint ncuts = get_level_cuts(level, levels, comms);
@@ -687,8 +690,19 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
       struct rsb_element *const pe = (struct rsb_element *const)elements->ptr;
       for (uint i = 0; i < elements->n; i++) pe[i].proc = lc.id;
 
+      // Setup the laplacian.
+      metric_tic(&lc, RSB_LAPLACIAN_SETUP);
+      laplacian wl;
+      laplacian_init(&wl, pe, elements->n, nv, GS, &lc, bfr);
+      metric_toc(&lc, RSB_LAPLACIAN_SETUP);
+
       // Find the Fiedler vector.
-      fiedler(elements, nv, options, &lc, bfr);
+      f = trealloc(scalar, f, elements->n);
+      fiedler(f, wl, options, &lc, bfr);
+      for (uint i = 0; i < elements->n; i++) pe[i].fiedler = f[i];
+
+      // Finalize the laplacian.
+      laplacian_free(&wl);
 
       // Sort by Fiedler value.
       metric_tic(&lc, RSB_SORT);
@@ -720,6 +734,8 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
     }
     comm_free(&lc);
   }
+
+  free(f);
 
   check_rsb_partition(gc, options);
 }

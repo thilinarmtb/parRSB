@@ -385,8 +385,8 @@ static int lanczos(scalar *fiedler, laplacian wl, scalar *initv,
   return (ipass - 1) * miter + iter;
 }
 
-int fiedler(struct array *elems, int nv, const parrsb_options opts,
-            const struct comm *gsc, buffer *buf) {
+static int fiedler_mesh(struct array *elems, int nv, const parrsb_options opts,
+                        const struct comm *gsc, buffer *buf) {
   metric_tic(gsc, RSB_FIEDLER);
 
   // Return if the number of processes is equal to 1.
@@ -408,7 +408,6 @@ int fiedler(struct array *elems, int nv, const parrsb_options opts,
   ortho(initv, lelt, nelg, gsc);
   scalar rtr = dot(initv, initv, lelt), rni;
   comm_allreduce(gsc, gs_double, gs_add, &rtr, 1, &rni);
-
   rni = 1.0 / sqrt(rtr);
   for (uint i = 0; i < lelt; i++) initv[i] *= rni;
 
@@ -450,8 +449,10 @@ early_exit:
   return 0;
 }
 
-int fiedler1(scalar *f, laplacian l, const parrsb_options opts,
-             const struct comm *c, buffer *buf) {
+int fiedler(scalar *f, laplacian l, const parrsb_options opts,
+            const struct comm *c, buffer *buf) {
+  metric_tic(c, RSB_FIEDLER);
+
   int err = 0;
   scalar *vi = 0;
 
@@ -475,21 +476,27 @@ int fiedler1(scalar *f, laplacian l, const parrsb_options opts,
   scalar normi = 1.0 / sqrt(norm);
   for (uint i = 0; i < n; i++) vi[i] *= normi;
 
+  metric_tic(c, RSB_FIEDLER_CALC);
+  int iter = 0;
   switch (opts->rsb_algo) {
-  case 0: lanczos(f, l, vi, c, opts, ng, buf); break;
+  case 0: iter = lanczos(f, l, vi, c, opts, ng, buf); break;
   default:
     err = 1;
     goto early_exit;
     break;
   }
+  metric_acc(RSB_FIEDLER_CALC_NITER, iter);
 
   norm = dot(f, f, n);
   comm_allreduce(c, gs_double, gs_add, &norm, 1, wrk);
   normi = 1.0 / sqrt(norm);
   for (uint i = 0; i < n; i++) f[i] *= normi;
 
+  metric_toc(c, RSB_FIEDLER_CALC);
+
 early_exit:
   free(vi);
+  metric_toc(c, RSB_FIEDLER);
 
   return err;
 }

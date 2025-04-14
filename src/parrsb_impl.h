@@ -63,12 +63,14 @@ typedef struct laplacian *laplacian;
 #define MAXNV 8  // Maximum number of vertices per element.
 
 /*
- * RCB / RIB. `struct rcb_element` is used for RCB and RIB partitioning.
+ * RCB / RIB. `struct rcb_element` is used for mesh partitioning with RCB and
+ * RIB.
  */
 struct rcb_element {
   uint proc, origin;
   ulong globalId;
-  scalar coord[MAXDIM], fiedler;
+  scalar fiedler;
+  scalar coord[MAXDIM];
 };
 
 INTERN int rcb(struct array *elements, size_t unit_size, int ndim,
@@ -78,23 +80,21 @@ INTERN int rib(struct array *elements, size_t unit_size, int ndim,
 
 /*
  * RSB. `struct rsb_element` = `struct rcb_element` + `vertices`. Order is
- * important.
+ * important. Used for mesh partitioning with RSB.
  */
 struct rsb_element {
   uint proc, origin;
   ulong globalId;
-  scalar coord[MAXDIM], fiedler;
+  scalar fiedler;
+  scalar coord[MAXDIM];
   slong vertices[MAXNV];
 };
 
 INTERN void rsb(struct array *elements, int nv, const parrsb_options options,
                 const struct comm *comms, buffer *bfr);
 
-INTERN int fiedler(struct array *elements, int nv, const parrsb_options options,
+INTERN int fiedler(scalar *fiedler, laplacian l, const parrsb_options opts,
                    const struct comm *gsc, buffer *buf);
-
-INTERN int fiedler1(scalar *fiedler, laplacian l, const parrsb_options opts,
-                    const struct comm *gsc, buffer *buf);
 
 /*
  * Laplacian.
