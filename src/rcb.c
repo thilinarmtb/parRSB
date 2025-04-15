@@ -113,14 +113,14 @@ static int rcb_level(struct array *a, size_t unit_size, int ndim,
   return 0;
 }
 
-int rcb(struct array *elements, size_t unit_size, int ndim,
-        const struct comm *ci, buffer *bfr) {
+int rcb(struct array *elements, const element_info ei, const struct comm *ci,
+        buffer *bfr) {
   struct comm c;
   comm_dup(&c, ci);
 
   uint size = c.np, rank = c.id;
   while (size > 1) {
-    rcb_level(elements, unit_size, ndim, &c, bfr);
+    rcb_level(elements, ei->size, ei->nd, &c, bfr);
 
     struct comm t;
     const int bin = ((rank >= (size + 1) / 2) ? 1 : 0);
@@ -131,7 +131,7 @@ int rcb(struct array *elements, size_t unit_size, int ndim,
   }
   comm_free(&c);
 
-  rcb_local(elements, unit_size, 0, elements->n, ndim, bfr);
+  rcb_local(elements, ei->size, 0, elements->n, ei->nd, bfr);
 
   return 0;
 }

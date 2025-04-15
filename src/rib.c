@@ -85,14 +85,14 @@ static int rib_level(struct array *a, size_t unit_size, int ndim,
   return 0;
 }
 
-int rib(struct array *elements, size_t unit_size, int ndim,
-        const struct comm *ci, buffer *bfr) {
+int rib(struct array *elements, const element_info ei, const struct comm *ci,
+        buffer *bfr) {
   struct comm c;
   comm_dup(&c, ci);
 
   uint size = c.np, rank = c.id;
   while (size > 1) {
-    rib_level(elements, unit_size, ndim, &c, bfr);
+    rib_level(elements, ei->size, ei->nd, &c, bfr);
 
     struct comm t;
     const int bin = ((rank >= (size + 1) / 2) ? 1 : 0);
@@ -103,7 +103,7 @@ int rib(struct array *elements, size_t unit_size, int ndim,
   }
   comm_free(&c);
 
-  rib_local(elements, unit_size, 0, elements->n, ndim, bfr);
+  rib_local(elements, ei->size, 0, elements->n, ei->nd, bfr);
 
   return 0;
 }

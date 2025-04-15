@@ -85,10 +85,10 @@ static void initialize_levels(struct comm *const comms, parrsb_options options,
   options->levels = levels;
 }
 
-static size_t mesh_load_balance(struct array *elist, uint nel, int nv,
-                                const double *const xyz,
-                                const long long *const vtx, struct crystal *cr,
-                                buffer *bfr) {
+static void mesh_load_balance(struct array *elist, uint nel,
+                              const double *const xyz,
+                              const long long *const vtx, const element_info ei,
+                              struct crystal *cr, buffer *bfr) {
   struct comm *c = &cr->comm;
 
   slong out[2][1], wrk[2][1], in = nel;
@@ -99,12 +99,12 @@ static size_t mesh_load_balance(struct array *elist, uint nel, int nv,
   uint nrem = nelg - nstar * c->np;
   slong lower = (nstar + 1) * nrem;
 
-  size_t unit_size = sizeof(struct rsb_element);
-  if (vtx == NULL) unit_size = sizeof(struct rcb_element);
+  size_t unit_size = ei->size;
+  int ndim = ei->nd;
+  int nv = ei->nv;
 
   array_init_(elist, nel, unit_size, __FILE__, __LINE__);
 
-  int ndim = nv_to_ndim(nv);
   struct rcb_element *pe = (struct rcb_element *)calloc(1, unit_size);
   pe->origin = c->id;
   for (uint e = 0; e < nel; ++e) {
@@ -140,8 +140,6 @@ static size_t mesh_load_balance(struct array *elist, uint nel, int nv,
     sarray_sort(struct rsb_element, elist->ptr, elist->n, globalId, 1, bfr);
 
   free(pe);
-
-  return unit_size;
 }
 
 static void mesh_restore(int *part, struct crystal *cr, struct array *elist,
@@ -168,18 +166,19 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
                                 const unsigned nv, const parrsb_options options,
                                 const struct comm *const c,
                                 struct crystal *const cr, buffer *const bfr) {
-  const int verbose = options->verbose_level;
+  element_info ei = tcalloc(struct element_info, 1);
 
-  if (vtx == NULL && xyz == NULL) {
-    parrsb_print(
-        c, verbose,
-        "parrsb_part_mesh_v0: Both vertices and coordinates can't be NULL");
-    MPI_Abort(c->c, EXIT_FAILURE);
+  ei->nv = nv;
+  ei->nd = nv_to_ndim(nv);
+  ei->size = sizeof(struct rsb_element);
+  ei->align = ALIGNOF(struct rsb_element);
+  if (vtx == NULL) {
+    ei->size = sizeof(struct rcb_element);
+    ei->align = ALIGNOF(struct rcb_element);
   }
-  if (xyz == NULL) options->rsb_pre = 0;
 
   struct array elist;
-  size_t esize = mesh_load_balance(&elist, nel, nv, xyz, vtx, cr, bfr);
+  mesh_load_balance(&elist, nel, xyz, vtx, ei, cr, bfr);
 
   struct comm ca;
   comm_split(c, elist.n > 0, c->id, &ca);
@@ -188,13 +187,13 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   struct comm comms[8];
   initialize_levels(comms, options, &ca);
 
+  const int verbose = options->verbose_level;
   parrsb_print(c, verbose, "parrsb_part_mesh_v0: running partitioner ...");
   if (elist.n > 0) {
-    const uint nd = nv_to_ndim(nv);
     switch (options->partitioner) {
-    case 0: rsb(&elist, esize, nv, options, comms, bfr); break;
-    case 1: rcb(&elist, esize, nd, &ca, bfr); break;
-    case 2: rib(&elist, esize, nd, &ca, bfr); break;
+    case 0: rsb(&elist, ei, options, comms, bfr); break;
+    case 1: rcb(&elist, ei, &ca, bfr); break;
+    case 2: rib(&elist, ei, &ca, bfr); break;
     default: break;
     }
   }
@@ -203,7 +202,9 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   comm_free(&ca);
 
   parrsb_print(c, verbose, "parrsb_part_mesh_v0: restore original input");
-  mesh_restore(part, cr, &elist, esize, bfr);
+  mesh_restore(part, cr, &elist, ei->size, bfr);
+
+  free(ei);
 }
 
 void parrsb_check_tagged_partitions(const long long *const eids,
@@ -774,24 +775,48 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
   comm_init(&c, comm);
 
   options_update(options);
+  // TODO: parrsb_options_validate(options, c);
 
   const int verbose = options->verbose_level;
   if (c.id == 0 && verbose) parrsb_options_print(options);
+
+  if (vtx == NULL && xyz == NULL) {
+    parrsb_print(&c, verbose,
+                 "parRSB: Both vertices and coordinates can't be NULL");
+    MPI_Abort(c.c, EXIT_FAILURE);
+  }
+
+  if (vtx == NULL && options->partitioner == 0) {
+    parrsb_print(&c, verbose,
+                 "parRSB: Vertices can't be NULL if the partitioner is RSB");
+    MPI_Abort(c.c, EXIT_FAILURE);
+  }
+
+  if (xyz == NULL && options->partitioner > 0) {
+    parrsb_print(&c, verbose,
+                 "parRSB: Coordinates can't be NULL if the partitioner is "
+                 "RCB or RIB");
+    MPI_Abort(c.c, EXIT_FAILURE);
+  }
+
+  if (xyz == NULL && options->rsb_pre != 0) {
+    parrsb_print(&c, verbose,
+                 "parRSB: Coordinates can't be NULL if the pre-partitioner is "
+                 "RCB or RIB");
+    MPI_Abort(c.c, EXIT_FAILURE);
+  }
+
+  if (options->tagged == 1 && !tag) {
+    parrsb_print(
+        &c, verbose,
+        "parRSB: Tagged partitioning requested but the tag array is NULL");
+    MPI_Abort(c.c, EXIT_FAILURE);
+  }
 
   slong nelg = nel, wrk;
   comm_allreduce(&c, gs_long, gs_add, &nelg, 1, &wrk);
   parrsb_print(&c, verbose, "Running parRSB ..., nv = %d, nelg = %lld", nv,
                nelg);
-
-  if (options->tagged == 1 && !tag) {
-    if (c.id == 0) {
-      fprintf(
-          stderr,
-          "parRSB: Tagged partitioning requested but the tag array is NULL!");
-      fflush(stderr);
-    }
-    return 1;
-  }
 
   buffer bfr;
   buffer_init(&bfr, (nel + 1) * 72);

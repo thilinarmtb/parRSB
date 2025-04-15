@@ -654,20 +654,20 @@ static uint get_level_cuts(const uint level, const uint levels,
   return cuts;
 }
 
-static void run_pre_partitioner(struct array *elements, size_t esize, int ndim,
-                                const struct comm *lc,
+static void run_pre_partitioner(struct array *elements, const element_info ei,
+                                const struct comm *c,
                                 const parrsb_options options, buffer *bfr) {
-  metric_tic(lc, RSB_PRE);
+  metric_tic(c, RSB_PRE);
   switch (options->rsb_pre) {
   case 0:
-    parallel_sort(struct rsb_element, elements, globalId, gs_long, 0, 1, lc,
+    parallel_sort(struct rsb_element, elements, globalId, gs_long, 0, 1, c,
                   bfr);
     break;
-  case 1: rcb(elements, esize, ndim, lc, bfr); break;
-  case 2: rib(elements, esize, ndim, lc, bfr); break;
+  case 1: rcb(elements, ei, c, bfr); break;
+  case 2: rib(elements, ei, c, bfr); break;
   default: break;
   }
-  metric_toc(lc, RSB_PRE);
+  metric_toc(c, RSB_PRE);
 }
 
 static void set_proc(struct array *elements, size_t esize,
@@ -683,14 +683,12 @@ static void set_fiedler(struct array *elements, size_t esize, const scalar *f) {
     ((struct base_element *)(p + esize * i))->fiedler = f[i];
 }
 
-void rsb(struct array *elements, size_t esize, int nv,
+void rsb(struct array *elements, const element_info ei,
          const parrsb_options options, const struct comm *comms, buffer *bfr) {
-  const uint levels = options->levels;
-  const uint ndim = nv_to_ndim(nv);
   const struct comm *gc = &comms[0];
 
   scalar *f = tcalloc(scalar, elements->n + 1);
-
+  const uint levels = options->levels;
   for (uint level = 0; level < levels; level++) {
     struct comm lc;
     comm_dup(&lc, &comms[level]);
@@ -698,20 +696,20 @@ void rsb(struct array *elements, size_t esize, int nv,
     // Find the maximum number of RSB cuts in current level.
     uint ncuts = get_level_cuts(level, levels, comms);
     for (uint cut = 0; cut < ncuts; cut++) {
-      run_pre_partitioner(elements, esize, ndim, &lc, options, bfr);
+      run_pre_partitioner(elements, ei, &lc, options, bfr);
 
-      set_proc(elements, esize, &lc);
+      set_proc(elements, ei->size, &lc);
 
       // Setup the laplacian.
       laplacian wl;
       metric_tic(&lc, RSB_LAPLACIAN_SETUP);
-      laplacian_init(&wl, elements, nv, GS, &lc, bfr);
+      laplacian_init(&wl, elements, ei->nv, GS, &lc, bfr);
       metric_toc(&lc, RSB_LAPLACIAN_SETUP);
 
       // Find the Fiedler vector.
       f = trealloc(scalar, f, elements->n);
       fiedler(f, wl, options, &lc, bfr);
-      set_fiedler(elements, esize, f);
+      set_fiedler(elements, ei->size, f);
 
       // Finalize the laplacian.
       laplacian_free(&wl);
@@ -729,17 +727,17 @@ void rsb(struct array *elements, size_t esize, int nv,
 
       // Find the number of disconnected components.
       if (options->find_disconnected_comps == 1) {
-        slong nc = get_components_v2(NULL, elements, nv, &tc, bfr);
+        slong nc = get_components_v2(NULL, elements, ei->nv, &tc, bfr);
         metric_acc(RSB_COMPONENTS_NCOMP, nc);
       }
 
       // Bisect and balance.
-      balance_partitions(elements, nv, &tc, &lc, bin, bfr);
+      balance_partitions(elements, ei->nv, &tc, &lc, bin, bfr);
 
       // Split the communicator and recurse on the sub-problems.
       comm_free(&lc), comm_dup(&lc, &tc), comm_free(&tc);
 
-      const uint nbrs = get_neighbors(elements, nv, gc, &lc, bfr);
+      const uint nbrs = get_neighbors(elements, ei->nv, gc, &lc, bfr);
       metric_acc(RSB_NEIGHBORS, nbrs);
 
       metric_push_level();

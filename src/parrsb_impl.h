@@ -34,7 +34,14 @@ struct parrsb_options {
   int rsb_mg_factor;   // MG Coarsening factor (Default: 2, should be > 1)
 };
 
-typedef struct laplacian *laplacian;
+struct element_info {
+  size_t size;
+  size_t align;
+  int nd;
+  int nv;
+};
+
+typedef struct element_info *element_info;
 
 /*
  * Set the visibility of a symbol.
@@ -83,10 +90,24 @@ struct rcb_element {
   scalar coord[MAXDIM];
 };
 
-INTERN int rcb(struct array *elements, size_t unit_size, int ndim,
+INTERN int rcb(struct array *elements, const element_info ei,
                const struct comm *c, buffer *bfr);
-INTERN int rib(struct array *elements, size_t unit_size, int ndim,
+
+INTERN int rib(struct array *elements, const element_info ei,
                const struct comm *c, buffer *bfr);
+/*
+ * Laplacian.
+ */
+#define GS 1
+#define CSR 2
+
+typedef struct laplacian *laplacian;
+
+INTERN int laplacian_init(laplacian *l, const struct array *elements, int nv,
+                          int type, const struct comm *c, buffer *bfr);
+INTERN uint laplacian_get_size(laplacian wl);
+INTERN int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *bfr);
+INTERN int laplacian_free(laplacian *l);
 
 /*
  * RSB. `struct rsb_element` = `struct rcb_element` + `vertices`. Order is
@@ -100,24 +121,12 @@ struct rsb_element {
   slong vertices[MAXNV];
 };
 
-INTERN void rsb(struct array *elements, size_t esize, int nv,
+INTERN void rsb(struct array *elements, const element_info ei,
                 const parrsb_options options, const struct comm *comms,
                 buffer *bfr);
 
 INTERN int fiedler(scalar *fiedler, laplacian l, const parrsb_options opts,
                    const struct comm *gsc, buffer *buf);
-
-/*
- * Laplacian.
- */
-#define GS 1
-#define CSR 2
-
-INTERN int laplacian_init(laplacian *l, const struct array *elements, int nv,
-                          int type, const struct comm *c, buffer *bfr);
-INTERN uint laplacian_get_size(laplacian wl);
-INTERN int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *bfr);
-INTERN int laplacian_free(laplacian *l);
 
 /*
  * Helper routines.
