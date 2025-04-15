@@ -657,17 +657,15 @@ static uint get_level_cuts(const uint level, const uint levels,
 static void run_pre_partitioner(struct array *elements, const element_info ei,
                                 const struct comm *c,
                                 const parrsb_options options, buffer *bfr) {
-  metric_tic(c, RSB_PRE);
   switch (options->rsb_pre) {
   case 0:
-    parallel_sort(struct rsb_element, elements, globalId, gs_long, 0, 1, c,
-                  bfr);
+    parallel_sort_(elements, ei->size, ei->align, 0, 1, c, bfr, 1, gs_long,
+                   offsetof(struct base_element, globalId));
     break;
   case 1: rcb(elements, ei, c, bfr); break;
   case 2: rib(elements, ei, c, bfr); break;
   default: break;
   }
-  metric_toc(c, RSB_PRE);
 }
 
 static void set_proc(struct array *elements, size_t esize,
@@ -700,25 +698,16 @@ void rsb(struct array *elements, const element_info ei,
 
       set_proc(elements, ei->size, &lc);
 
-      // Setup the laplacian.
+      // Setup the laplacian and find the Fiedler vector.
       laplacian wl;
-      metric_tic(&lc, RSB_LAPLACIAN_SETUP);
       laplacian_init(&wl, elements, ei->nv, GS, &lc, bfr);
-      metric_toc(&lc, RSB_LAPLACIAN_SETUP);
-
-      // Find the Fiedler vector.
-      f = trealloc(scalar, f, elements->n);
       fiedler(f, wl, options, &lc, bfr);
-      set_fiedler(elements, ei->size, f);
-
-      // Finalize the laplacian.
       laplacian_free(&wl);
 
-      // Sort by Fiedler value.
-      metric_tic(&lc, RSB_SORT);
-      parallel_sort(struct rsb_element, elements, fiedler, gs_double, 0, 1, &lc,
-                    bfr);
-      metric_toc(&lc, RSB_SORT);
+      // Sort the elements by Fiedler value.
+      set_fiedler(elements, ei->size, f);
+      parallel_sort_(elements, ei->size, ei->align, 0, 1, &lc, bfr, 1,
+                     gs_double, offsetof(struct base_element, fiedler));
 
       // Get the bin of the current process and create a temporary communicator.
       sint bin = get_bin(&lc, level, levels, comms);

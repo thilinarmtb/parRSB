@@ -1,4 +1,5 @@
 #include "mat.h"
+#include "metrics.h"
 #include "multigrid.h"
 #include "parrsb_impl.h"
 
@@ -177,6 +178,7 @@ static int gs_weighted_free(laplacian l) {
  */
 int laplacian_init(laplacian *l_, const struct array *elements, int nv,
                    int type, const struct comm *c, buffer *buf) {
+  metric_tic(c, RSB_LAPLACIAN_SETUP);
   laplacian l = *l_ = tcalloc(struct laplacian, 1);
   l->type = type;
   l->nv = nv;
@@ -189,6 +191,7 @@ int laplacian_init(laplacian *l_, const struct array *elements, int nv,
   default: return 1; break;
   }
 
+  metric_toc(c, RSB_LAPLACIAN_SETUP);
   return 0;
 }
 
