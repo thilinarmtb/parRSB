@@ -63,6 +63,16 @@ typedef struct laplacian *laplacian;
 #define MAXNV 8  // Maximum number of vertices per element.
 
 /*
+ * Base element for mesh and graph partitioning. All of the structures used for
+ * partitioning should append other fields to this structure.
+ */
+struct base_element {
+  uint proc, origin;
+  ulong globalId;
+  scalar fiedler;
+};
+
+/*
  * RCB / RIB. `struct rcb_element` is used for mesh partitioning with RCB and
  * RIB.
  */
@@ -90,8 +100,9 @@ struct rsb_element {
   slong vertices[MAXNV];
 };
 
-INTERN void rsb(struct array *elements, int nv, const parrsb_options options,
-                const struct comm *comms, buffer *bfr);
+INTERN void rsb(struct array *elements, size_t esize, int nv,
+                const parrsb_options options, const struct comm *comms,
+                buffer *bfr);
 
 INTERN int fiedler(scalar *fiedler, laplacian l, const parrsb_options opts,
                    const struct comm *gsc, buffer *buf);

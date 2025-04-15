@@ -190,11 +190,11 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
 
   parrsb_print(c, verbose, "parrsb_part_mesh_v0: running partitioner ...");
   if (elist.n > 0) {
-    int ndim = (nv == 8) ? 3 : 2;
+    const uint nd = nv_to_ndim(nv);
     switch (options->partitioner) {
-    case 0: rsb(&elist, nv, options, comms, bfr); break;
-    case 1: rcb(&elist, esize, ndim, &ca, bfr); break;
-    case 2: rib(&elist, esize, ndim, &ca, bfr); break;
+    case 0: rsb(&elist, esize, nv, options, comms, bfr); break;
+    case 1: rcb(&elist, esize, nd, &ca, bfr); break;
+    case 2: rib(&elist, esize, nd, &ca, bfr); break;
     default: break;
     }
   }

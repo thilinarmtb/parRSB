@@ -654,7 +654,7 @@ static uint get_level_cuts(const uint level, const uint levels,
   return cuts;
 }
 
-static void run_pre_partitioner(struct array *elements, int ndim,
+static void run_pre_partitioner(struct array *elements, size_t esize, int ndim,
                                 const struct comm *lc,
                                 const parrsb_options options, buffer *bfr) {
   metric_tic(lc, RSB_PRE);
@@ -663,43 +663,55 @@ static void run_pre_partitioner(struct array *elements, int ndim,
     parallel_sort(struct rsb_element, elements, globalId, gs_long, 0, 1, lc,
                   bfr);
     break;
-  case 1: rcb(elements, sizeof(struct rsb_element), ndim, lc, bfr); break;
-  case 2: rib(elements, sizeof(struct rsb_element), ndim, lc, bfr); break;
+  case 1: rcb(elements, esize, ndim, lc, bfr); break;
+  case 2: rib(elements, esize, ndim, lc, bfr); break;
   default: break;
   }
   metric_toc(lc, RSB_PRE);
 }
 
-void rsb(struct array *elements, int nv, const parrsb_options options,
-         const struct comm *comms, buffer *bfr) {
+static void set_proc(struct array *elements, size_t esize,
+                     const struct comm *c) {
+  char *p = (char *)elements->ptr;
+  for (uint i = 0; i < elements->n; i++)
+    ((struct base_element *)(p + esize * i))->proc = c->id;
+}
+
+static void set_fiedler(struct array *elements, size_t esize, const scalar *f) {
+  char *p = (char *)elements->ptr;
+  for (uint i = 0; i < elements->n; i++)
+    ((struct base_element *)(p + esize * i))->fiedler = f[i];
+}
+
+void rsb(struct array *elements, size_t esize, int nv,
+         const parrsb_options options, const struct comm *comms, buffer *bfr) {
   const uint levels = options->levels;
   const uint ndim = nv_to_ndim(nv);
-
   const struct comm *gc = &comms[0];
+
   scalar *f = tcalloc(scalar, elements->n + 1);
 
   for (uint level = 0; level < levels; level++) {
-    // Find the maximum number of RSB cuts in current level.
-    uint ncuts = get_level_cuts(level, levels, comms);
-
     struct comm lc;
     comm_dup(&lc, &comms[level]);
-    for (uint cut = 0; cut < ncuts; cut++) {
-      run_pre_partitioner(elements, ndim, &lc, options, bfr);
 
-      struct rsb_element *const pe = (struct rsb_element *const)elements->ptr;
-      for (uint i = 0; i < elements->n; i++) pe[i].proc = lc.id;
+    // Find the maximum number of RSB cuts in current level.
+    uint ncuts = get_level_cuts(level, levels, comms);
+    for (uint cut = 0; cut < ncuts; cut++) {
+      run_pre_partitioner(elements, esize, ndim, &lc, options, bfr);
+
+      set_proc(elements, esize, &lc);
 
       // Setup the laplacian.
-      metric_tic(&lc, RSB_LAPLACIAN_SETUP);
       laplacian wl;
+      metric_tic(&lc, RSB_LAPLACIAN_SETUP);
       laplacian_init(&wl, elements, nv, GS, &lc, bfr);
       metric_toc(&lc, RSB_LAPLACIAN_SETUP);
 
       // Find the Fiedler vector.
       f = trealloc(scalar, f, elements->n);
       fiedler(f, wl, options, &lc, bfr);
-      for (uint i = 0; i < elements->n; i++) pe[i].fiedler = f[i];
+      set_fiedler(elements, esize, f);
 
       // Finalize the laplacian.
       laplacian_free(&wl);
