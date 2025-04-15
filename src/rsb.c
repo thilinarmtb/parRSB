@@ -693,7 +693,7 @@ void rsb(struct array *elements, int nv, const parrsb_options options,
       // Setup the laplacian.
       metric_tic(&lc, RSB_LAPLACIAN_SETUP);
       laplacian wl;
-      laplacian_init(&wl, pe, elements->n, nv, GS, &lc, bfr);
+      laplacian_init(&wl, elements, nv, GS, &lc, bfr);
       metric_toc(&lc, RSB_LAPLACIAN_SETUP);
 
       // Find the Fiedler vector.

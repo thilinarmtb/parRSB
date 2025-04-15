@@ -66,13 +66,12 @@ static void find_nbrs_rsb(struct array *arr, const struct rsb_element *elems,
 }
 
 static int par_csr_init(laplacian l, const struct rsb_element *elems,
-                        const uint nelt, const int nv, const struct comm *c,
-                        buffer *bfr) {
+                        const int nv, const struct comm *c, buffer *bfr) {
   struct crystal cr;
   crystal_init(&cr, c);
 
   struct array nbrs, eij;
-  find_nbrs_rsb(&nbrs, elems, nelt, nv, c, &cr, bfr);
+  find_nbrs_rsb(&nbrs, elems, l->nel, nv, c, &cr, bfr);
   compress_nbrs(&eij, &nbrs, bfr);
 
   struct csr_laplacian *L = l->data = tcalloc(struct csr_laplacian, 1);
@@ -116,10 +115,10 @@ struct gs_laplacian {
   struct gs_data *gsh;
 };
 
-static int gs_weighted_init(laplacian l, struct rsb_element *elems,
-                            const uint lelt, const unsigned nv,
-                            const struct comm *c, buffer *buf) {
-
+static int gs_weighted_init(laplacian l, const struct rsb_element *elems,
+                            const unsigned nv, const struct comm *c,
+                            buffer *buf) {
+  uint lelt = l->nel;
   uint npts = nv * lelt;
   slong *vertices = tcalloc(slong, npts);
   uint i, j;
@@ -176,16 +175,17 @@ static int gs_weighted_free(laplacian l) {
 /*
  * Laplacian - user API.
  */
-int laplacian_init(laplacian *l_, struct rsb_element *elems, uint nel, int nv,
+int laplacian_init(laplacian *l_, const struct array *elements, int nv,
                    int type, const struct comm *c, buffer *buf) {
   laplacian l = *l_ = tcalloc(struct laplacian, 1);
   l->type = type;
   l->nv = nv;
-  l->nel = nel;
+  l->nel = elements->n;
 
+  const struct rsb_element *pe = (const struct rsb_element *)elements->ptr;
   switch (type) {
-  case CSR: par_csr_init(l, elems, nel, nv, c, buf); break;
-  case GS: gs_weighted_init(l, elems, nel, nv, c, buf); break;
+  case CSR: par_csr_init(l, pe, nv, c, buf); break;
+  case GS: gs_weighted_init(l, pe, nv, c, buf); break;
   default: return 1; break;
   }
 

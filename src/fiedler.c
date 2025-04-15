@@ -415,7 +415,7 @@ static int fiedler_mesh(struct array *elems, int nv, const parrsb_options opts,
 
   metric_tic(gsc, RSB_LAPLACIAN_SETUP);
   laplacian wl;
-  laplacian_init(&wl, (struct rsb_element *)elems->ptr, lelt, nv, GS, gsc, buf);
+  laplacian_init(&wl, elems, nv, GS, gsc, buf);
   metric_toc(gsc, RSB_LAPLACIAN_SETUP);
 
   metric_tic(gsc, RSB_FIEDLER_CALC);

@@ -102,8 +102,8 @@ INTERN int fiedler(scalar *fiedler, laplacian l, const parrsb_options opts,
 #define GS 1
 #define CSR 2
 
-INTERN int laplacian_init(laplacian *l, struct rsb_element *elems, uint nel,
-                          int nv, int type, const struct comm *c, buffer *bfr);
+INTERN int laplacian_init(laplacian *l, const struct array *elements, int nv,
+                          int type, const struct comm *c, buffer *bfr);
 INTERN uint laplacian_get_size(laplacian wl);
 INTERN int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *bfr);
 INTERN int laplacian_free(laplacian *l);
