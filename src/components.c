@@ -1,22 +1,19 @@
 #include "metrics.h"
 #include "parrsb_impl.h"
 
-static slong get_components_v1(sint *component, struct array *elems, uint nv,
-                               struct comm *c, buffer *buf) {
-  uint nelt = elems->n;
-  struct rsb_element *pe = (struct rsb_element *)elems->ptr;
-
-  slong out[2][1], wrk[2][1], in = nelt;
+static slong mesh_components_v1(sint *component, struct array *elems, uint nv,
+                                struct comm *c, buffer *buf) {
+  slong out[2][1], wrk[2][1], in = elems->n;
   comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
   ulong nelg = out[1][0], start = out[0][0];
-
   if (nelg == 0) return 0;
 
-  uint nev = nelt * nv;
+  const uint nelt = elems->n;
+  const uint nev = nelt * nv;
+  const int null_input = (component == NULL);
+
   slong *p = tcalloc(slong, nev);
   slong *ids = tcalloc(slong, nev);
-
-  int null_input = (component == NULL);
   if (null_input) component = tcalloc(sint, nelt);
 
   for (uint e = 0; e < nelt; e++) component[e] = -1;
@@ -29,6 +26,7 @@ static slong get_components_v1(sint *component, struct array *elems, uint nv,
   struct array arr;
   array_init(struct unmarked, &arr, nelt);
 
+  struct rsb_element *pe = (struct rsb_element *)elems->ptr;
   struct comm cc;
   slong count = 0;
   slong nnz1, nnzg, nnzg0, nnzb;
@@ -155,25 +153,23 @@ static sint find_or_insert(struct array *cids, struct cmp_t *t) {
   return -1;
 }
 
-static slong get_components_v2(sint *component, const struct array *elems,
-                               uint nv, const struct comm *ci, buffer *bfr) {
-  metric_tic(ci, RSB_COMPONENTS);
-
-  slong nc = 0;
-
+static slong mesh_components_v2(sint *component, const struct array *elems,
+                                uint nv, const struct comm *ci, buffer *bfr) {
   slong out[2][1], wrk[2][1], in = elems->n;
   comm_scan(out, ci, gs_long, gs_add, &in, 1, wrk);
   ulong nelg = out[1][0];
-  if (nelg == 0) goto exit_early;
+  if (nelg == 0) return 0;
+
+  metric_tic(ci, RSB_COMPONENTS);
 
   const uint nelt = elems->n;
   const uint nev = nelt * nv;
+  const int null_input = (component == NULL);
+
   sint *p0 = tcalloc(sint, nev);
   sint *p = tcalloc(sint, nev);
   slong *ids = tcalloc(slong, nev);
   uint *inds = tcalloc(uint, nev);
-
-  int null_input = (component == NULL);
   if (null_input) component = tcalloc(sint, nelt);
 
   for (uint e = 0; e < nelt; e++) component[e] = -1;
@@ -181,6 +177,7 @@ static slong get_components_v2(sint *component, const struct array *elems,
   struct rsb_element *pe = (struct rsb_element *)elems->ptr;
   struct comm c;
   ulong nmkd = 0;
+  slong nc = 0;
   do {
     // Copy unmarked elements to ids.
     uint unmkd = 0;
@@ -323,12 +320,14 @@ static slong get_components_v2(sint *component, const struct array *elems,
   if (null_input == 1) free(component);
   free(p0), free(p), free(ids), free(inds);
 
-exit_early:
   metric_toc(ci, RSB_COMPONENTS);
   return nc;
 }
 
 slong get_components(sint *component, const struct array *elems,
                      const element_info ei, struct comm *c, buffer *buf) {
-  return get_components_v2(component, elems, ei->nv, c, buf);
+  if (ei->nv > 0)
+    return mesh_components_v2(component, elems, ei->nv, c, buf);
+  else
+    return 0;
 }
