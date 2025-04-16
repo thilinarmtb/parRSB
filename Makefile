@@ -43,7 +43,7 @@ SRC.c = $(wildcard $(SRCDIR)/*.c)
 SRC.o = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%.o,$(SRC.c))
 EXAMPLE.c = $(wildcard $(EXAMPLEDIR)/*.c)
 EXAMPLE.bin = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%,$(EXAMPLE.c))
-LIB = $(BUILDDIR)/lib/libparRSB.a
+LIB.a = $(BUILDDIR)/lib/libparRSB.a
 
 INCFLAGS = -I$(SRCDIR) -I$(GSLIBPATH)/include
 CCCMD = $(CC) $(CFLAGS) $(INCFLAGS) $(PP)
@@ -54,11 +54,11 @@ LDFLAGS += -L$(INSTALLDIR)/lib -lparRSB -L$(GSLIBPATH)/lib -lgs -lm
 all: lib install example
 
 lib: $(SRC.o) | $(BUILDDIR)
-	@$(AR) cr $(LIB) $?
-	@ranlib $(LIB)
+	@$(AR) cr $(LIB.a) $?
+	@ranlib $(LIB.a)
 
 install: lib | $(INSTALLDIR)
-	@cp -v $(LIB) $(INSTALLDIR)/lib 2>/dev/null
+	@cp -v $(LIB.a) $(INSTALLDIR)/lib 2>/dev/null
 	@cp $(SRCDIR)/*.h $(INSTALLDIR)/include 2>/dev/null
 
 example: $(EXAMPLE.bin) | lib install
