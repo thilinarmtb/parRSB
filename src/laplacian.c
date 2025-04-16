@@ -3,6 +3,9 @@
 #include "multigrid.h"
 #include "parrsb_impl.h"
 
+#define GS 1
+#define CSR 2
+
 struct laplacian {
   int type, nv;
   uint nel;
@@ -45,7 +48,7 @@ static void find_nbrs_rsb(struct array *arr, const struct rsb_element *elems,
   struct nbr *vptr = vertices.ptr;
   uint vn = vertices.n;
 
-  // FIXME: Assumes quads or hexes
+  // FIXME: Assumes quads or hexes.
   struct nbr t;
   uint s = 0, e;
   array_init(struct nbr, arr, vertices.n * 10);
@@ -176,18 +179,19 @@ static int gs_weighted_free(laplacian l) {
 /*
  * Laplacian - user API.
  */
-int laplacian_init(laplacian *l_, const struct array *elements, int nv,
-                   int type, const struct comm *c, buffer *buf) {
+int laplacian_init(laplacian *l_, const struct array *elements,
+                   const element_info ei, const struct comm *c, buffer *buf) {
   metric_tic(c, RSB_LAPLACIAN_SETUP);
+
   laplacian l = *l_ = tcalloc(struct laplacian, 1);
-  l->type = type;
-  l->nv = nv;
+  l->nv = ei->nv;
+  l->type = (l->nv > 0) ? GS : CSR;
   l->nel = elements->n;
 
   const struct rsb_element *pe = (const struct rsb_element *)elements->ptr;
-  switch (type) {
-  case CSR: par_csr_init(l, pe, nv, c, buf); break;
-  case GS: gs_weighted_init(l, pe, nv, c, buf); break;
+  switch (l->type) {
+  case CSR: par_csr_init(l, pe, l->nv, c, buf); break;
+  case GS: gs_weighted_init(l, pe, l->nv, c, buf); break;
   default: return 1; break;
   }
 
@@ -220,3 +224,6 @@ int laplacian_free(laplacian *l_) {
   free(l), l = 0;
   return 0;
 }
+
+#undef CSR
+#undef GS

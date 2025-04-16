@@ -385,8 +385,9 @@ static int lanczos(scalar *fiedler, laplacian wl, scalar *initv,
   return (ipass - 1) * miter + iter;
 }
 
-static int fiedler_mesh(struct array *elems, int nv, const parrsb_options opts,
-                        const struct comm *gsc, buffer *buf) {
+static int fiedler_mesh(struct array *elems, const element_info ei,
+                        const parrsb_options opts, const struct comm *gsc,
+                        buffer *buf) {
   metric_tic(gsc, RSB_FIEDLER);
 
   // Return if the number of processes is equal to 1.
@@ -415,7 +416,7 @@ static int fiedler_mesh(struct array *elems, int nv, const parrsb_options opts,
 
   metric_tic(gsc, RSB_LAPLACIAN_SETUP);
   laplacian wl;
-  laplacian_init(&wl, elems, nv, GS, gsc, buf);
+  laplacian_init(&wl, elems, ei, gsc, buf);
   metric_toc(gsc, RSB_LAPLACIAN_SETUP);
 
   metric_tic(gsc, RSB_FIEDLER_CALC);
@@ -424,7 +425,9 @@ static int fiedler_mesh(struct array *elems, int nv, const parrsb_options opts,
   scalar *f = tcalloc(scalar, lelt);
   switch (opts->rsb_algo) {
   case 0: iter = lanczos(f, wl, initv, gsc, opts, nelg, buf); break;
-  case 1: iter = inverse(f, wl, elems, nv, initv, gsc, opts, nelg, buf); break;
+  case 1:
+    iter = inverse(f, wl, elems, ei->nv, initv, gsc, opts, nelg, buf);
+    break;
   }
   metric_acc(RSB_FIEDLER_CALC_NITER, iter);
 

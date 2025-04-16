@@ -98,13 +98,11 @@ INTERN int rib(struct array *elements, const element_info ei,
 /*
  * Laplacian.
  */
-#define GS 1
-#define CSR 2
-
 typedef struct laplacian *laplacian;
 
-INTERN int laplacian_init(laplacian *l, const struct array *elements, int nv,
-                          int type, const struct comm *c, buffer *bfr);
+INTERN int laplacian_init(laplacian *l, const struct array *elements,
+                          const element_info ei, const struct comm *c,
+                          buffer *bfr);
 INTERN uint laplacian_get_size(laplacian wl);
 INTERN int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *bfr);
 INTERN int laplacian_free(laplacian *l);

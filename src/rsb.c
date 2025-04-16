@@ -381,7 +381,7 @@ void rsb(struct array *elements, const element_info ei,
 
       // Setup the laplacian and find the Fiedler vector.
       laplacian wl;
-      laplacian_init(&wl, elements, ei->nv, GS, &lc, bfr);
+      laplacian_init(&wl, elements, ei, &lc, bfr);
       fiedler(f, wl, options, &lc, bfr);
       laplacian_free(&wl);
 
