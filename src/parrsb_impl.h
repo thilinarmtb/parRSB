@@ -129,6 +129,12 @@ INTERN int fiedler(scalar *fiedler, laplacian l, const parrsb_options opts,
                    const struct comm *gsc, buffer *buf);
 
 /*
+ * Find the number of disconnected components in the graph.
+ */
+INTERN slong get_components(sint *component, const struct array *elems,
+                            const element_info ei, struct comm *c, buffer *buf);
+
+/*
  * Helper routines.
  */
 INTERN void parrsb_barrier(struct comm *c);
