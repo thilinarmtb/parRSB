@@ -181,12 +181,10 @@ static void check_rsb_partition(const struct comm *gc,
   }
 }
 
-static int balance_partitions(struct array *elements, uint nv, struct comm *lc,
-                              struct comm *gc, int bin, buffer *bfr) {
+static sint balance_partitions_mesh(struct array *elements, uint nv,
+                                    struct comm *lc, struct comm *gc, int bin,
+                                    buffer *bfr) {
   metric_tic(lc, RSB_BALANCE);
-
-  // Return if there is only one processor (or partition).
-  if (gc->np == 1 || gc->np == lc->np) goto early_exit;
 
   struct ielem_t {
     uint index, orig;
@@ -196,9 +194,9 @@ static int balance_partitions(struct array *elements, uint nv, struct comm *lc,
 
   // Calculate expected # of elements per processor.
   uint ne = elements->n;
-  slong nelgt = ne, nglob = ne, wrk;
-  comm_allreduce(lc, gs_long, gs_add, &nelgt, 1, &wrk);
-  comm_allreduce(gc, gs_long, gs_add, &nglob, 1, &wrk);
+  slong nelgt = ne, nglob = ne, wrk[2][1];
+  comm_allreduce(lc, gs_long, gs_add, &nelgt, 1, wrk);
+  comm_allreduce(gc, gs_long, gs_add, &nglob, 1, wrk);
 
   sint ne_ = nglob / gc->np, nrem = nglob - ne_ * gc->np;
   slong nelgt_exp = ne_ * lc->np + nrem / 2 + (nrem % 2) * (1 - bin);
@@ -225,72 +223,85 @@ static int balance_partitions(struct array *elements, uint nv, struct comm *lc,
   sint sid = (send_cnt == 0) ? gc->id : INT_MAX;
   comm_allreduce(gc, gs_int, gs_min, &sid, 1, &wrk);
 
-  struct crystal cr;
   sint balanced = 0;
+  if (send_cnt == 0) goto allreduce;
 
-  if (send_cnt > 0) {
-    struct array ielems;
-    array_init(struct ielem_t, &ielems, 10);
+  struct array ielems;
+  array_init(struct ielem_t, &ielems, 10);
 
-    struct ielem_t ielem = {.orig = lc->id, .dest = -1};
-    int mul = (sid == 0) ? 1 : -1;
-    for (uint e = 0; e < ne; e++) {
-      for (uint v = 0; v < nv; v++) {
-        if (input[e * nv + v] > 0) {
-          ielem.index = e, ielem.fiedler = mul * elems[e].fiedler;
-          array_cat(struct ielem_t, &ielems, &ielem, 1);
-          break;
-        }
+  struct ielem_t ielem = {.orig = lc->id, .dest = -1};
+  int mul = (sid == 0) ? 1 : -1;
+  for (uint e = 0; e < ne; e++) {
+    for (uint v = 0; v < nv; v++) {
+      if (input[e * nv + v] > 0) {
+        ielem.index = e, ielem.fiedler = mul * elems[e].fiedler;
+        array_cat(struct ielem_t, &ielems, &ielem, 1);
+        break;
       }
     }
-
-    // Sort based on fiedler value and sets `orig` field
-    parallel_sort(struct ielem_t, &ielems, fiedler, gs_double, 0, 1, lc, bfr);
-
-    slong out[2][1], bfr[2][1], nielems = ielems.n;
-    comm_scan(out, lc, gs_long, gs_add, &nielems, 1, bfr);
-    slong start = out[0][0];
-
-    sint P = gc->np - lc->np;
-    sint part_size = (send_cnt + P - 1) / P;
-
-    if (out[1][0] >= send_cnt) {
-      balanced = 1;
-      struct ielem_t *ptr = ielems.ptr;
-      for (uint e = 0; start + e < send_cnt && e < ielems.n; e++)
-        ptr[e].dest = sid + (start + e) / part_size;
-
-      crystal_init(&cr, lc);
-      sarray_transfer(struct ielem_t, &ielems, orig, 0, &cr);
-      crystal_free(&cr);
-
-      ptr = ielems.ptr;
-      for (uint e = 0; e < ielems.n; e++)
-        if (ptr[e].dest != -1) elems[ptr[e].index].proc = ptr[e].dest;
-    }
-
-    array_free(&ielems);
   }
 
+  // Sort based on fiedler value and sets `orig` field
+  parallel_sort(struct ielem_t, &ielems, fiedler, gs_double, 0, 1, lc, bfr);
+
+  slong out[2][1], nielems = ielems.n;
+  comm_scan(out, lc, gs_long, gs_add, &nielems, 1, wrk);
+  slong start = out[0][0];
+
+  sint P = gc->np - lc->np;
+  sint part_size = (send_cnt + P - 1) / P;
+
+  if (out[1][0] >= send_cnt) {
+    balanced = 1;
+    struct ielem_t *ptr = ielems.ptr;
+    for (uint e = 0; start + e < send_cnt && e < ielems.n; e++)
+      ptr[e].dest = sid + (start + e) / part_size;
+
+    struct crystal cr;
+    crystal_init(&cr, lc);
+    sarray_transfer(struct ielem_t, &ielems, orig, 0, &cr);
+    crystal_free(&cr);
+
+    ptr = ielems.ptr;
+    for (uint e = 0; e < ielems.n; e++)
+      if (ptr[e].dest != -1) elems[ptr[e].index].proc = ptr[e].dest;
+  }
+
+  array_free(&ielems);
+
+allreduce:
   comm_allreduce(gc, gs_int, gs_max, &balanced, 1, &wrk);
-  if (balanced == 1) {
+
+  free(ids), gs_free(gsh);
+
+  metric_toc(lc, RSB_BALANCE);
+  return balanced;
+}
+
+static void balance_partitions(struct array *elements, const element_info ei,
+                               struct comm *lc, struct comm *gc, int bin,
+                               buffer *bfr) {
+  // Return if there is only one processor (or partition).
+  if (gc->np == 1 || gc->np == lc->np) return;
+
+  sint balanced = 0;
+  // Try to balance partitions if the input is a mesh.
+  if (ei->nv > 0)
+    balanced = balance_partitions_mesh(elements, ei->nv, lc, gc, bin, bfr);
+
+  if (balanced && ei->nv > 0) {
+    struct crystal cr;
     crystal_init(&cr, gc);
     sarray_transfer(struct rsb_element, elements, proc, 0, &cr);
     crystal_free(&cr);
 
-    // Do a load balanced sort in each partition
-    parallel_sort(struct rsb_element, elements, fiedler, gs_double, 0, 1, lc,
-                  bfr);
+    parallel_sort_(elements, ei->size, ei->align, 0, 1, lc, bfr, 1, gs_double,
+                   offsetof(struct base_element, fiedler));
   } else {
-    // Forget about disconnected components, just do a load balanced partition
-    parallel_sort(struct rsb_element, elements, fiedler, gs_double, 0, 1, gc,
-                  bfr);
-  }
 
-  free(ids), gs_free(gsh);
-early_exit:
-  metric_toc(lc, RSB_BALANCE);
-  return 0;
+    parallel_sort_(elements, ei->size, ei->align, 0, 1, gc, bfr, 1, gs_double,
+                   offsetof(struct base_element, fiedler));
+  }
 }
 
 static sint get_bin(const struct comm *const lc, const uint level,
@@ -391,7 +402,7 @@ void rsb(struct array *elements, const element_info ei,
       }
 
       // Bisect and balance.
-      balance_partitions(elements, ei->nv, &tc, &lc, bin, bfr);
+      balance_partitions(elements, ei, &tc, &lc, bin, bfr);
 
       // Split the communicator and recurse on the sub-problems.
       comm_free(&lc), comm_dup(&lc, &tc), comm_free(&tc);
