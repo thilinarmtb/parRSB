@@ -146,13 +146,10 @@ INTERN int log2ll(long long n);
 
 INTERN int nv_to_ndim(int nv);
 
-/*
- * Matrix inverse (local to MPI process).
- */
 INTERN int matrix_inverse(int N, scalar *A);
 
 /*
- * General eigenvalue related.
+ * General eigenvalue related routines.
  */
 INTERN int power_iter(double *y, uint N, double *A);
 
