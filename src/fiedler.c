@@ -454,20 +454,18 @@ early_exit:
 
 int fiedler(scalar *f, laplacian l, const parrsb_options opts,
             const struct comm *c, buffer *buf) {
+  // Return if the number of processes is equal to 1 or rsb algorithm is set to
+  // something other than lanczos.
+  if (c->np == 1 || opts->rsb_algo > 0) return 1;
+
   metric_tic(c, RSB_FIEDLER);
-
-  int err = 0;
-  scalar *vi = 0;
-
-  // Return if the number of processes is equal to 1.
-  if (c->np == 1) goto early_exit;
 
   uint n = laplacian_get_size(l);
   slong out[2][1], wrk[2][1], in = n;
   comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
   slong start = out[0][0], ng = out[1][0];
 
-  vi = tcalloc(scalar, n);
+  scalar *vi = tcalloc(scalar, n);
   for (uint i = 0; i < n; i++) {
     vi[i] = start + i + 1.0;
     if (start + i < ng / 2) vi[i] += 1000 * ng;
@@ -479,14 +477,10 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
   scalar normi = 1.0 / sqrt(norm);
   for (uint i = 0; i < n; i++) vi[i] *= normi;
 
-  metric_tic(c, RSB_FIEDLER_CALC);
   int iter = 0;
   switch (opts->rsb_algo) {
   case 0: iter = lanczos(f, l, vi, c, opts, ng, buf); break;
-  default:
-    err = 1;
-    goto early_exit;
-    break;
+  default: break;
   }
   metric_acc(RSB_FIEDLER_CALC_NITER, iter);
 
@@ -495,11 +489,9 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
   normi = 1.0 / sqrt(norm);
   for (uint i = 0; i < n; i++) f[i] *= normi;
 
-  metric_toc(c, RSB_FIEDLER_CALC);
-
-early_exit:
   free(vi);
+
   metric_toc(c, RSB_FIEDLER);
 
-  return err;
+  return 0;
 }

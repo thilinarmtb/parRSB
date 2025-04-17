@@ -391,8 +391,8 @@ void rsb(struct array *elements, const element_info ei,
                      gs_double, offsetof(struct base_element, fiedler));
 
       // Get the bin of the current process and create a temporary communicator.
-      sint bin = get_bin(&lc, level, levels, comms);
       struct comm tc;
+      sint bin = get_bin(&lc, level, levels, comms);
       comm_split(&lc, bin, lc.id, &tc);
 
       // Find the number of disconnected components.
