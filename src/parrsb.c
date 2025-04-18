@@ -847,25 +847,7 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
   return 0;
 }
 
-typedef struct {
-  uint nn;
-  ulong *nodes;
-  uint *origin;
-  uint *offsets;
-  ulong *neighbors;
-} graph_t;
-
-static int graph_free(graph_t *graph) {
-  if (!graph) return 1;
-  if (graph->nodes) free(graph->nodes), graph->nodes = 0;
-  if (graph->origin) free(graph->origin), graph->origin = 0;
-  if (graph->offsets) free(graph->offsets), graph->offsets = 0;
-  if (graph->neighbors) free(graph->neighbors), graph->neighbors = 0;
-  graph->nn = 0;
-  return 0;
-}
-
-static int graph_load_balance(graph_t *graph, uint nn, long long *nodes,
+static int graph_load_balance(struct array *nlist, uint nn, long long *nodes,
                               size_t *offsets, long long *neighbors,
                               struct crystal *const cr, buffer *bfr) {
   const struct comm *c = &cr->comm;
@@ -878,63 +860,28 @@ static int graph_load_balance(graph_t *graph, uint nn, long long *nodes,
   uint nrem = ng - (slong)nstar * (slong)c->np;
   slong threshold = (nstar + 1) * nrem;
 
-  typedef struct {
-    ulong u, v;
-    uint p;
-  } pair_t;
+  array_init(struct graph_element, nlist, nn * 27);
 
-  struct array arr;
-  array_init(pair_t, &arr, nn * 27);
-
-  pair_t p;
+  struct graph_element g;
+  g.origin = c->id;
   for (uint i = 0; i < nn; i++) {
-    slong ig = start + i;
+    slong ig = g.globalId = start + i;
     if (nstar == 0)
-      p.p = ig;
+      g.proc = ig;
     else if (ig < threshold)
-      p.p = ig / (nstar + 1);
+      g.proc = ig / (nstar + 1);
     else
-      p.p = nrem + (ig - threshold) / nstar;
+      g.proc = nrem + (ig - threshold) / nstar;
 
-    p.u = nodes[i];
+    g.u = nodes[i];
     for (uint j = offsets[i], je = offsets[i + 1]; j < je; j++) {
-      p.v = neighbors[j];
-      array_cat(pair_t, &arr, &p, 1);
+      g.v = neighbors[j];
+      array_cat(struct graph_element, nlist, &g, 1);
     }
   }
 
-  sarray_transfer(pair_t, &arr, p, 1, cr);
-  sarray_sort_2(pair_t, arr.ptr, arr.n, u, 1, v, 1, bfr);
-
-  graph->nn = (arr.n != 0);
-  if (graph->nn == 0) goto cleanup;
-
-  const pair_t *const pa = (const pair_t *)arr.ptr;
-  for (uint i = 1; i < arr.n; i++)
-    if (pa[i - 1].u != pa[i].u) graph->nn++;
-
-  graph->nodes = tcalloc(ulong, graph->nn);
-  graph->origin = tcalloc(uint, graph->nn);
-  graph->offsets = tcalloc(uint, graph->nn + 1);
-  graph->neighbors = tcalloc(ulong, arr.n);
-
-  graph->nodes[0] = pa[0].u;
-  graph->origin[0] = pa[0].p;
-  graph->offsets[0] = 0;
-  graph->neighbors[0] = pa[0].v;
-  uint nn_ = 1;
-  for (uint i = 1; i < arr.n; i++) {
-    graph->neighbors[i] = pa[i].v;
-    if (pa[i - 1].u == pa[i].u) continue;
-    graph->nodes[nn_] = pa[i].u;
-    graph->offsets[nn_] = i;
-    graph->origin[nn_] = pa[i].p;
-    nn_++;
-  }
-  assert(graph->nn == nn_);
-
-cleanup:
-  array_free(&arr);
+  sarray_transfer(struct graph_element, nlist, proc, 1, cr);
+  sarray_sort_2(struct graph_element, nlist->ptr, nlist->n, u, 1, v, 1, bfr);
 
   return 0;
 }
@@ -964,24 +911,22 @@ int parrsb_part_graph(int *part, size_t num_nodes, long long *nodes,
 
   metric_init();
 
-  graph_t graph;
-  graph_load_balance(&graph, num_nodes, nodes, offsets, neighbors, &cr, &bfr);
+  struct array nlist;
+  graph_load_balance(&nlist, num_nodes, nodes, offsets, neighbors, &cr, &bfr);
 
   struct comm ca;
-  comm_split(&c, graph.nn > 0, c.id, &ca);
+  comm_split(&c, nlist.n > 0, c.id, &ca);
 
   struct comm comms[8];
   initialize_levels(comms, options, &ca);
 
-  for (int i = 0; i < options->levels; i++) comm_free(&comms[i]);
-  comm_free(&ca);
-
-  graph_free(&graph);
-  crystal_free(&cr);
-  buffer_free(&bfr);
-
   metric_rsb_print(&c, options->profile_level);
   metric_finalize();
+
+  for (int i = 0; i < options->levels; i++) comm_free(&comms[i]);
+  comm_free(&ca);
+  crystal_free(&cr);
+  buffer_free(&bfr);
 
   t = comm_time() - t;
   parrsb_print(&c, verbose, "par%s finished in %g seconds.",

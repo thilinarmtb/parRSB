@@ -80,6 +80,16 @@ struct base_element {
 };
 
 /*
+ * General graph partitioning.
+ */
+struct graph_element {
+  uint proc, origin;
+  ulong globalId;
+  scalar fiedler;
+  ulong u, v;
+};
+
+/*
  * RCB / RIB. `struct rcb_element` is used for mesh partitioning with RCB and
  * RIB.
  */
