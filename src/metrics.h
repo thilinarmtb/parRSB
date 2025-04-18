@@ -26,18 +26,6 @@ typedef enum {
   RSB_PROJECT_MG,
   RSB_REPAIR,
   RSB_SORT,
-  SCHUR_PROJECT_NITER,
-  SCHUR_PROJECT_OPERATOR,
-  SCHUR_PROJECT_OPERATOR_FXI,
-  SCHUR_PROJECT_OPERATOR_CHOL,
-  SCHUR_PROJECT_OPERATOR_EZL,
-  SCHUR_PROJECT_OPERATOR_MATVEC,
-  SCHUR_PROJECT_PRECOND,
-  SCHUR_SOLVE_CHOL1,
-  SCHUR_SOLVE_CHOL2,
-  SCHUR_SOLVE_PROJECT,
-  SCHUR_SOLVE_SETRHS1,
-  SCHUR_SOLVE_SETRHS2,
   TOL_FNL,
   TOL_TGT,
   TOL_INIT
@@ -52,7 +40,6 @@ double metric_get_value(int level, metric m);
 void metric_push_level(void);
 uint metric_get_levels(void);
 void metric_rsb_print(const struct comm *c, int profile_level);
-void metric_crs_print(const struct comm *c, int profile_level);
 void metric_finalize(void);
 
 #endif
