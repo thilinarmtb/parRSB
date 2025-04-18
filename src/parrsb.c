@@ -911,7 +911,7 @@ int parrsb_part_graph(int *part, size_t num_nodes, long long *nodes,
 
   slong n = num_nodes, wrk;
   comm_allreduce(&c, gs_long, gs_add, &n, 1, &wrk);
-  parrsb_print(&c, verbose, "Running parRSB ..., n = %lld\n", n);
+  parrsb_print(&c, verbose, "parRSB: # vertices = %lld\n", n);
 
   parrsb_barrier(&c);
   double t = comm_time();
@@ -924,6 +924,12 @@ int parrsb_part_graph(int *part, size_t num_nodes, long long *nodes,
 
   metric_init();
 
+  element_info ei = tcalloc(struct element_info, 1);
+  ei->nv = 0;
+  ei->nd = 0;
+  ei->size = sizeof(struct graph_element);
+  ei->align = ALIGNOF(struct graph_element);
+
   struct array nlist;
   graph_load_balance(&nlist, num_nodes, nodes, offsets, neighbors, &cr, &bfr);
 
@@ -933,11 +939,25 @@ int parrsb_part_graph(int *part, size_t num_nodes, long long *nodes,
   struct comm comms[8];
   initialize_levels(comms, options, &ca);
 
-  metric_rsb_print(&c, options->profile_level);
-  metric_finalize();
+  parrsb_print(&c, verbose, "parrsb_part_graph: running partitioner ...");
+  if (nlist.n > 0) {
+    switch (options->partitioner) {
+    case 0: rsb(&nlist, ei, options, comms, &bfr); break;
+    default: break;
+    }
+  }
 
   for (int i = 0; i < options->levels; i++) comm_free(&comms[i]);
   comm_free(&ca);
+
+  parrsb_print(&c, verbose, "parrsb_part_graph: restore original input");
+  mesh_restore(part, &cr, &nlist, ei->size, &bfr);
+
+  free(ei);
+
+  metric_rsb_print(&c, options->profile_level);
+
+  metric_finalize();
   crystal_free(&cr);
   buffer_free(&bfr);
 
