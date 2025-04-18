@@ -1,6 +1,5 @@
 #include "mat.h"
 #include "metrics.h"
-#include "multigrid.h"
 #include "parrsb_impl.h"
 
 #define GS 1
