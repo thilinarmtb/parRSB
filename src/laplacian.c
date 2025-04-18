@@ -19,8 +19,8 @@ struct csr_laplacian {
   scalar *buf;
 };
 
-static int par_csr_init(laplacian l, const struct rsb_element *elems,
-                        const int nv, const struct comm *c, buffer *bfr) {
+static int par_csr_init(laplacian l, struct array *nlist, const struct comm *c,
+                        buffer *bfr) {
   struct crystal cr;
   crystal_init(&cr, c);
   crystal_free(&cr);
@@ -51,31 +51,32 @@ struct gs_laplacian {
   struct gs_data *gsh;
 };
 
-static int gs_weighted_init(laplacian l, const struct rsb_element *elems,
-                            const unsigned nv, const struct comm *c,
-                            buffer *buf) {
+static int gs_weighted_init(laplacian l, struct array *elist,
+                            const struct comm *c, buffer *buf) {
   uint lelt = l->nel;
+  uint nv = l->nv;
   uint npts = nv * lelt;
+
+  const struct rsb_element *pe = (const struct rsb_element *)elist->ptr;
   slong *vertices = tcalloc(slong, npts);
-  uint i, j;
-  for (i = 0; i < lelt; i++)
-    for (j = 0; j < nv; j++) vertices[i * nv + j] = elems[i].vertices[j];
+  for (uint i = 0; i < lelt; i++)
+    for (uint j = 0; j < nv; j++) vertices[i * nv + j] = pe[i].vertices[j];
 
   struct gs_laplacian *gl = l->data = tcalloc(struct gs_laplacian, 1);
   gl->u = tcalloc(scalar, npts);
-  for (i = 0; i < lelt; i++)
-    for (j = 0; j < nv; j++) gl->u[nv * i + j] = 1.0;
+  for (uint i = 0; i < lelt; i++)
+    for (uint j = 0; j < nv; j++) gl->u[nv * i + j] = 1.0;
 
   gl->gsh = gs_setup(vertices, npts, c, 0, gs_crystal_router, 0);
   gs(gl->u, gs_double, gs_add, 0, gl->gsh, buf);
 
   gl->diag = tcalloc(scalar, lelt);
-  for (i = 0; i < lelt; i++) {
+  for (uint i = 0; i < lelt; i++) {
     gl->diag[i] = 0.0;
-    for (j = 0; j < nv; j++) gl->diag[i] += gl->u[nv * i + j];
+    for (uint j = 0; j < nv; j++) gl->diag[i] += gl->u[nv * i + j];
   }
 
-  if (vertices != NULL) free(vertices);
+  free(vertices);
 
   return 0;
 }
@@ -111,19 +112,18 @@ static int gs_weighted_free(laplacian l) {
 /*
  * Laplacian - user API.
  */
-int laplacian_init(laplacian *l_, const struct array *elements,
+int laplacian_init(laplacian *l_, const struct array *arr,
                    const element_info ei, const struct comm *c, buffer *buf) {
   metric_tic(c, RSB_LAPLACIAN_SETUP);
 
   laplacian l = *l_ = tcalloc(struct laplacian, 1);
   l->nv = ei->nv;
   l->type = (l->nv > 0) ? GS : CSR;
-  l->nel = elements->n;
+  l->nel = arr->n;
 
-  const struct rsb_element *pe = (const struct rsb_element *)elements->ptr;
   switch (l->type) {
-  case CSR: par_csr_init(l, pe, l->nv, c, buf); break;
-  case GS: gs_weighted_init(l, pe, l->nv, c, buf); break;
+  case CSR: par_csr_init(l, arr, c, buf); break;
+  case GS: gs_weighted_init(l, arr, c, buf); break;
   default: return 1; break;
   }
 
