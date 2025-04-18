@@ -14,50 +14,36 @@ struct laplacian {
  * Laplacian - CSR based implementation.
  */
 struct csr_laplacian {
-  struct par_mat *M;
+  // struct par_mat *M;
   struct gs_data *gsh;
   scalar *buf;
 };
 
 static int par_csr_init(laplacian l, const struct rsb_element *elems,
                         const int nv, const struct comm *c, buffer *bfr) {
+  if (!l) return 1;
+
   struct crystal cr;
   crystal_init(&cr, c);
-
-  struct array nbrs, eij;
-  find_nbrs_rsb(&nbrs, elems, l->nel, nv, c, &cr, bfr);
-  compress_nbrs(&eij, &nbrs, bfr);
-
-  struct csr_laplacian *L = l->data = tcalloc(struct csr_laplacian, 1);
-  struct par_mat *M = L->M = par_csr_setup_ext(&eij, 1, bfr);
-  L->gsh = setup_Q(L->M, c, bfr);
-
-  uint nnz = M->rn > 0 ? M->adj_off[M->rn] + M->rn : 0;
-  L->buf = tcalloc(scalar, nnz);
-
   crystal_free(&cr);
-
-  array_free(&nbrs);
-  array_free(&eij);
 
   return 0;
 }
 
 static int par_csr(scalar *v, const laplacian l, scalar *u, buffer *bfr) {
+  if (!l || !l->data) return 1;
+
   struct csr_laplacian *L = (struct csr_laplacian *)l->data;
-  if (L != NULL) {
-    mat_vec_csr(v, u, L->M, L->gsh, L->buf, bfr);
-    return 0;
-  }
-  return 1;
+  // mat_vec_csr(v, u, L->M, L->gsh, L->buf, bfr);
+  return 0;
 }
 
 static int par_csr_free(laplacian l) {
-  if (l->data != NULL) {
-    struct csr_laplacian *L = (struct csr_laplacian *)l->data;
-    par_mat_free(L->M), gs_free(L->gsh), free(L->buf);
-    free(L);
-  }
+  if (!l || !l->data) return 1;
+
+  struct csr_laplacian *L = (struct csr_laplacian *)l->data;
+  gs_free(L->gsh), free(L->buf), free(L);
+
   return 0;
 }
 
