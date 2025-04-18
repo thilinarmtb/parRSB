@@ -19,54 +19,6 @@ struct csr_laplacian {
   scalar *buf;
 };
 
-static void find_nbrs_rsb(struct array *arr, const struct rsb_element *elems,
-                          const uint nelt, const unsigned nv,
-                          const struct comm *c, struct crystal *cr,
-                          buffer *buf) {
-  slong out[2][1], bfr[2][1], in = nelt;
-  comm_scan(out, c, gs_long, gs_add, &in, 1, bfr);
-  ulong eid = out[0][0] + 1;
-
-  struct array vertices;
-  array_init(struct nbr, &vertices, nelt * nv);
-
-  struct nbr v;
-  uint i, j;
-  for (i = 0; i < nelt; i++) {
-    v.r = eid++;
-    for (j = 0; j < nv; j++) {
-      v.c = elems[i].vertices[j], v.proc = v.c % c->np;
-      array_cat(struct nbr, &vertices, &v, 1);
-    }
-  }
-
-  sarray_transfer(struct nbr, &vertices, proc, 1, cr);
-
-  sarray_sort(struct nbr, vertices.ptr, vertices.n, c, 1, buf);
-  struct nbr *vptr = vertices.ptr;
-  uint vn = vertices.n;
-
-  // FIXME: Assumes quads or hexes.
-  struct nbr t;
-  uint s = 0, e;
-  array_init(struct nbr, arr, vertices.n * 10);
-  while (s < vn) {
-    e = s + 1;
-    while (e < vn && vptr[s].c == vptr[e].c) e++;
-    for (i = s; i < e; i++) {
-      t = vptr[i];
-      for (j = s; j < e; j++) {
-        t.c = vptr[j].r;
-        array_cat(struct nbr, arr, &t, 1);
-      }
-    }
-    s = e;
-  }
-
-  sarray_transfer(struct nbr, arr, proc, 1, cr);
-  array_free(&vertices);
-}
-
 static int par_csr_init(laplacian l, const struct rsb_element *elems,
                         const int nv, const struct comm *c, buffer *bfr) {
   struct crystal cr;
