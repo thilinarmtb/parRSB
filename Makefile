@@ -9,7 +9,7 @@ GSLIBPATH ?=
 
 ########################## Don't touch what follows ###########################
 ifeq ($(GSLIBPATH),)
-	$(error Specify GSLIBPATH=<path to gslib build>)
+  $(error Specify GSLIBPATH=<path to gslib build>)
 endif
 
 ifneq ($(DEBUG),0)

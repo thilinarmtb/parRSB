@@ -16,11 +16,10 @@ struct laplacian {
 struct csr_laplacian {
   // struct par_mat *M;
   struct gs_data *gsh;
-  scalar *buf;
 };
 
-static int par_csr_init(laplacian l, struct array *nlist, const struct comm *c,
-                        buffer *bfr) {
+static int csr_init(laplacian l, struct array *nlist, const struct comm *c,
+                    buffer *bfr) {
   struct crystal cr;
   crystal_init(&cr, c);
   crystal_free(&cr);
@@ -28,17 +27,17 @@ static int par_csr_init(laplacian l, struct array *nlist, const struct comm *c,
   return 0;
 }
 
-static int par_csr(scalar *v, const laplacian l, scalar *u, buffer *bfr) {
+static int csr_op(scalar *v, const laplacian l, scalar *u, buffer *bfr) {
   struct csr_laplacian *L = (struct csr_laplacian *)l->data;
   // mat_vec_csr(v, u, L->M, L->gsh, L->buf, bfr);
 
   return 0;
 }
 
-static int par_csr_free(laplacian l) {
+static int csr_free(laplacian l) {
 
   struct csr_laplacian *L = (struct csr_laplacian *)l->data;
-  gs_free(L->gsh), free(L->buf), free(L);
+  gs_free(L->gsh), free(L);
 
   return 0;
 }
@@ -81,20 +80,19 @@ static int gs_weighted_init(laplacian l, struct array *elist,
   return 0;
 }
 
-static int gs_weighted(scalar *v, laplacian l, scalar *u, buffer *bfr) {
+static int gs_weighted_op(scalar *v, laplacian l, scalar *u, buffer *bfr) {
   uint lelt = l->nel;
   unsigned nv = l->nv;
   struct gs_laplacian *gl = l->data;
 
-  uint i, j;
-  for (i = 0; i < lelt; i++)
-    for (j = 0; j < nv; j++) gl->u[nv * i + j] = u[i];
+  for (uint i = 0; i < lelt; i++)
+    for (uint j = 0; j < nv; j++) gl->u[nv * i + j] = u[i];
 
   gs(gl->u, gs_double, gs_add, 0, gl->gsh, bfr);
 
-  for (i = 0; i < lelt; i++) {
+  for (uint i = 0; i < lelt; i++) {
     v[i] = gl->diag[i] * u[i];
-    for (j = 0; j < nv; j++) v[i] -= gl->u[nv * i + j];
+    for (uint j = 0; j < nv; j++) v[i] -= gl->u[nv * i + j];
   }
 
   return 0;
@@ -114,20 +112,17 @@ static int gs_weighted_free(laplacian l) {
  */
 int laplacian_init(laplacian *l_, const struct array *arr,
                    const element_info ei, const struct comm *c, buffer *buf) {
-  metric_tic(c, RSB_LAPLACIAN_SETUP);
-
   laplacian l = *l_ = tcalloc(struct laplacian, 1);
   l->nv = ei->nv;
   l->type = (l->nv > 0) ? GS : CSR;
   l->nel = arr->n;
 
   switch (l->type) {
-  case CSR: par_csr_init(l, arr, c, buf); break;
+  case CSR: csr_init(l, arr, c, buf); break;
   case GS: gs_weighted_init(l, arr, c, buf); break;
-  default: return 1; break;
+  default: break;
   }
 
-  metric_toc(c, RSB_LAPLACIAN_SETUP);
   return 0;
 }
 
@@ -140,9 +135,9 @@ int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *buf) {
   if (!l || !l->data) return 1;
 
   switch (l->type) {
-  case CSR: par_csr(v, l, u, buf); break;
-  case GS: gs_weighted(v, l, u, buf); break;
-  default: return 1; break;
+  case CSR: csr_op(v, l, u, buf); break;
+  case GS: gs_weighted_op(v, l, u, buf); break;
+  default: break;
   }
 
   return 0;
@@ -154,8 +149,8 @@ int laplacian_free(laplacian *l_) {
   laplacian l = *l_;
   switch (l->type) {
   case GS: gs_weighted_free(l); break;
-  case CSR: par_csr_free(l); break;
-  default: return 1; break;
+  case CSR: csr_free(l); break;
+  default: break;
   }
 
   free(l), l = 0;

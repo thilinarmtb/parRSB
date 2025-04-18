@@ -167,7 +167,6 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
                                 const struct comm *const c,
                                 struct crystal *const cr, buffer *const bfr) {
   element_info ei = tcalloc(struct element_info, 1);
-
   ei->nv = nv;
   ei->nd = nv_to_ndim(nv);
   ei->size = sizeof(struct rsb_element);
@@ -815,8 +814,8 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
 
   slong nelg = nel, wrk;
   comm_allreduce(&c, gs_long, gs_add, &nelg, 1, &wrk);
-  parrsb_print(&c, verbose, "Running parRSB ..., nv = %d, nelg = %lld", nv,
-               nelg);
+  parrsb_print(&c, verbose,
+               "parRSB: # elements = %lld, # vertices/element = %d", nelg, nv);
 
   buffer bfr;
   buffer_init(&bfr, (nel + 1) * 72);

@@ -81,8 +81,8 @@ void metric_rsb_print(const struct comm *c, int profile_level) {
              SUMMARY(i, RSB_FIEDLER_SETUP));
       printf("    RSB_FIEDLER_CALC         : %e/%e/%e\n",
              SUMMARY(i, RSB_FIEDLER_CALC));
-      printf("      RSB_LAPLACIAN_SETUP    : %e/%e/%e\n",
-             SUMMARY(i, RSB_LAPLACIAN_SETUP));
+      printf("      LAPLACIAN_INIT    : %e/%e/%e\n",
+             SUMMARY(i, LAPLACIAN_INIT));
       printf("      RSB_LANCZOS_SETUP      : %e/%e/%e\n",
              SUMMARY(i, RSB_LANCZOS_SETUP));
       printf("      RSB_LANCZOS            : %e/%e/%e\n",

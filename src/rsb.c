@@ -336,7 +336,7 @@ static uint get_level_cuts(const uint level, const uint levels,
 }
 
 static void pre_partitioner(struct array *elements, const element_info ei,
-                            const struct comm *c, const parrsb_options options,
+                            const parrsb_options options, const struct comm *c,
                             buffer *bfr) {
   switch (options->rsb_pre) {
   case 0:
@@ -375,7 +375,7 @@ void rsb(struct array *elements, const element_info ei,
     // Find the maximum number of RSB cuts in current level.
     uint ncuts = get_level_cuts(level, levels, comms);
     for (uint cut = 0; cut < ncuts; cut++) {
-      pre_partitioner(elements, ei, &lc, options, bfr);
+      pre_partitioner(elements, ei, options, &lc, bfr);
 
       set_proc(elements, ei->size, &lc);
 
