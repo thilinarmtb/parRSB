@@ -886,6 +886,19 @@ static int graph_load_balance(struct array *nlist, uint nn, long long *nodes,
   return 0;
 }
 
+static void graph_restore(int *part, struct crystal *cr, struct array *nlist,
+                          buffer *bfr) {
+  sarray_transfer(struct graph_element, nlist, origin, 1, cr);
+
+  uint n = nlist->n;
+  struct graph_element *pg = (struct graph_element *)nlist->ptr;
+
+  sarray_sort(struct graph_element, pg, n, globalId, 1, bfr);
+  for (uint i = 0; i < n; i++) part[i] = pg[i].origin;
+
+  array_free(nlist);
+}
+
 int parrsb_part_graph(int *part, size_t num_nodes, long long *nodes,
                       size_t *offsets, long long *neighbors,
                       const parrsb_options options, MPI_Comm comm) {
