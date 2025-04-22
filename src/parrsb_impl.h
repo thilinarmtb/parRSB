@@ -72,13 +72,15 @@ struct parrsb_options {
  * input.
  */
 struct element_info {
-  size_t size;
-  size_t align;
-  int nd;
-  int nv;
+  size_t size, align;
+  int nd, nv;
 };
 
 typedef struct element_info *element_info;
+
+typedef enum { MESH = 0, GRAPH = 1 } element_t;
+
+INTERN element_t element_info_type(element_info ei);
 
 /*
  * Base element for mesh and graph partitioning. All of the structures used for

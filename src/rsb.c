@@ -335,18 +335,9 @@ static uint get_level_cuts(const uint level, const uint levels,
   return cuts;
 }
 
-static void pre_partitioner(struct array *elements, const element_info ei,
-                            const parrsb_options options, const struct comm *c,
-                            buffer *bfr) {
-  switch (options->rsb_pre) {
-  case 0:
-    parallel_sort_(elements, ei->size, ei->align, 0, 1, c, bfr, 1, gs_long,
-                   offsetof(struct base_element, globalId));
-    break;
-  case 1: rcb(elements, ei, c, bfr); break;
-  case 2: rib(elements, ei, c, bfr); break;
-  default: break;
-  }
+element_t element_info_type(element_info ei) {
+  if (ei->nv > 0) return MESH;
+  return GRAPH;
 }
 
 static void set_proc(struct array *elements, size_t esize,
@@ -362,6 +353,22 @@ static void set_fiedler(struct array *elements, size_t esize, const scalar *f) {
     ((struct base_element *)(p + esize * i))->fiedler = f[i];
 }
 
+static void prepartition(struct array *elements, const element_info ei,
+                         const parrsb_options options, const struct comm *c,
+                         buffer *bfr) {
+  if (element_info_type(ei) != MESH) return;
+
+  switch (options->rsb_pre) {
+  case 0:
+    parallel_sort_(elements, ei->size, ei->align, 0, 1, c, bfr, 1, gs_long,
+                   offsetof(struct base_element, globalId));
+    break;
+  case 1: rcb(elements, ei, c, bfr); break;
+  case 2: rib(elements, ei, c, bfr); break;
+  default: break;
+  }
+}
+
 void rsb(struct array *elements, const element_info ei,
          const parrsb_options options, const struct comm *comms, buffer *bfr) {
   const struct comm *gc = &comms[0];
@@ -375,7 +382,9 @@ void rsb(struct array *elements, const element_info ei,
     // Find the maximum number of RSB cuts in current level.
     uint ncuts = get_level_cuts(level, levels, comms);
     for (uint cut = 0; cut < ncuts; cut++) {
-      pre_partitioner(elements, ei, options, &lc, bfr);
+      // Pre-partition using RCB, RIB or simply by sorting. Only works for mesh
+      // partitioning.
+      prepartition(elements, ei, options, &lc, bfr);
 
       set_proc(elements, ei->size, &lc);
 
@@ -385,7 +394,7 @@ void rsb(struct array *elements, const element_info ei,
       fiedler(f, wl, options, &lc, bfr);
       laplacian_free(&wl);
 
-      // Sort the elements by Fiedler value.
+      // Distribute the elements by Fiedler value.
       set_fiedler(elements, ei->size, f);
       parallel_sort_(elements, ei->size, ei->align, 0, 1, &lc, bfr, 1,
                      gs_double, offsetof(struct base_element, fiedler));
