@@ -9,40 +9,6 @@
 #include <float.h>
 #include <stdlib.h>
 
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-
-struct parrsb_options {
-  // General options
-  int partitioner; // Partition algo: 0 - RSB, 1 - RCB, 2 - RIB (Default: 0)
-  int tagged;      // Tagged partitioning: 0 - No, 1 - Yes (Default: 0)
-  int levels;      // Number of levels: 1, or 2 (Default: 2)
-  int find_disconnected_comps; // Find number of components: 0 - No, 1 - Yes
-                               // (Default: 1)
-  int repair; // Repair disconnected components: 0 - No, 1 - Yes (Default: 0)
-  int verbose_level; // Verbose level: 0, 1, 2, .. etc (Default: 1)
-  int profile_level; // Profile level: 0, 1, 2, .. etc (Default: 0)
-  // RSB common (Lanczos and MG) options
-  int rsb_algo; // RSB algo: 0 - Lanczos, 1 - MG (Default: 0)
-  int rsb_pre;  // RSB pre-partition : 0 - None, 1 - RCB , 2 - RIB (Default: 1)
-  int rsb_max_iter;   // Max iterations in Lanczos / MG (Default: 50)
-  int rsb_max_passes; // Max Lanczos restarts / Inverse iterations (Default: 50)
-  double rsb_tol;     // Tolerance for Lanczos or RQI (Default: 1e-5)
-  int rsb_dump_stats; // Dump partition statistics to a text file.
-  // RSB MG specific options
-  int rsb_mg_grammian; // MG Grammian: 0 or 1 (Default: 0)
-  int rsb_mg_factor;   // MG Coarsening factor (Default: 2, should be > 1)
-};
-
-struct element_info {
-  size_t size;
-  size_t align;
-  int nd;
-  int nv;
-};
-
-typedef struct element_info *element_info;
-
 /*
  * Set the visibility of a symbol.
  */
@@ -66,8 +32,53 @@ typedef struct element_info *element_info;
 #define INTERN extern VISIBILITY(hidden)
 #endif
 
-#define MAXDIM 3 // Maximum dimension of the mesh.
-#define MAXNV 8  // Maximum number of vertices per element.
+// Macro for finding min of two numbers.
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+// Macro for finding max of two numbers.
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+// Maximum dimension of the mesh.
+#define MAXDIM 3
+// Maximum number of vertices per element.
+#define MAXNV 8
+
+/*
+ * parRSB configuration options.
+ */
+struct parrsb_options {
+  // General options
+  int partitioner; // Partition algo: 0 - RSB, 1 - RCB, 2 - RIB (Default: 0)
+  int tagged;      // Tagged partitioning: 0 - No, 1 - Yes (Default: 0)
+  int levels;      // Number of levels: 1, or 2 (Default: 2)
+  int find_disconnected_comps; // Find number of components: 0 - No, 1 - Yes
+                               // (Default: 1)
+  int repair; // Repair disconnected components: 0 - No, 1 - Yes (Default: 0)
+  int verbose_level; // Verbose level: 0, 1, 2, .. etc (Default: 1)
+  int profile_level; // Profile level: 0, 1, 2, .. etc (Default: 0)
+  // RSB common (Lanczos and MG) options
+  int rsb_algo; // RSB algo: 0 - Lanczos, 1 - MG (Default: 0)
+  int rsb_pre;  // RSB pre-partition : 0 - None, 1 - RCB , 2 - RIB (Default: 1)
+  int rsb_max_iter;   // Max iterations in Lanczos / MG (Default: 50)
+  int rsb_max_passes; // Max Lanczos restarts / Inverse iterations (Default: 50)
+  double rsb_tol;     // Tolerance for Lanczos or RQI (Default: 1e-5)
+  int rsb_dump_stats; // Dump partition statistics to a text file.
+  // RSB MG specific options
+  int rsb_mg_grammian; // MG Grammian: 0 or 1 (Default: 0)
+  int rsb_mg_factor;   // MG Coarsening factor (Default: 2, should be > 1)
+};
+
+/*
+ * Element info struct keeps track of align, size and number of
+ * vertices and dimensions (latter two in case of a mesh) of the
+ * input.
+ */
+struct element_info {
+  size_t size;
+  size_t align;
+  int nd;
+  int nv;
+};
+
+typedef struct element_info *element_info;
 
 /*
  * Base element for mesh and graph partitioning. All of the structures used for
@@ -79,6 +90,8 @@ struct base_element {
   scalar fiedler;
 };
 
+typedef struct base_element *base_element;
+
 /*
  * General graph partitioning.
  */
@@ -87,7 +100,10 @@ struct graph_element {
   ulong globalId;
   scalar fiedler;
   ulong u, v;
+  scalar val;
 };
+
+typedef struct graph_element *graph_element;
 
 /*
  * RCB / RIB. `struct rcb_element` is used for mesh partitioning with RCB and
@@ -100,11 +116,14 @@ struct rcb_element {
   scalar coord[MAXDIM];
 };
 
+typedef struct rcb_element *rcb_element;
+
 INTERN int rcb(struct array *elements, const element_info ei,
                const struct comm *c, buffer *bfr);
 
 INTERN int rib(struct array *elements, const element_info ei,
                const struct comm *c, buffer *bfr);
+
 /*
  * Laplacian.
  */
@@ -128,6 +147,8 @@ struct rsb_element {
   scalar coord[MAXDIM];
   slong vertices[MAXNV];
 };
+
+typedef struct rsb_element *rsb_element;
 
 INTERN void rsb(struct array *elements, const element_info ei,
                 const parrsb_options options, const struct comm *comms,
