@@ -60,15 +60,17 @@ static int csr_init(laplacian l, const struct array *nlist,
 
 static int csr_op(scalar *v, const laplacian l, scalar *u, buffer *bfr) {
   struct csr_laplacian *L = (struct csr_laplacian *)l->data;
-  // mat_vec_csr(v, u, L->M, L->gsh, L->buf, bfr);
-
   return 0;
 }
 
 static int csr_free(laplacian l) {
+  if (!l) return 1;
 
   struct csr_laplacian *L = (struct csr_laplacian *)l->data;
-  gs_free(L->gsh), free(L);
+  if (!L) return 1;
+
+  free(L->di), free(L->off), free(L->v), gs_free(L->gsh);
+  free(L), l->data = 0;
 
   return 0;
 }
