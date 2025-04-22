@@ -17,6 +17,7 @@ struct csr_laplacian {
   uint n;
   uint *di, *off;
   scalar *v;
+  scalar *wrk;
   struct gs_data *gsh;
 };
 
@@ -33,9 +34,12 @@ static int csr_init(laplacian l, const struct array *nlist,
   L->n = rn;
   L->di = tcalloc(uint, L->n);
   L->off = tcalloc(uint, L->n + 1);
-  L->v = tcalloc(scalar, nlist->n + L->n);
 
-  buffer_reserve(bfr, (nlist->n + L->n) * sizeof(slong));
+  uint nnz = nlist->n + L->n;
+  L->v = tcalloc(scalar, nnz);
+  L->wrk = tcalloc(scalar, nnz);
+
+  buffer_reserve(bfr, nnz * sizeof(slong));
 
   slong *ids = (slong *)bfr->ptr;
   uint n = 0;
@@ -52,7 +56,7 @@ static int csr_init(laplacian l, const struct array *nlist,
     ids[d] = pe[n].u, L->v[d] = i - n, L->off[++rn] = n = i;
   }
 
-  L->gsh = gs_setup(ids, nlist->n + L->n, c, 0, gs_crystal_router, 0);
+  L->gsh = gs_setup(ids, nnz, c, 0, gs_crystal_router, 0);
 
   return 0;
 }
@@ -62,13 +66,29 @@ static uint csr_size(laplacian l) {
   return L->n;
 }
 
+static void csr_op(scalar *v, const laplacian l, scalar *u, buffer *bfr) {
+  struct csr_laplacian *L = (struct csr_laplacian *)l->data;
+
+  for (uint i = 0; i < L->n; i++) L->wrk[L->di[i]] = u[i];
+
+  gs(L->wrk, gs_scalar, gs_add, 0, L->gsh, bfr);
+
+  for (uint i = 0; i < L->n; i++) {
+    scalar s = 0;
+    for (uint j = L->off[i], je = L->off[i + 1]; j < je; j++)
+      s += L->wrk[j] * L->v[j];
+    v[i] = s;
+  }
+}
+
 static int csr_free(laplacian l) {
   if (!l) return 1;
 
   struct csr_laplacian *L = (struct csr_laplacian *)l->data;
   if (!L) return 1;
 
-  free(L->di), free(L->off), free(L->v), gs_free(L->gsh);
+  gs_free(L->gsh);
+  free(L->di), free(L->off), free(L->v), free(L->wrk);
   free(L), l->data = 0;
 
   return 0;
