@@ -13,16 +13,47 @@ struct laplacian {
 /*
  * Laplacian - CSR based implementation.
  */
+
 struct csr_laplacian {
-  // struct par_mat *M;
+  uint n;
+  uint *di, *off;
+  scalar *v;
   struct gs_data *gsh;
 };
 
-static int csr_init(laplacian l, struct array *nlist, const struct comm *c,
-                    buffer *bfr) {
-  struct crystal cr;
-  crystal_init(&cr, c);
-  crystal_free(&cr);
+static int csr_init(laplacian l, const struct array *nlist,
+                    const struct comm *c, buffer *bfr) {
+  sarray_sort_2(struct graph_element, nlist->ptr, nlist->n, u, 1, v, 1, bfr);
+
+  const graph_element pe = (const graph_element)nlist->ptr;
+  uint rn = (nlist->n > 0);
+  for (uint n = 1; n < nlist->n; n++)
+    if (pe[n].u != pe[n - 1].u) rn++;
+
+  struct csr_laplacian *L = l->data = tcalloc(struct csr_laplacian, 1);
+  L->n = rn;
+  L->di = tcalloc(uint, L->n);
+  L->off = tcalloc(uint, L->n + 1);
+  L->v = tcalloc(scalar, nlist->n + L->n);
+
+  buffer_reserve(bfr, (nlist->n + L->n) * sizeof(slong));
+
+  slong *ids = (slong *)bfr->ptr;
+  uint n = 0;
+  rn = 0;
+  while (n < nlist->n) {
+    uint i = n;
+    while (i < n && pe[n].u == pe[i].u && (pe[i].v < pe[i].u))
+      L->v[i] = -1, ids[i] = -pe[i].v, i++;
+
+    uint d = L->di[rn] = i;
+
+    while (i < n && pe[n].u == pe[i].u) L->v[i + 1] = -1, ids[i + 1] = -pe[i].v;
+
+    ids[d] = pe[n].u, L->v[d] = i - n, L->off[++rn] = n = i;
+  }
+
+  L->gsh = gs_setup(ids, nlist->n + L->n, c, 0, gs_crystal_router, 0);
 
   return 0;
 }
