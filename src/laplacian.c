@@ -6,7 +6,6 @@
 
 struct laplacian {
   int type, nv;
-  uint n;
   void *data;
 };
 
@@ -58,9 +57,9 @@ static int csr_init(laplacian l, const struct array *nlist,
   return 0;
 }
 
-static int csr_op(scalar *v, const laplacian l, scalar *u, buffer *bfr) {
+static uint csr_size(laplacian l) {
   struct csr_laplacian *L = (struct csr_laplacian *)l->data;
-  return 0;
+  return L->n;
 }
 
 static int csr_free(laplacian l) {
@@ -79,22 +78,26 @@ static int csr_free(laplacian l) {
  * Laplacian - GS based implementation.
  */
 struct gs_laplacian {
+  uint n;
   scalar *diag, *u;
   struct gs_data *gsh;
 };
 
 static int gs_weighted_init(laplacian l, const struct array *elist,
                             const struct comm *c, buffer *buf) {
-  uint ne = l->n;
+  uint ne = elist->n;
   uint nv = l->nv;
   uint npts = nv * ne;
 
+  buffer_reserve(buf, npts * sizeof(slong));
+  slong *vertices = (slong *)buf->ptr;
+
   const struct rsb_element *pe = (const struct rsb_element *)elist->ptr;
-  slong *vertices = tcalloc(slong, npts);
   for (uint i = 0; i < ne; i++)
     for (uint j = 0; j < nv; j++) vertices[i * nv + j] = pe[i].vertices[j];
 
   struct gs_laplacian *gl = l->data = tcalloc(struct gs_laplacian, 1);
+  gl->n = ne;
   gl->u = tcalloc(scalar, npts);
   for (uint i = 0; i < ne; i++)
     for (uint j = 0; j < nv; j++) gl->u[nv * i + j] = 1.0;
@@ -108,16 +111,19 @@ static int gs_weighted_init(laplacian l, const struct array *elist,
     for (uint j = 0; j < nv; j++) gl->diag[i] += gl->u[nv * i + j];
   }
 
-  free(vertices);
-
   return 0;
 }
 
-static int gs_weighted_op(scalar *v, laplacian l, scalar *u, buffer *bfr) {
-  uint ne = l->n;
-  unsigned nv = l->nv;
-  struct gs_laplacian *gl = l->data;
+static uint gs_weighted_size(laplacian l) {
+  struct gs_laplacian *L = (struct gs_laplacian *)l->data;
+  return L->n;
+}
 
+static void gs_weighted_op(scalar *v, laplacian l, scalar *u, buffer *bfr) {
+  unsigned nv = l->nv;
+
+  struct gs_laplacian *gl = l->data;
+  uint ne = gl->n;
   for (uint i = 0; i < ne; i++)
     for (uint j = 0; j < nv; j++) gl->u[nv * i + j] = u[i];
 
@@ -127,8 +133,6 @@ static int gs_weighted_op(scalar *v, laplacian l, scalar *u, buffer *bfr) {
     v[i] = gl->diag[i] * u[i];
     for (uint j = 0; j < nv; j++) v[i] -= gl->u[nv * i + j];
   }
-
-  return 0;
 }
 
 static int gs_weighted_free(laplacian l) {
@@ -148,7 +152,6 @@ int laplacian_init(laplacian *l_, const struct array *arr,
   laplacian l = *l_ = tcalloc(struct laplacian, 1);
   l->nv = ei->nv;
   l->type = (l->nv > 0) ? GS : CSR;
-  l->n = arr->n;
 
   switch (l->type) {
   case CSR: csr_init(l, arr, c, buf); break;
@@ -161,7 +164,14 @@ int laplacian_init(laplacian *l_, const struct array *arr,
 
 uint laplacian_get_size(laplacian l) {
   if (!l) return 0;
-  return l->n;
+
+  switch (l->type) {
+  case CSR: return csr_size(l); break;
+  case GS: return gs_weighted_size(l); break;
+  default: break;
+  }
+
+  return 0;
 }
 
 int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *buf) {
