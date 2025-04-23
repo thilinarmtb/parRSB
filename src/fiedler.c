@@ -16,7 +16,7 @@ inline static void ortho(scalar *q, uint lelt, ulong n, const struct comm *c) {
   for (uint i = 0; i < lelt; i++) sum += q[i];
 
   scalar wrk;
-  comm_allreduce(c, gs_double, gs_add, &sum, 1, &wrk);
+  comm_allreduce(c, gs_scalar, gs_add, &sum, 1, &wrk);
   sum /= n;
 
   for (uint i = 0; i < lelt; i++) q[i] -= sum;
@@ -35,7 +35,7 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint lelt,
 
   scalar rtz1 = 1, pap = 0, alpha, beta, rtz2, pap_old;
   scalar rtr = dot(r, r, lelt), buf[2];
-  comm_allreduce(gsc, gs_double, gs_add, &rtr, 1, buf);
+  comm_allreduce(gsc, gs_scalar, gs_add, &rtr, 1, buf);
   scalar rnorm = sqrt(rtr), rtol = rnorm * tol;
 
   metric_set(TOL_INIT, rnorm);
@@ -55,7 +55,7 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint lelt,
     for (i = 0; i < lelt; i++) p[i] = beta * p[i] + r[i];
 
     scalar pp = dot(p, p, lelt);
-    comm_allreduce(gsc, gs_double, gs_add, &pp, 1, buf);
+    comm_allreduce(gsc, gs_scalar, gs_add, &pp, 1, buf);
 
     // vec_ortho(gsc, p, nelg);
     ortho(p, lelt, nelg, gsc);
@@ -63,14 +63,14 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint lelt,
     laplacian_op(w, gl, p, bfr);
 
     pap_old = pap, pap = dot(w, p, lelt);
-    comm_allreduce(gsc, gs_double, gs_add, &pap, 1, buf);
+    comm_allreduce(gsc, gs_scalar, gs_add, &pap, 1, buf);
 
     alpha = rtz1 / pap;
     // vec_axpby(r, r, 1.0, w, -1.0 * alpha);
     for (i = 0; i < lelt; i++) r[i] = r[i] - alpha * w[i];
 
     rtr = dot(r, r, lelt);
-    comm_allreduce(gsc, gs_double, gs_add, &rtr, 1, buf);
+    comm_allreduce(gsc, gs_scalar, gs_add, &rtr, 1, buf);
     rnorm = sqrt(rtr), rni = 1.0 / rnorm;
 
     // vec_scale(rr[iter + 1], r, rni);
@@ -174,7 +174,7 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
 
   ortho(vi, n, ng, c);
   scalar norm = dot(vi, vi, n);
-  comm_allreduce(c, gs_double, gs_add, &norm, 1, wrk);
+  comm_allreduce(c, gs_scalar, gs_add, &norm, 1, wrk);
   scalar normi = 1.0 / sqrt(norm);
   for (uint i = 0; i < n; i++) vi[i] *= normi;
 
@@ -186,7 +186,7 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
   metric_acc(RSB_FIEDLER_CALC_NITER, iter);
 
   norm = dot(f, f, n);
-  comm_allreduce(c, gs_double, gs_add, &norm, 1, wrk);
+  comm_allreduce(c, gs_scalar, gs_add, &norm, 1, wrk);
   normi = 1.0 / sqrt(norm);
   for (uint i = 0; i < n; i++) f[i] *= normi;
 

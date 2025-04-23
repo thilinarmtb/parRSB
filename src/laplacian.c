@@ -115,7 +115,7 @@ static void gs_weighted_init(laplacian l, const struct array *elist,
   L->wrk = tcalloc(scalar, npts);
   for (uint i = 0; i < ne; i++)
     for (uint j = 0; j < nv; j++) L->wrk[nv * i + j] = 1.0;
-  gs(L->wrk, gs_double, gs_add, 0, L->gsh, bfr);
+  gs(L->wrk, gs_scalar, gs_add, 0, L->gsh, bfr);
 
   L->diag = tcalloc(scalar, ne);
   for (uint i = 0; i < ne; i++) {
@@ -137,7 +137,7 @@ static void gs_weighted_op(scalar *v, laplacian l, scalar *u, buffer *bfr) {
   for (uint i = 0; i < ne; i++)
     for (uint j = 0; j < nv; j++) L->wrk[nv * i + j] = u[i];
 
-  gs(L->wrk, gs_double, gs_add, 0, L->gsh, bfr);
+  gs(L->wrk, gs_scalar, gs_add, 0, L->gsh, bfr);
 
   for (uint i = 0; i < ne; i++) {
     v[i] = L->diag[i] * u[i];

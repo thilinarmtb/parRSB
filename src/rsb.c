@@ -242,7 +242,7 @@ static sint balance_partitions_mesh(struct array *elements, uint nv,
   }
 
   // Sort based on fiedler value and sets `orig` field
-  parallel_sort(struct ielem_t, &ielems, fiedler, gs_double, 0, 1, lc, bfr);
+  parallel_sort(struct ielem_t, &ielems, fiedler, gs_scalar, 0, 1, lc, bfr);
 
   slong out[2][1], nielems = ielems.n;
   comm_scan(out, lc, gs_long, gs_add, &nielems, 1, wrk);
@@ -295,11 +295,11 @@ static void balance_partitions(struct array *elements, const element_info ei,
     sarray_transfer(struct rsb_element, elements, proc, 0, &cr);
     crystal_free(&cr);
 
-    parallel_sort_(elements, ei->size, ei->align, 0, 1, lc, bfr, 1, gs_double,
+    parallel_sort_(elements, ei->size, ei->align, 0, 1, lc, bfr, 1, gs_scalar,
                    offsetof(struct base_element, fiedler));
   } else {
 
-    parallel_sort_(elements, ei->size, ei->align, 0, 1, gc, bfr, 1, gs_double,
+    parallel_sort_(elements, ei->size, ei->align, 0, 1, gc, bfr, 1, gs_scalar,
                    offsetof(struct base_element, fiedler));
   }
 }
