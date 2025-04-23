@@ -1,5 +1,6 @@
 #include "metrics.h"
 #include "parrsb_impl.h"
+#include "sort.h"
 
 static slong mesh_components_v1(sint *component, struct array *elems, uint nv,
                                 struct comm *c, buffer *buf) {
@@ -330,4 +331,117 @@ slong get_components(sint *component, const struct array *elems,
     return mesh_components_v2(component, elems, ei->nv, c, buf);
   else
     return 0;
+}
+
+static sint repair_mesh(struct array *elements, uint nv, struct comm *lc,
+                        struct comm *gc, int bin, buffer *bfr) {
+  metric_tic(lc, RSB_BALANCE);
+
+  struct ielem_t {
+    uint index, orig;
+    sint dest;
+    scalar fiedler;
+  };
+
+  // Calculate expected # of elements per processor.
+  uint ne = elements->n;
+  slong nelgt = ne, nglob = ne, wrk[2][1];
+  comm_allreduce(lc, gs_long, gs_add, &nelgt, 1, wrk);
+  comm_allreduce(gc, gs_long, gs_add, &nglob, 1, wrk);
+
+  sint ne_ = nglob / gc->np, nrem = nglob - ne_ * gc->np;
+  slong nelgt_exp = ne_ * lc->np + nrem / 2 + (nrem % 2) * (1 - bin);
+  slong send_cnt = (nelgt - nelgt_exp) > 0 ? (nelgt - nelgt_exp) : 0;
+
+  // Setup gather-scatter.
+  uint size = ne * nv;
+  slong *ids = tcalloc(slong, size);
+  struct rsb_element *elems = (struct rsb_element *)elements->ptr;
+  for (uint e = 0; e < ne; e++)
+    for (uint v = 0; v < nv; v++) ids[e * nv + v] = elems[e].vertices[v];
+  struct gs_data *gsh = gs_setup(ids, size, gc, 0, gs_pairwise, 0);
+
+  sint *input = (sint *)ids;
+  if (send_cnt > 0)
+    for (uint e = 0; e < size; e++) input[e] = 0;
+  else
+    for (uint e = 0; e < size; e++) input[e] = 1;
+
+  gs(input, gs_int, gs_add, 0, gsh, bfr);
+
+  for (uint e = 0; e < ne; e++) elems[e].proc = gc->id;
+
+  sint sid = (send_cnt == 0) ? gc->id : INT_MAX;
+  comm_allreduce(gc, gs_int, gs_min, &sid, 1, &wrk);
+
+  sint balanced = 0;
+  if (send_cnt == 0) goto allreduce;
+
+  struct array ielems;
+  array_init(struct ielem_t, &ielems, 10);
+
+  struct ielem_t ielem = {.orig = lc->id, .dest = -1};
+  int mul = (sid == 0) ? 1 : -1;
+  for (uint e = 0; e < ne; e++) {
+    for (uint v = 0; v < nv; v++) {
+      if (input[e * nv + v] > 0) {
+        ielem.index = e, ielem.fiedler = mul * elems[e].fiedler;
+        array_cat(struct ielem_t, &ielems, &ielem, 1);
+        break;
+      }
+    }
+  }
+
+  // Sort based on fiedler value and sets `orig` field
+  parallel_sort(struct ielem_t, &ielems, fiedler, gs_scalar, 0, 1, lc, bfr);
+
+  slong out[2][1], nielems = ielems.n;
+  comm_scan(out, lc, gs_long, gs_add, &nielems, 1, wrk);
+  slong start = out[0][0];
+
+  sint P = gc->np - lc->np;
+  sint part_size = (send_cnt + P - 1) / P;
+
+  if (out[1][0] >= send_cnt) {
+    balanced = 1;
+    struct ielem_t *ptr = ielems.ptr;
+    for (uint e = 0; start + e < send_cnt && e < ielems.n; e++)
+      ptr[e].dest = sid + (start + e) / part_size;
+
+    struct crystal cr;
+    crystal_init(&cr, lc);
+    sarray_transfer(struct ielem_t, &ielems, orig, 0, &cr);
+    crystal_free(&cr);
+
+    ptr = ielems.ptr;
+    for (uint e = 0; e < ielems.n; e++)
+      if (ptr[e].dest != -1) elems[ptr[e].index].proc = ptr[e].dest;
+  }
+
+  array_free(&ielems);
+
+allreduce:
+  comm_allreduce(gc, gs_int, gs_max, &balanced, 1, &wrk);
+
+  free(ids), gs_free(gsh);
+
+  metric_toc(lc, RSB_BALANCE);
+  return balanced;
+}
+
+static void repair(struct array *elements, const element_info ei,
+                   struct comm *lc, struct comm *gc, int bin, buffer *bfr) {
+  // Return if there is only one processor (or partition).
+  if (gc->np == 1 || gc->np == lc->np || element_info_type(ei) == GRAPH) return;
+
+  sint balanced = repair_mesh(elements, ei->nv, lc, gc, bin, bfr);
+  if (!balanced) return;
+
+  struct crystal cr;
+  crystal_init(&cr, gc);
+  sarray_transfer(struct rsb_element, elements, proc, 0, &cr);
+  crystal_free(&cr);
+
+  parallel_sort_(elements, ei->size, ei->align, 0, 1, lc, bfr, 1, gs_scalar,
+                 offsetof(struct base_element, fiedler));
 }
