@@ -181,9 +181,8 @@ static void check_rsb_partition(const struct comm *gc,
   }
 }
 
-static sint split(struct comm *new, const struct comm *const c,
-                  const uint level, const uint levels,
-                  const struct comm *comms) {
+static sint find_bin(const struct comm *const c, const uint level,
+                     const uint levels, const struct comm *comms) {
   sint size = c->np, id = c->id;
   if (level < levels - 1) {
     sint out[2][1], wrk[2][1], in = (comms[level + 1].id == 0);
@@ -192,9 +191,7 @@ static sint split(struct comm *new, const struct comm *const c,
     comm_allreduce(&comms[level + 1], gs_int, gs_max, &id, 1, wrk);
   }
 
-  sint bin = (id >= (size + 1) / 2);
-  comm_split(c, bin, c->id, new);
-  return bin;
+  return (id >= (size + 1) / 2);
 }
 
 static uint get_level_cuts(const uint level, const uint levels,
@@ -322,10 +319,16 @@ static void distribute_graph(struct array *arr, const element_info ei,
   crystal_free(&cr);
 }
 
-static void distribute(struct array *elements, const element_info ei,
-                       const scalar *f, const struct comm *c, buffer *bfr) {
+static void bisect(struct comm *c, struct array *elements, const scalar *f,
+                   sint bin, const element_info ei, buffer *bfr) {
   if (element_info_type(ei) == MESH) distribute_mesh(elements, ei, f, c, bfr);
   if (element_info_type(ei) == GRAPH) distribute_graph(elements, ei, f, c, bfr);
+
+  // Split the communicator based on new partitions.
+  struct comm tc;
+  comm_split(c, bin, c->id, &tc);
+  comm_free(c), comm_dup(c, &tc);
+  comm_free(&tc);
 }
 
 void rsb(struct array *elements, const element_info ei,
@@ -351,22 +354,17 @@ void rsb(struct array *elements, const element_info ei,
       fiedler(f, l, options, &lc, bfr);
       laplacian_free(&l);
 
-      // Distribute the elements by Fiedler value.
-      distribute(elements, ei, f, &lc, bfr);
-
-      // Split the communicator based on new partitions.
-      struct comm tc;
-      split(&tc, &lc, level, levels, comms);
+      // bisect the elements by Fiedler value.
+      sint bin = find_bin(&lc, level, levels, comms);
+      bisect(&lc, elements, f, bin, ei, bfr);
 
       // Find the number of disconnected components.
       if (options->find_disconnected_comps == 1) {
-        slong nc = get_components(NULL, elements, ei, &tc, bfr);
+        slong nc = get_components(NULL, elements, ei, &lc, bfr);
         metric_acc(RSB_COMPONENTS_NCOMP, nc);
       }
 
-      comm_free(&lc), comm_dup(&lc, &tc), comm_free(&tc);
-
-      const uint nbrs = get_neighbors(elements, ei->nv, gc, &lc, bfr);
+      uint nbrs = get_neighbors(elements, ei->nv, gc, &lc, bfr);
       metric_acc(RSB_NEIGHBORS, nbrs);
 
       metric_push_level();
