@@ -331,6 +331,22 @@ static void bisect(struct comm *c, struct array *elements, const scalar *f,
   comm_free(&tc);
 }
 
+static void calc_stats(const struct array *elements, const struct comm *gc,
+                       const struct comm *lc, const parrsb_options options,
+                       const element_info ei, buffer *bfr) {
+  // Find the number of disconnected components.
+  if (options->find_disconnected_comps == 1) {
+    slong nc = get_components(NULL, elements, ei, lc, bfr);
+    metric_acc(RSB_COMPONENTS_NCOMP, nc);
+  }
+
+  // Find the nymber of neighbors.
+  uint nbrs = get_neighbors(elements, ei->nv, gc, lc, bfr);
+  metric_acc(RSB_NEIGHBORS, nbrs);
+
+  metric_push_level();
+}
+
 void rsb(struct array *elements, const element_info ei,
          const parrsb_options options, const struct comm *comms, buffer *bfr) {
   const struct comm *gc = &comms[0];
@@ -354,20 +370,12 @@ void rsb(struct array *elements, const element_info ei,
       fiedler(f, l, options, &lc, bfr);
       laplacian_free(&l);
 
-      // bisect the elements by Fiedler value.
+      // Bisect the elements by Fiedler value.
       sint bin = find_bin(&lc, level, levels, comms);
       bisect(&lc, elements, f, bin, ei, bfr);
 
-      // Find the number of disconnected components.
-      if (options->find_disconnected_comps == 1) {
-        slong nc = get_components(NULL, elements, ei, &lc, bfr);
-        metric_acc(RSB_COMPONENTS_NCOMP, nc);
-      }
-
-      uint nbrs = get_neighbors(elements, ei->nv, gc, &lc, bfr);
-      metric_acc(RSB_NEIGHBORS, nbrs);
-
-      metric_push_level();
+      // Calculate partition stats.
+      calc_stats(elements, gc, &lc, options, ei, bfr);
     }
     comm_free(&lc);
   }

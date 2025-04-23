@@ -326,15 +326,15 @@ static slong mesh_components_v2(sint *component, const struct array *elems,
 }
 
 slong get_components(sint *component, const struct array *elems,
-                     const element_info ei, struct comm *c, buffer *buf) {
+                     const element_info ei, const struct comm *c, buffer *buf) {
   if (ei->nv > 0)
     return mesh_components_v2(component, elems, ei->nv, c, buf);
   else
     return 0;
 }
 
-static sint repair_mesh(struct array *elements, uint nv, struct comm *lc,
-                        struct comm *gc, int bin, buffer *bfr) {
+static sint repair_mesh(struct array *elements, uint nv, const struct comm *lc,
+                        const struct comm *gc, int bin, buffer *bfr) {
   metric_tic(lc, RSB_BALANCE);
 
   struct ielem_t {
@@ -430,7 +430,8 @@ allreduce:
 }
 
 static void repair(struct array *elements, const element_info ei,
-                   struct comm *lc, struct comm *gc, int bin, buffer *bfr) {
+                   const struct comm *lc, struct comm *gc, int bin,
+                   buffer *bfr) {
   // Return if there is only one processor (or partition).
   if (gc->np == 1 || gc->np == lc->np || element_info_type(ei) == GRAPH) return;
 
