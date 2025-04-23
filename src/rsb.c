@@ -220,12 +220,6 @@ element_t element_info_type(element_info ei) {
   return GRAPH;
 }
 
-static void set_proc(struct array *arr, size_t esize, const struct comm *c) {
-  char *p = (char *)arr->ptr;
-  for (uint i = 0; i < arr->n; i++)
-    ((struct base_element *)(p + esize * i))->proc = c->id;
-}
-
 static void prepartition(struct array *arr, const element_info ei,
                          const parrsb_options options, const struct comm *c,
                          buffer *bfr) {
@@ -350,7 +344,6 @@ void rsb(struct array *elements, const element_info ei,
       // Pre-partition using RCB, RIB or simply by sorting. Only applicable for
       // mesh partitioning.
       prepartition(elements, ei, options, &lc, bfr);
-      set_proc(elements, ei->size, &lc);
 
       // Setup the laplacian and find the Fiedler vector.
       laplacian l;
