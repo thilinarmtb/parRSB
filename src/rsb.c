@@ -181,17 +181,20 @@ static void check_rsb_partition(const struct comm *gc,
   }
 }
 
-static sint get_bin(const struct comm *const lc, const uint level,
-                    const uint levels, const struct comm *comms) {
-  sint psize = lc->np, pid = lc->id;
+static sint split(struct comm *new, const struct comm *const c,
+                  const uint level, const uint levels,
+                  const struct comm *comms) {
+  sint size = c->np, id = c->id;
   if (level < levels - 1) {
     sint out[2][1], wrk[2][1], in = (comms[level + 1].id == 0);
-    comm_scan(out, lc, gs_int, gs_add, &in, 1, wrk);
-    psize = out[1][0], pid = (comms[level + 1].id == 0) * out[0][0];
-    comm_allreduce(&comms[level + 1], gs_int, gs_max, &pid, 1, wrk);
+    comm_scan(out, c, gs_int, gs_add, &in, 1, wrk);
+    size = out[1][0], id = (comms[level + 1].id == 0) * out[0][0];
+    comm_allreduce(&comms[level + 1], gs_int, gs_max, &id, 1, wrk);
   }
 
-  return (pid >= (psize + 1) / 2);
+  sint bin = (id >= (size + 1) / 2);
+  comm_split(c, bin, c->id, new);
+  return bin;
 }
 
 static uint get_level_cuts(const uint level, const uint levels,
@@ -358,10 +361,9 @@ void rsb(struct array *elements, const element_info ei,
       // Distribute the elements by Fiedler value.
       distribute(elements, ei, f, &lc, bfr);
 
-      // Get the bin of the current process and create a temporary communicator.
+      // Split the communicator based on new partitions.
       struct comm tc;
-      sint bin = get_bin(&lc, level, levels, comms);
-      comm_split(&lc, bin, lc.id, &tc);
+      split(&tc, &lc, level, levels, comms);
 
       // Find the number of disconnected components.
       if (options->find_disconnected_comps == 1) {
