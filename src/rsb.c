@@ -340,33 +340,118 @@ element_t element_info_type(element_info ei) {
   return GRAPH;
 }
 
-static void set_proc(struct array *elements, size_t esize,
-                     const struct comm *c) {
-  char *p = (char *)elements->ptr;
-  for (uint i = 0; i < elements->n; i++)
+static void set_proc(struct array *arr, size_t esize, const struct comm *c) {
+  char *p = (char *)arr->ptr;
+  for (uint i = 0; i < arr->n; i++)
     ((struct base_element *)(p + esize * i))->proc = c->id;
 }
 
-static void set_fiedler(struct array *elements, size_t esize, const scalar *f) {
-  char *p = (char *)elements->ptr;
-  for (uint i = 0; i < elements->n; i++)
-    ((struct base_element *)(p + esize * i))->fiedler = f[i];
-}
-
-static void prepartition(struct array *elements, const element_info ei,
+static void prepartition(struct array *arr, const element_info ei,
                          const parrsb_options options, const struct comm *c,
                          buffer *bfr) {
   if (element_info_type(ei) != MESH) return;
 
   switch (options->rsb_pre) {
   case 0:
-    parallel_sort_(elements, ei->size, ei->align, 0, 1, c, bfr, 1, gs_long,
+    parallel_sort_(arr, ei->size, ei->align, 0, 1, c, bfr, 1, gs_long,
                    offsetof(struct base_element, globalId));
     break;
-  case 1: rcb(elements, ei, c, bfr); break;
-  case 2: rib(elements, ei, c, bfr); break;
+  case 1: rcb(arr, ei, c, bfr); break;
+  case 2: rib(arr, ei, c, bfr); break;
   default: break;
   }
+}
+
+static void distribute_mesh(struct array *arr, const element_info ei,
+                            const scalar *f, const struct comm *c,
+                            buffer *bfr) {
+  char *p = (char *)arr->ptr;
+  for (uint i = 0; i < arr->n; i++)
+    ((struct base_element *)(p + ei->size * i))->fiedler = f[i];
+
+  parallel_sort_(arr, ei->size, ei->align, 0, 1, c, bfr, 1, gs_scalar,
+                 offsetof(struct base_element, fiedler));
+}
+
+static void distribute_graph(struct array *arr, const element_info ei,
+                             const scalar *f, const struct comm *c,
+                             buffer *bfr) {
+  sarray_sort_2(struct graph_element, arr->ptr, arr->n, u, 1, v, 1, bfr);
+  graph_element pe = (const graph_element)arr->ptr;
+  uint n = 0, nr = 0;
+  while (n < arr->n) {
+    uint i = n;
+    while (i < arr->n && pe[i].u == pe[n].u) pe[i].fiedler = f[nr], i++;
+    nr++, n = i;
+  }
+
+  // Sort based on the fiedler vector.
+  parallel_sort_(arr, ei->size, ei->align, 0, 1, c, bfr, 1, gs_scalar,
+                 offsetof(struct base_element, fiedler));
+
+  // Setup a gs handle to find the smallest processor id which owns a
+  // given row.
+  buffer_reserve(bfr, arr->n * sizeof(slong));
+  slong *ids = (slong *)bfr->ptr;
+
+  pe = (const graph_element)arr->ptr;
+  for (uint i = 0; i < arr->n; i++) ids[i] = pe[i].u;
+  struct gs_data *gsh = gs_setup(ids, arr->n, c, 0, gs_crystal_router, 0);
+
+  // Find the minimum processor id where a given row id resides.
+  sint *proc = tcalloc(sint, arr->n);
+  for (uint i = 0; i < arr->n; i++) proc[i] = c->id;
+  gs(proc, gs_sint, gs_min, 0, gsh, bfr);
+  for (uint i = 0; i < arr->n; i++) pe[i].proc = proc[i];
+  free(proc), gs_free(gsh);
+
+  // Send a given row to the minumum processor id.
+  struct crystal cr;
+  crystal_init(&cr, c);
+  sarray_transfer(struct graph_element, arr, proc, 0, &cr);
+
+  // Re-calculate the number of rows and load balance.
+  sarray_sort_2(struct graph_element, arr->ptr, arr->n, u, 1, v, 1, bfr);
+  pe = (const graph_element)arr->ptr;
+  n = nr = 0;
+  while (n < arr->n) {
+    uint i = n;
+    while (i < arr->n && pe[i].u == pe[n].u) i++;
+    nr++, n = i;
+  }
+
+  slong out[2][1], wrk[2][1], in = nr;
+  comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
+  slong start = out[0][0], nrg = out[1][0];
+
+  uint nstar = nrg / c->np;
+  uint nrem = nrg - nstar * c->np;
+  slong lower = (nstar + 1) * nrem;
+
+  n = nr = 0;
+  while (n < arr->n) {
+    slong rg = start + nr;
+    uint p = 0;
+    if (nstar == 0)
+      p = rg;
+    else if (rg <= lower)
+      p = rg / (nstar + 1);
+    else
+      p = (rg - lower) / nstar + nrem;
+
+    uint i = n;
+    while (i < arr->n && pe[i].u == pe[n].u) pe[i].proc = p, i++;
+    n = i, nr++;
+  }
+
+  sarray_transfer(struct graph_element, arr, proc, 0, &cr);
+  crystal_free(&cr);
+}
+
+static void distribute(struct array *elements, const element_info ei,
+                       const scalar *f, const struct comm *c, buffer *bfr) {
+  if (element_info_type(ei) == MESH) distribute_mesh(elements, ei, f, c, bfr);
+  if (element_info_type(ei) == GRAPH) distribute_graph(elements, ei, f, c, bfr);
 }
 
 void rsb(struct array *elements, const element_info ei,
@@ -382,22 +467,19 @@ void rsb(struct array *elements, const element_info ei,
     // Find the maximum number of RSB cuts in current level.
     uint ncuts = get_level_cuts(level, levels, comms);
     for (uint cut = 0; cut < ncuts; cut++) {
-      // Pre-partition using RCB, RIB or simply by sorting. Only works for mesh
-      // partitioning.
+      // Pre-partition using RCB, RIB or simply by sorting. Only applicable for
+      // mesh partitioning.
       prepartition(elements, ei, options, &lc, bfr);
-
       set_proc(elements, ei->size, &lc);
 
       // Setup the laplacian and find the Fiedler vector.
-      laplacian wl;
-      laplacian_init(&wl, elements, ei, &lc, bfr);
-      fiedler(f, wl, options, &lc, bfr);
-      laplacian_free(&wl);
+      laplacian l;
+      laplacian_init(&l, elements, ei, &lc, bfr);
+      fiedler(f, l, options, &lc, bfr);
+      laplacian_free(&l);
 
       // Distribute the elements by Fiedler value.
-      set_fiedler(elements, ei->size, f);
-      parallel_sort_(elements, ei->size, ei->align, 0, 1, &lc, bfr, 1,
-                     gs_double, offsetof(struct base_element, fiedler));
+      distribute(elements, ei, f, &lc, bfr);
 
       // Get the bin of the current process and create a temporary communicator.
       struct comm tc;
