@@ -133,7 +133,7 @@ static void mesh_load_balance(struct array *elist, uint nel,
       for (int v = 0; v < nv; v++) pr[e].vertices[v] = vtx[e * nv + v];
   }
 
-  sarray_transfer_(elist, unit_size, offsetof(struct rcb_element, proc), 1, cr);
+  sarray_transfer_(elist, unit_size, offsetof(struct rcb_element, proc), 0, cr);
   if (vtx == NULL)
     sarray_sort(struct rcb_element, elist->ptr, elist->n, globalId, 1, bfr);
   else
@@ -879,7 +879,7 @@ static int graph_load_balance(struct array *nlist, uint nn, long long *nodes,
     }
   }
 
-  sarray_transfer(struct graph_element, nlist, proc, 1, cr);
+  sarray_transfer(struct graph_element, nlist, proc, 0, cr);
   sarray_sort_2(struct graph_element, nlist->ptr, nlist->n, u, 1, v, 1, bfr);
 
   return 0;
