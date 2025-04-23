@@ -102,7 +102,6 @@ struct graph_element {
   ulong globalId;
   scalar fiedler;
   ulong u, v;
-  scalar val;
 };
 
 typedef struct graph_element *graph_element;
@@ -131,7 +130,7 @@ INTERN int rib(struct array *elements, const element_info ei,
  */
 typedef struct laplacian *laplacian;
 
-INTERN int laplacian_init(laplacian *l, const struct array *elements,
+INTERN int laplacian_init(laplacian *l, struct array *elements,
                           const element_info ei, const struct comm *c,
                           buffer *bfr);
 INTERN uint laplacian_get_size(laplacian wl);

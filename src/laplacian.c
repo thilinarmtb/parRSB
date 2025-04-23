@@ -20,9 +20,31 @@ struct csr_laplacian {
   struct gs_data *gsh;
 };
 
-static void csr_init(laplacian l, const struct array *nlist,
-                     const struct comm *c, buffer *bfr) {
-  sarray_sort_2(struct graph_element, nlist->ptr, nlist->n, u, 1, v, 1, bfr);
+static void filter_entries(struct array *nlist, const struct comm *c) {
+  if (nlist->n == 0) return;
+
+  // Find the minimum and maximum row ids.
+  slong max = LONG_MIN, min = LONG_MAX;
+  const graph_element pe = (const graph_element)nlist->ptr;
+  for (uint i = 0; i < nlist->n; i++) {
+    if (pe[i].u > (ulong)max) max = pe[i].u;
+    if (pe[i].u < (ulong)min) min = pe[i].u;
+  }
+
+  slong wrk;
+  comm_allreduce(c, gs_long, gs_max, &max, 1, &wrk);
+  comm_allreduce(c, gs_long, gs_min, &min, 1, &wrk);
+
+  // Filter out all the entires `< min` and `> max`.
+  uint n = 0;
+  for (uint i = 0; i < nlist->n; i++)
+    if (pe[i].v >= (ulong)min || pe[i].v <= (ulong)max) pe[n++] = pe[i];
+  nlist->n = n;
+}
+
+static void csr_init(laplacian l, struct array *nlist, const struct comm *c,
+                     buffer *bfr) {
+  filter_entries(nlist, c);
 
   const graph_element pe = (const graph_element)nlist->ptr;
   uint rn = (nlist->n > 0);
@@ -155,8 +177,8 @@ static void gs_weighted_free(laplacian l) {
 /*
  * Laplacian - user API.
  */
-int laplacian_init(laplacian *l_, const struct array *arr,
-                   const element_info ei, const struct comm *c, buffer *buf) {
+int laplacian_init(laplacian *l_, struct array *arr, const element_info ei,
+                   const struct comm *c, buffer *buf) {
   laplacian l = *l_ = tcalloc(struct laplacian, 1);
   l->nv = ei->nv;
   l->type = (l->nv > 0) ? GS : CSR;
