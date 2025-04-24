@@ -6,9 +6,9 @@ int NEIGHBOR_MAP[GC_MAX_VERTICES][GC_MAX_NEIGHBORS] = {
     {1, 2, 4}, {0, 3, 5}, {0, 3, 6}, {1, 2, 7},
     {0, 5, 6}, {1, 4, 7}, {2, 4, 7}, {3, 5, 6}};
 
-//==============================================================================
-// Mesh struct
-//
+/*
+ * Mesh struct.
+ */
 struct mesh_t *mesh_init(uint nelt, unsigned nv, unsigned ndim, unsigned nnbrs,
                          double *coord, long long *pinfo, uint npinfo,
                          const struct comm *c) {
@@ -53,9 +53,9 @@ int mesh_free(struct mesh_t *m) {
   return 0;
 }
 
-//==============================================================================
-// Find the minimum distance between a vertex and its neighbors
-//
+/*
+ * Find the minimum distance between a vertex and its neighbors.
+ */
 static inline double distance_2d(struct point_t *a, struct point_t *b) {
   return diff_sqr(a->x[0], b->x[0]) + diff_sqr(a->x[1], b->x[1]);
 }
@@ -101,9 +101,9 @@ int find_min_neighbor_distance(Mesh mesh) {
   return 0;
 }
 
-//==============================================================================
-// Global numbering
-//
+/*
+ * Global numbering.
+ */
 int set_global_id(Mesh mesh, struct comm *c) {
   uint nPoints = mesh->elements.n;
   Point points = (struct point_t *)mesh->elements.ptr;
@@ -176,9 +176,9 @@ static int transfer_boundary_faces(Mesh mesh, struct comm *c) {
   return 0;
 }
 
-//==============================================================================
-// Sanity checks
-//
+/*
+ * Sanity checks.
+ */
 typedef struct {
   ulong sequenceId;
   int nnbrs;
@@ -466,20 +466,21 @@ static int element_check(Mesh mesh, struct comm *c, buffer *bfr) {
   return err;
 }
 
-//==============================================================================
-// Input:
-//   nelt: Number of elements
-//   ndim: The dimension of the problem
-//   nv: Number of vertices in an element
-//     nv = 8 if ndim == 3 (Hex)
-//     nv = 4 if ndim = 2 (Quad)
-//   pinfo: Periodic BC information
-//   npinfo: Number of periodic BCs
-//   tol: Tolerance similar to gencon
-//   coord [nelt, nv, ndim]: Coordinates of elements vertices in preprocessor
-//     ordering.
-// Output:
-//   vtx[nelt, nv]: Global numbering of vertices of elements
+/*
+ * Input:
+ *   nelt: Number of elements
+ *   ndim: The dimension of the problem
+ *   nv: Number of vertices in an element
+ *     nv = 8 if ndim == 3 (Hex)
+ *     nv = 4 if ndim = 2 (Quad)
+ *   pinfo: Periodic BC information
+ *   npinfo: Number of periodic BCs
+ *   tol: Tolerance similar to gencon
+ *   coord [nelt, nv, ndim]: Coordinates of elements vertices in preprocessor
+ *     ordering.
+ * Output:
+ *   vtx[nelt, nv]: Global numbering of vertices of elements
+ */
 int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
                      long long *pinfo, int npinfo, double tol, MPI_Comm comm,
                      int verbose) {
@@ -580,7 +581,9 @@ cleanup:
   return err;
 }
 
-// Fortran interface
+/*
+ * Fortran interface.
+ */
 void fparrsb_conn_mesh(long long *vtx, double *coord, int *nelt, int *ndim,
                        long long *pinfo, int *npinfo, double *tol,
                        MPI_Fint *fcomm, int *err, int *verbose) {
