@@ -1,12 +1,12 @@
-//=============================================================================
-// Generate connectivity (.co2) from Nek5000 mesh (.re2) file.
-//
+/*
+ * Generate connectivity (.co2) from Nek5000 mesh (.re2) file.
+ */
+
 #include "parRSB.h"
 
 static void test_parcon(unsigned int neltp, long long *vlp, char *name,
                         MPI_Comm comm) {
-  unsigned int nelt;
-  unsigned nv;
+  unsigned nelt, nv;
   long long *vls = NULL;
   int err = parrsb_read_mesh(&nelt, &nv, &vls, NULL, NULL, NULL, name, comm, 2);
   parrsb_check_error(err, comm);

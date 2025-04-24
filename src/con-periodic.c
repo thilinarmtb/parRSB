@@ -536,7 +536,6 @@ static int number_points(slong *const gid, sint nf, sint nv, sint ndim,
   size_t size = (size_t)nf * (size_t)nv;
   for (size_t i = 0; i < size; i++) gid[i] = ptr[i].globalId + 1;
 
-
   mesh_free(mesh);
   return 0;
 }
@@ -576,8 +575,8 @@ int parrsb_match_periodic_faces(slong *const gid, uint nf,
   transform_points(new_coord, nf, bid, nv, ndim, coord, R, t);
 
   // Globally number points:
-  con_chk_err(number_points(gid, nf, nv, ndim, new_coord, tol, &c, &bfr),
-              err, &c);
+  con_chk_err(number_points(gid, nf, nv, ndim, new_coord, tol, &c, &bfr), err,
+              &c);
   if (err) goto cleanup;
 
 cleanup:
