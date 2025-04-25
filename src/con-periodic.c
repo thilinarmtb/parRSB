@@ -575,9 +575,15 @@ int parrsb_match_periodic_faces(slong *const gid, uint nf,
   transform_points(new_coord, nf, bid, nv, ndim, coord, R, t);
 
   // Globally number points:
-  con_chk_err(number_points(gid, nf, nv, ndim, new_coord, tol, &c, &bfr), err,
+  slong *gid_ = tcalloc(slong, ngids);
+  con_chk_err(number_points(gid_, nf, nv, ndim, new_coord, tol, &c, &bfr), err,
               &c);
-  if (err) goto cleanup;
+
+  // Update the input vertices.
+  struct gs_data *gsh = gs_setup(gid_, ngids, &c, 0, gs_pairwise, 0);
+  gs(gid, gs_long, gs_min, 0, gsh, &bfr);
+  gs_free(gsh);
+  free(gid_);
 
 cleanup:
   free(new_coord);
