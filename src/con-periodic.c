@@ -1,8 +1,5 @@
 #include "con-impl.h"
 
-#include <math.h>
-#include <time.h>
-
 int faces3D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{1, 5, 7, 3}, {2, 4, 8, 6},
                                                    {1, 2, 6, 5}, {3, 7, 8, 4},
                                                    {1, 3, 4, 2}, {5, 6, 8, 7}};
@@ -10,10 +7,6 @@ int faces3D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{1, 5, 7, 3}, {2, 4, 8, 6},
 int faces2D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{3, 1, 0, 0}, {2, 4, 0, 0},
                                                    {1, 2, 0, 0}, {4, 3, 0, 0},
                                                    {0, 0, 0, 0}, {0, 0, 0, 0}};
-#ifndef M_PI
-#define M_PI (3.14159265358979323846)
-#endif
-
 #define return_if_not_debug()                                                  \
   {                                                                            \
     char *dbg = getenv("DEBUG");                                               \
@@ -291,13 +284,6 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
   return 0;
 }
 
-static scalar normi(scalar *a, sint n) {
-  scalar norm = 0;
-  for (sint i = 0; i < n; i++)
-    if (norm < fabs(a[i])) norm = fabs(a[i]);
-  return norm;
-}
-
 #define FDGESVD GS_FORTRAN_UNPREFIXED(dgesvd, DGESVD)
 
 #if defined(PARRSB_BLAS)
@@ -362,9 +348,9 @@ static scalar determinant(const scalar R[3][3]) {
 
 // find the translation vector `t` and the rotation matrix `R` that maps the
 // face `face0` to the face `face1`.
-static scalar transform_face(scalar R[3][3], scalar t[3],
-                             const scalar face1[4][3], const scalar face0[4][3],
-                             sint nv, sint ndim, scalar tol) {
+scalar transform_face(scalar R[3][3], scalar t[3], const scalar face1[4][3],
+                      const scalar face0[4][3], sint nv, sint ndim,
+                      scalar tol) {
   // Find the centroids of the faces.
   scalar t0[3], t1[3];
   for (int i = 0; i < 3; i++) t0[i] = t1[i] = 0.0;
@@ -540,14 +526,15 @@ static int number_points(slong *const gid, sint nf, sint nv, sint ndim,
   return 0;
 }
 
-//==============================================================================
-// int nf; // Number of faces, [input]
-// int nv; // number of vertices for a face, [input]
-// int *bid; // Periodic BC id (bid[i] is either 0 or 1), size = nf, [input]
-// int ndim; // dimension of the problem, [input]
-// double *coord; // face coordinates, size = nf * nv * ndim, [input]
-// double tol; // Tolerance similar to gencon, [input]
-// slong *gid; // global id of each face vertex, size = nf * nv, [output]
+/*
+ * int nf;  Number of faces, [input]
+ * int nv;  Number of vertices for a face, [input]
+ * int *bid; Periodic BC id (bid[i] is either 0 or 1), size = nf, [input]
+ * int ndim; Dimension of the problem, [input]
+ * double *coord; Face coordinates, size = nf * nv * ndim, [input]
+ * double tol; Tolerance similar to gencon, [input]
+ * slong *gid; Global id of each face vertex, size = nf * nv, [output]
+ */
 int parrsb_match_periodic_faces(slong *const gid, uint nf,
                                 const sint *const bid, sint nv, sint ndim,
                                 const scalar *const coord, scalar tol,
@@ -590,164 +577,6 @@ cleanup:
   buffer_free(&bfr), comm_free(&c);
 
   return err;
-}
-
-static int test_transform_face_00(const scalar tol) {
-  scalar face1[4][3], face0[4][3];
-  for (sint i = 0; i < 4; i++)
-    for (sint j = 0; j < 3; j++)
-      face1[i][j] = face0[i][j] = rand() / (scalar)RAND_MAX;
-
-  scalar R[3][3], t[3];
-  transform_face(R, t, face1, face0, 4, 3, tol);
-
-  scalar R_expected[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
-  scalar t_expected[3] = {0.0, 0.0, 0.0};
-
-  scalar R_err[9], t_err[3];
-  for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
-  for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
-
-  sint err = 0;
-  err |= (normi(t_err, 3) > tol);
-  err |= (normi(R_err, 9) > tol);
-  return err;
-}
-
-static int test_transform_face_01(const scalar tol) {
-  scalar face1[4][3], face0[4][3];
-  for (sint i = 0; i < 4; i++) {
-    for (sint j = 0; j < 3; j++) {
-      face1[i][j] = face0[i][j] = rand() / (scalar)RAND_MAX;
-      face1[i][j] += 10.0;
-    }
-  }
-
-  scalar R_expected[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
-  scalar t_expected[3] = {10.0, 10.0, 10.0};
-
-  scalar R[3][3], t[3];
-  transform_face(R, t, face1, face0, 4, 3, tol);
-
-  scalar R_err[9], t_err[3];
-  for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
-  for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
-
-  sint err = 0;
-  err |= (normi(t_err, 3) > tol);
-  err |= (normi(R_err, 9) > tol);
-  return err;
-}
-
-static int test_transform_face_02(const scalar tol) {
-  scalar face1[4][3], face0[4][3];
-  for (sint i = 0; i < 4; i++) {
-    for (sint j = 0; j < 3; j++) {
-      face1[i][j] = face0[i][j] = rand() / (scalar)RAND_MAX;
-      face1[i][j] += j;
-    }
-  }
-
-  scalar R_expected[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
-  scalar t_expected[3] = {0.0, 1.0, 2.0};
-
-  scalar R[3][3], t[3];
-  transform_face(R, t, face1, face0, 4, 3, tol);
-
-  scalar R_err[9], t_err[3];
-  for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
-  for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
-
-  sint err = 0;
-  err |= (normi(t_err, 3) > tol);
-  err |= (normi(R_err, 9) > tol);
-  return err;
-}
-
-static int test_transform_face_03(const scalar tol) {
-  scalar face0[4][3] = {
-      {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {1.0, 1.0, 0.0}};
-
-  // Rotate by 60 degrees around the x-axis and translate by (1, 2, 3).
-  scalar theta = M_PI / 3.0;
-  scalar R_expected[3][3] = {{1.0, 0.0, 0.0},
-                             {0.0, cos(theta), -sin(theta)},
-                             {0.0, sin(theta), cos(theta)}};
-  scalar t_expected[3] = {1.0, 2.0, 3.0};
-
-  scalar face1[4][3];
-  for (sint i = 0; i < 4; i++) {
-    for (sint j = 0; j < 3; j++) {
-      face1[i][j] = 0;
-      for (sint k = 0; k < 3; k++)
-        face1[i][j] += R_expected[j][k] * face0[i][k];
-      face1[i][j] += t_expected[j];
-    }
-  }
-
-  scalar R[3][3], t[3];
-  transform_face(R, t, face1, face0, 4, 3, tol);
-
-  scalar R_err[9], t_err[3];
-  for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
-  for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
-
-  sint err = 0;
-  err |= (normi(t_err, 3) > tol);
-  err |= (normi(R_err, 9) > tol);
-  return err;
-}
-
-static int test_transform_face_04(const scalar tol) {
-  scalar face0[4][3] = {
-      {0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, {0.0, 1.0, 1.0}, {0.0, 1.0, 0.0}};
-  scalar face1[4][3] = {
-      {1.0, 0.0, 0.0}, {1.0, 1.0, 0.0}, {1.0, 1.0, 1.0}, {1.0, 0.0, 1.0}};
-
-  scalar R[3][3], t[3];
-  transform_face(R, t, face1, face0, 4, 3, tol);
-
-  scalar face2[4][3];
-  for (sint i = 0; i < 4; i++) {
-    for (sint j = 0; j < 3; j++) {
-      face2[i][j] = 0;
-      for (sint k = 0; k < 3; k++) face2[i][j] += R[j][k] * face0[i][k];
-      face2[i][j] += t[j];
-    }
-  }
-
-  scalar f_err[12];
-  for (sint i = 0; i < 12; i++) f_err[i] = face2[0][i] - face1[0][i];
-
-  return (normi(f_err, 12) > tol);
-}
-
-int test_transform_face(scalar tol, MPI_Comm comm) {
-  struct comm c;
-  comm_init(&c, comm);
-
-#define chk_test(call, count, c)                                               \
-  {                                                                            \
-    sint _err = (call);                                                        \
-    sint _wrk;                                                                 \
-    comm_allreduce(&(c), gs_int, gs_max, &_err, 1, &_wrk);                     \
-    if (_err) {                                                                \
-      if ((c).id == 0) fprintf(stderr, #call " failed.\n");                    \
-      (count)++;                                                               \
-    }                                                                          \
-  }
-
-  sint errs = 0;
-  chk_test(test_transform_face_00(tol), errs, c);
-  chk_test(test_transform_face_01(tol), errs, c);
-  chk_test(test_transform_face_02(tol), errs, c);
-  chk_test(test_transform_face_03(tol), errs, c);
-  chk_test(test_transform_face_04(tol), errs, c);
-
-#undef chk_test
-
-  comm_free(&c);
-  return errs;
 }
 
 #undef distance2D

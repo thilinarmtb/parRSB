@@ -1,6 +1,9 @@
 #if !defined(_CON_IMPL_H_)
 #define _CON_IMPL_H_
 
+#include <math.h>
+#include <time.h>
+
 #include "parrsb-impl.h"
 #include "sort.h"
 
@@ -154,13 +157,12 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr);
   }
 
 /*
- * Tests for various connectivity functions.
- */
-int test_transform_face(scalar tol, MPI_Comm comm);
-
-/*
  * Match periodic faces automatically.
  */
+
+scalar transform_face(scalar R[3][3], scalar t[3], const scalar face1[4][3],
+                      const scalar face0[4][3], sint nv, sint ndim, scalar tol);
+
 int parrsb_match_periodic_faces(slong *const gid, uint nf,
                                 const sint *const bid, sint nv, sint ndim,
                                 const scalar *const coord, scalar tol,
