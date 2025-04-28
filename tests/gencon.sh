@@ -1,8 +1,9 @@
 #!/bin/bash
 
-MESH=${1:-"./linear_periodic_mesh.box"}
-GENBOX=${2:-"$HOME/Nek5000/bin/genbox"}
+NEK5K=${1:-"${HOME}/Nek5000"}
+MESH=${2:-"./linear_periodic_mesh.box"}
 
+GENBOX=${NEK5K}/bin/genbox
 if [[ ! -f $GENBOX ]]; then
     echo "Error: genbox not found in \"$GENBOX\""
     exit 1
