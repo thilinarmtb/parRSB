@@ -130,8 +130,8 @@ typedef struct mesh_t *Mesh;
  * Mesh init and finalize functions.
  */
 struct mesh_t *mesh_init(uint nelt, unsigned nv, unsigned ndim, unsigned nnbrs,
-                         double *coord, long long *pinfo, uint npinfo,
-                         const struct comm *c);
+                         const double *coord, const long long *pinfo,
+                         uint npinfo, const struct comm *c);
 
 int mesh_free(struct mesh_t *m);
 

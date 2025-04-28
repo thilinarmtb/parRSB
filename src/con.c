@@ -10,8 +10,8 @@ int NEIGHBOR_MAP[GC_MAX_VERTICES][GC_MAX_NEIGHBORS] = {
  * Mesh struct.
  */
 struct mesh_t *mesh_init(uint nelt, unsigned nv, unsigned ndim, unsigned nnbrs,
-                         double *coord, long long *pinfo, uint npinfo,
-                         const struct comm *c) {
+                         const double *coord, const long long *pinfo,
+                         uint npinfo, const struct comm *c) {
   struct mesh_t *m = tcalloc(struct mesh_t, 1);
   m->nelt = nelt;
   m->nv = nv;
@@ -482,9 +482,9 @@ static int element_check(Mesh mesh, struct comm *c, buffer *bfr) {
  * Output:
  *   vtx[nelt, nv]: Global numbering of vertices of elements
  */
-int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
-                     long long *pinfo, int npinfo, double tol, MPI_Comm comm,
-                     int verbose) {
+int parrsb_conn_mesh(long long *vtx, const double *coord, uint nelt,
+                     unsigned ndim, const long long *pinfo, int npinfo,
+                     double tol, MPI_Comm comm, int verbose) {
   struct comm c;
   comm_init(&c, comm);
 
