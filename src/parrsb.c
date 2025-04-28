@@ -846,9 +846,9 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
   return 0;
 }
 
-static int graph_load_balance(struct array *nlist, uint nn, long long *nodes,
-                              size_t *offsets, long long *neighbors,
-                              struct crystal *const cr, buffer *bfr) {
+int graph_load_balance(struct array *nlist, uint nn, const long long *nodes,
+                       const unsigned *offsets, const long long *neighbors,
+                       struct crystal *cr, buffer *bfr) {
   const struct comm *c = &cr->comm;
 
   slong out[2][1], wrk[2][1], in = nn;
@@ -885,22 +885,38 @@ static int graph_load_balance(struct array *nlist, uint nn, long long *nodes,
   return 0;
 }
 
-static void graph_restore(int *part, struct crystal *cr, struct array *nlist,
-                          buffer *bfr) {
+void graph_element_info_init(element_info *ei_) {
+  element_info ei = *ei_ = tcalloc(struct element_info, 1);
+  ei->nv = 0;
+  ei->nd = 0;
+  ei->size = sizeof(struct graph_element);
+  ei->align = ALIGNOF(struct graph_element);
+}
+
+void graph_element_info_free(element_info *ei) {
+  if (!ei || !(*ei)) return;
+
+  free(*ei), *ei = 0;
+}
+
+void graph_restore(int *part, struct array *nlist, struct crystal *cr,
+                   buffer *bfr) {
   sarray_transfer(struct graph_element, nlist, origin, 1, cr);
+
+  if (!part) goto free_array;
 
   uint n = nlist->n;
   struct graph_element *pg = (struct graph_element *)nlist->ptr;
-
   sarray_sort(struct graph_element, pg, n, globalId, 1, bfr);
   for (uint i = 0; i < n; i++) part[i] = pg[i].origin;
 
+free_array:
   array_free(nlist);
 }
 
-int parrsb_part_graph(int *part, size_t num_nodes, long long *nodes,
-                      size_t *offsets, long long *neighbors,
-                      const parrsb_options options, MPI_Comm comm) {
+int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
+                      const unsigned *offsets, const long long *neighbors,
+                      const parrsb_options options, const MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 
@@ -923,11 +939,8 @@ int parrsb_part_graph(int *part, size_t num_nodes, long long *nodes,
 
   metric_init();
 
-  element_info ei = tcalloc(struct element_info, 1);
-  ei->nv = 0;
-  ei->nd = 0;
-  ei->size = sizeof(struct graph_element);
-  ei->align = ALIGNOF(struct graph_element);
+  element_info ei;
+  graph_element_info_init(&ei);
 
   struct array nlist;
   graph_load_balance(&nlist, num_nodes, nodes, offsets, neighbors, &cr, &bfr);
@@ -950,12 +963,10 @@ int parrsb_part_graph(int *part, size_t num_nodes, long long *nodes,
   comm_free(&ca);
 
   parrsb_print(&c, verbose, "parrsb_part_graph: restore original input");
-  mesh_restore(part, &cr, &nlist, ei->size, &bfr);
-
-  free(ei);
-
   metric_rsb_print(&c, options->profile_level);
 
+  graph_restore(part, &nlist, &cr, &bfr);
+  graph_element_info_free(&ei);
   metric_finalize();
   crystal_free(&cr);
   buffer_free(&bfr);

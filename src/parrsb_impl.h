@@ -78,6 +78,10 @@ struct element_info {
 
 typedef struct element_info *element_info;
 
+INTERN void graph_element_info_init(element_info *ei);
+
+INTERN void graph_element_info_free(element_info *ei);
+
 typedef enum { MESH = 0, GRAPH = 1 } element_t;
 
 INTERN element_t element_info_type(element_info ei);
@@ -106,6 +110,14 @@ struct graph_element {
 
 typedef struct graph_element *graph_element;
 
+INTERN int graph_load_balance(struct array *nlist, uint nn,
+                              const long long *nodes, const unsigned *offsets,
+                              const long long *neighbors, struct crystal *cr,
+                              buffer *bfr);
+
+INTERN void graph_restore(int *part, struct array *nlist, struct crystal *cr,
+                          buffer *bfr);
+
 /*
  * RCB / RIB. `struct rcb_element` is used for mesh partitioning with RCB and
  * RIB.
@@ -133,7 +145,7 @@ typedef struct laplacian *laplacian;
 INTERN int laplacian_init(laplacian *l, struct array *elements,
                           const element_info ei, const struct comm *c,
                           buffer *bfr);
-INTERN uint laplacian_get_size(laplacian wl);
+INTERN uint laplacian_get_size(laplacian l);
 INTERN int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *bfr);
 INTERN int laplacian_free(laplacian *l);
 

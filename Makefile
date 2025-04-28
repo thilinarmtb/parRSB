@@ -33,6 +33,7 @@ MKFILEPATH = $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJDIR = $(realpath $(patsubst %/,%,$(dir $(MKFILEPATH))))
 SRCDIR = $(PROJDIR)/src
 EXAMPLEDIR = $(PROJDIR)/example
+TESTDIR = $(PROJDIR)/test
 BUILDDIR = $(PROJDIR)/build
 INSTALLDIR = $(PROJDIR)/install
 ifneq ($(strip $(DESTDIR)),)
@@ -43,6 +44,8 @@ SRC.c = $(wildcard $(SRCDIR)/*.c)
 SRC.o = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%.o,$(SRC.c))
 EXAMPLE.c = $(wildcard $(EXAMPLEDIR)/*.c)
 EXAMPLE.bin = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%,$(EXAMPLE.c))
+TEST.c = $(wildcard $(TESTDIR)/*.c)
+TEST.bin = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%,$(TEST.c))
 LIB.a = $(BUILDDIR)/lib/libparRSB.a
 
 INCFLAGS = -I$(SRCDIR) -I$(GSLIBPATH)/include
@@ -51,7 +54,7 @@ LDFLAGS += -L$(INSTALLDIR)/lib -lparRSB -L$(GSLIBPATH)/lib -lgs -lm
 
 .PHONY: all lib install example format clean
 
-all: lib install example
+all: lib install example test
 
 lib: $(SRC.o) | $(BUILDDIR)
 	@$(AR) cr $(LIB.a) $?
@@ -62,6 +65,8 @@ install: lib | $(INSTALLDIR)
 	@cp $(SRCDIR)/*.h $(INSTALLDIR)/include 2>/dev/null
 
 example: $(EXAMPLE.bin) | lib install
+
+test: $(TEST.bin) | lib install
 
 format:
 	find . -iname *.h -o -iname *.c | xargs clang-format -i
@@ -87,6 +92,7 @@ $(BUILDDIR):
 	@mkdir -p $(BUILDDIR)/lib
 	@mkdir -p $(BUILDDIR)/src
 	@mkdir -p $(BUILDDIR)/example
+	@mkdir -p $(BUILDDIR)/test
 
 $(INSTALLDIR):
 	@mkdir -p $(INSTALLDIR)/lib 2>/dev/null
