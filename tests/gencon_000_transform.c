@@ -24,7 +24,9 @@ static int test_transform_face_00(const scalar tol) {
   scalar t_expected[3] = {0.0, 0.0, 0.0};
 
   scalar R_err[9], t_err[3];
-  for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
+  for (sint i = 0; i < 3; i++)
+    for (sint j = 0; j < 3; j++) R_err[3 * i + j] = R[i][j] - R_expected[i][j];
+
   for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
 
   sint err = 0;
@@ -49,7 +51,8 @@ static int test_transform_face_01(const scalar tol) {
   transform_face(R, t, face1, face0, 4, 3, tol);
 
   scalar R_err[9], t_err[3];
-  for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
+  for (sint i = 0; i < 3; i++)
+    for (sint j = 0; j < 3; j++) R_err[3 * i + j] = R[i][j] - R_expected[i][j];
   for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
 
   sint err = 0;
@@ -74,7 +77,8 @@ static int test_transform_face_02(const scalar tol) {
   transform_face(R, t, face1, face0, 4, 3, tol);
 
   scalar R_err[9], t_err[3];
-  for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
+  for (sint i = 0; i < 3; i++)
+    for (sint j = 0; j < 3; j++) R_err[3 * i + j] = R[i][j] - R_expected[i][j];
   for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
 
   sint err = 0;
@@ -108,7 +112,8 @@ static int test_transform_face_03(const scalar tol) {
   transform_face(R, t, face1, face0, 4, 3, tol);
 
   scalar R_err[9], t_err[3];
-  for (sint i = 0; i < 9; i++) R_err[i] = R[0][i] - R_expected[0][i];
+  for (sint i = 0; i < 3; i++)
+    for (sint j = 0; j < 3; j++) R_err[3 * i + j] = R[i][j] - R_expected[i][j];
   for (sint i = 0; i < 3; i++) t_err[i] = t[i] - t_expected[i];
 
   sint err = 0;
@@ -136,7 +141,8 @@ static int test_transform_face_04(const scalar tol) {
   }
 
   scalar f_err[12];
-  for (sint i = 0; i < 12; i++) f_err[i] = face2[0][i] - face1[0][i];
+  for (sint i = 0; i < 4; i++)
+    for (sint j = 0; j < 3; j++) f_err[3 * i + j] = face2[i][j] - face1[i][j];
 
   return (normi(f_err, 12) > tol);
 }
@@ -160,7 +166,8 @@ static int test_transform_face_05(const scalar tol) {
   }
 
   scalar f_err[12];
-  for (sint i = 0; i < 12; i++) f_err[i] = face2[0][i] - face1[0][i];
+  for (sint i = 0; i < 4; i++)
+    for (sint j = 0; j < 3; j++) f_err[3 * i + j] = face2[i][j] - face1[i][j];
 
   return (normi(f_err, 12) > tol);
 }
