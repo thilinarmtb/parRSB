@@ -2,6 +2,10 @@
 
 #include "con-impl.h"
 
+int face_vertices_3d[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {
+    {1, 3, 5, 7}, {2, 4, 6, 8}, {1, 2, 5, 6},
+    {3, 4, 7, 8}, {1, 2, 3, 4}, {5, 6, 7, 8}};
+
 static int PRE_TO_SYM_VERTEX[GC_MAX_VERTICES] = {0, 1, 3, 2, 4, 5, 7, 6};
 static int PRE_TO_SYM_FACE[GC_MAX_FACES] = {2, 1, 3, 0, 4, 5};
 
@@ -57,7 +61,7 @@ static void tag_periodic_faces(long long *gid, double *fc, int *bid,
     size_t ev_off = eid * nv;
     size_t ec_off = eid * nv * ndim;
     for (unsigned v = 0; v < nvf; v++) {
-      unsigned u = faces3D[fid][v] - 1;
+      unsigned u = face_vertices_3d[fid][v] - 1;
       gid[fv_off + v] = vl[ev_off + u];
       for (unsigned d = 0; d < ndim; d++)
         fc[fc_off + v * ndim + d] = symc[ec_off + u * ndim + d];
@@ -65,23 +69,6 @@ static void tag_periodic_faces(long long *gid, double *fc, int *bid,
     fc_off += nvf * ndim;
     fv_off += nvf;
   }
-
-  for (int i = 0; i < c->np; i++) {
-    if (i == c->id) {
-      printf("prev proc: %d:", c->id);
-      for (unsigned i = 0; i < nelt * nv; i++) printf(" %2lld", vl[i]);
-      printf("\n");
-      printf("symv proc: %d:", c->id);
-      for (unsigned i = 0; i < nelt * nv; i++) printf(" %2lld", vl[i]);
-      printf("\n");
-      printf("gid  proc: %d:", c->id);
-      for (unsigned i = 0; i < nf * nvf; i++) printf(" %2lld", gid[i]);
-      printf("\n");
-    }
-    fflush(stdout);
-    MPI_Barrier(c->c);
-  }
-
   tfree(symc);
 }
 
@@ -110,29 +97,12 @@ static int check_accuracy(unsigned nelt, unsigned nv, unsigned ndim,
 
     size_t ev_off = eid * nv;
     for (unsigned v = 0; v < nvf; v++) {
-      unsigned u = faces3D[fid][v] - 1;
+      unsigned u = face_vertices_3d[fid][v] - 1;
       vlm[ev_off + u] = vlM[ev_off + u] = vlf[i * nvf + v];
     }
   }
 
-  for (int i = 0; i < c->np; i++) {
-    if (i == c->id) {
-      printf("vlf proc: %d:", c->id);
-      for (unsigned i = 0; i < nf * nvf; i++) printf(" %2lld", vlf[i]);
-      printf("\n");
-      printf("vl  proc: %d:", c->id);
-      for (unsigned i = 0; i < nelt * nv; i++) printf(" %2lld", vl[i]);
-      printf("\n");
-      printf("vlm proc: %d:", c->id);
-      for (unsigned i = 0; i < nelt * nv; i++) printf(" %2lld", vlm[i]);
-      printf("\n");
-    }
-    fflush(stdout);
-    MPI_Barrier(c->c);
-  }
-
   sint err = 0;
-#if 0
   struct gs_data *gsh = gs_setup(vl, size, c, 0, gs_pairwise, 0);
   buffer bfr;
   buffer_init(&bfr, 1024);
@@ -147,10 +117,9 @@ static int check_accuracy(unsigned nelt, unsigned nv, unsigned ndim,
       break;
     }
   }
-  comm_allreduce(c, gs_int, gs_add, &err, 1, wrk);
-#endif
-
   tfree(vl), tfree(vlm), tfree(vlM);
+
+  comm_allreduce(c, gs_int, gs_add, &err, 1, wrk);
   return err;
 }
 
