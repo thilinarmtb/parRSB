@@ -424,8 +424,9 @@ static int face_check(Mesh mesh, struct comm *c, buffer *bfr) {
           }
           prev = l;
           ncount = 1;
-        } else
+        } else {
           ncount++;
+        }
       }
 
       if (ncount == 3) {

@@ -7,12 +7,6 @@ int faces3D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{1, 5, 7, 3}, {2, 4, 8, 6},
 int faces2D[GC_MAX_FACES][GC_MAX_FACE_VERTICES] = {{3, 1, 0, 0}, {2, 4, 0, 0},
                                                    {1, 2, 0, 0}, {4, 3, 0, 0},
                                                    {0, 0, 0, 0}, {0, 0, 0, 0}};
-#define return_if_not_debug()                                                  \
-  {                                                                            \
-    char *dbg = getenv("DEBUG");                                               \
-    if (!dbg || atoi(dbg) == 0) return;                                        \
-  }
-
 #define distance2D(a, b) (diff_sqr(a.x[0], b.x[0]) + diff_sqr(a.x[1], b.x[1]))
 #define distance3D(a, b) (distance2D(a, b) + diff_sqr(a.x[2], b.x[2]))
 
@@ -317,8 +311,6 @@ static void svd(scalar U[3][3], scalar S[3], scalar V[3][3], sint ndim,
 #undef FDGESVD
 
 static void print_matrix(const scalar A[3][3], sint ndim) {
-  return_if_not_debug();
-
   if (ndim == 3) {
     printf("%e %e %e\n", A[0][0], A[0][1], A[0][2]);
     printf("%e %e %e\n", A[1][0], A[1][1], A[1][2]);
@@ -332,8 +324,6 @@ static void print_matrix(const scalar A[3][3], sint ndim) {
 }
 
 static void print_vector(const scalar A[3], sint ndim) {
-  return_if_not_debug();
-
   if (ndim == 3) printf("%e %e %e\n", A[0], A[1], A[2]);
   if (ndim == 2) printf("%e %e\n", A[0], A[1]);
 }
