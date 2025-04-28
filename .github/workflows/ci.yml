@@ -128,5 +128,5 @@ jobs:
 
           mpirun -np 1 ${TESTDIR}/gencon_000_transform
 
-          ./gencon.sh ${NEK5KDIR}
+          ./genbox.sh ${NEK5KDIR}
           mpirun -np 2 ${TESTDIR}/gencon_010_match --mesh box
