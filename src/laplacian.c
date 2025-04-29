@@ -20,8 +20,6 @@ struct csr_laplacian {
 };
 
 static void filter_entries(struct array *nlist, const struct comm *c) {
-  if (nlist->n == 0) return;
-
   // Find the minimum and maximum row ids.
   slong max = LONG_MIN, min = LONG_MAX;
   const graph_element pe = (const graph_element)nlist->ptr;
