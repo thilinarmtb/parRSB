@@ -68,4 +68,10 @@ static inline void graph_free(graph_t *graph) {
   free(*graph), *graph = 0;
 }
 
+static scalar norm2(const scalar *u, unsigned n) {
+  scalar v = 0;
+  for (uint i = 0; i < n; i++) v += u[i] * u[i];
+  return sqrt(v);
+}
+
 #endif

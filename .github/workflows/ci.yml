@@ -6,21 +6,20 @@ on:
     branch: [main]
 env:
   GITHUB.TOKEN: ${{ secrets.token }}
-  CIDIR: parRSB-github-ci
-  EXAMPLEDIR: build/example
   MPIEXE: "mpirun --oversubscribe"
+  CC: mpicc
 jobs:
-  parRSB:
+  mesh:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         test: [box_2x2x2, pyramid, tgv, e3q, solid, ethier, vortex, expansion]
         np: [1, 2, 3, 4]
       fail-fast: false
-    name: "parRSB: ${{ matrix.test }}, NP = ${{ matrix.np }}"
+    name: "${{ matrix.test }}, np = ${{ matrix.np }}"
     env:
-      GSVER: 1.0.7
-      CC: mpicc
+      CIDIR: parRSB-github-ci
+      EXAMPLEDIR: build/example
     steps:
       - uses: actions/checkout@v3
       - name: Install apt dependencies
@@ -93,3 +92,36 @@ jobs:
       #     tol=(`cat test.txt | grep tol`); tol=${tol[2]}
       #     ${MPIEXE} -np ${{ matrix.np }} ./genmap --mesh ${{ matrix.test }} \
       #       --tol=${tol} --dump=0 --test=1
+  graph:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        np: [1, 2, 3, 4]
+      fail-fast: false
+    env:
+      TESTDIR: ${{ github.workspace }}/build/test
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install apt dependencies
+        shell: bash
+        run: |
+          sudo apt -y update
+          sudo apt install -y openmpi-bin libopenmpi-dev
+          sudo apt install -y libblas-dev liblapack-dev
+          sudo apt install -y build-essential
+      - name: Build parRSB and clone tests
+        shell: bash
+        run: |
+          # Build gslib
+          git clone https://github.com/Nek5000/gslib.git
+          make -C gslib -j4
+
+          # Build parRSB
+          export GSLIBPATH=`pwd`/gslib/build/
+          make -j4 test
+      - name: Run unit tests
+        shell: bash
+        run: |
+          cd ${TESTDIR}
+
+          ${MPIEXE} -np ${{ matrix.np }} ./parrsb_000_graph_laplacian
