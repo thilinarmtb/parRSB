@@ -192,7 +192,7 @@ int laplacian_init(laplacian *l_, struct array *arr, const element_info ei,
   return 0;
 }
 
-uint laplacian_get_size(laplacian l) {
+uint laplacian_size(laplacian l) {
   if (!l || !l->data) return 0;
 
   switch (l->type) {

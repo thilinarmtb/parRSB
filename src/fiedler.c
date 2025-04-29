@@ -104,7 +104,7 @@ static int lanczos(scalar *fiedler, laplacian wl, scalar *initv,
   uint miter = opts->rsb_max_iter;
   uint mpass = opts->rsb_max_passes;
   double tol = opts->rsb_tol;
-  uint lelt = laplacian_get_size(wl);
+  uint lelt = laplacian_size(wl);
 
   if (nelg < miter) miter = nelg;
 
@@ -161,7 +161,7 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
 
   metric_tic(c, RSB_FIEDLER);
 
-  uint n = laplacian_get_size(l);
+  uint n = laplacian_size(l);
   slong out[2][1], wrk[2][1], in = n;
   comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
   slong start = out[0][0], ng = out[1][0];
