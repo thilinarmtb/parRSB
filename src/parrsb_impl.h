@@ -32,13 +32,16 @@
 #define INTERN extern VISIBILITY(hidden)
 #endif
 
+/*
+ * Commonly used macros.
+ */
 // Macro for finding min of two numbers.
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 // Macro for finding max of two numbers.
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 // Maximum dimension of the mesh.
 #define MAXDIM 3
-// Maximum number of vertices per element.
+// Maximum number of vertices per element in the mesh.
 #define MAXNV 8
 
 /*

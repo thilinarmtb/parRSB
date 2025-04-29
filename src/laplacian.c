@@ -86,7 +86,6 @@ static void csr_op(scalar *v, const laplacian l, scalar *u, buffer *bfr) {
   struct csr_laplacian *L = (struct csr_laplacian *)l->data;
 
   for (uint i = 0; i < L->n; i++) L->wrk[L->di[i]] = u[i];
-
   gs(L->wrk, gs_scalar, gs_add, 0, L->gsh, bfr);
 
   for (uint i = 0; i < L->n; i++) {

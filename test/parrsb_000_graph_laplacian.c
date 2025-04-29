@@ -52,7 +52,7 @@ static int test_brick_10(const element_info ei, struct crystal *cr,
   const struct comm *c = &(cr->comm);
 
   graph_t g;
-  if (c->id < c->np / 2)
+  if (c->id >= c->np / 2)
     graph_init_brick(&g, 1, c->c);
   else
     graph_init_brick(&g, 0, c->c);
