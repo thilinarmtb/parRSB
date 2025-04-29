@@ -12,7 +12,6 @@ struct laplacian {
 /*
  * Laplacian - CSR based implementation.
  */
-
 struct csr_laplacian {
   uint n;
   uint *di, *off;
@@ -61,20 +60,20 @@ static void csr_init(laplacian l, struct array *nlist, const struct comm *c,
   L->wrk = tcalloc(scalar, nnz);
 
   buffer_reserve(bfr, nnz * sizeof(slong));
-
   slong *ids = (slong *)bfr->ptr;
   uint n = 0;
   rn = 0;
   while (n < nlist->n) {
     uint i = n;
-    while (i < n && pe[n].u == pe[i].u && (pe[i].v < pe[i].u))
+    while ((i < nlist->n) && (pe[n].u == pe[i].u) && (pe[i].v < pe[i].u))
       L->v[i] = -1, ids[i] = -pe[i].v, i++;
 
-    uint d = L->di[rn] = i;
+    uint d = L->di[rn++] = i;
 
-    while (i < n && pe[n].u == pe[i].u) L->v[i + 1] = -1, ids[i + 1] = -pe[i].v;
+    while ((i < nlist->n) && (pe[n].u == pe[i].u))
+      L->v[i + 1] = -1, ids[i + 1] = -pe[i].v, i++;
 
-    ids[d] = pe[n].u, L->v[d] = i - n, L->off[++rn] = n = i;
+    ids[d] = pe[n].u, L->v[d] = i - n, L->off[rn] = i + 1, n = i;
   }
 
   L->gsh = gs_setup(ids, nnz, c, 0, gs_crystal_router, 0);
