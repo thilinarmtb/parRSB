@@ -1,29 +1,78 @@
 #include "parrsb_test.h"
 
-static int test_brick_00(struct crystal *cr, buffer *bfr) {
+static int test_brick_00(const element_info ei, struct crystal *cr,
+                         buffer *bfr) {
   const struct comm *c = &(cr->comm);
 
   graph_t g;
-  unsigned n = 1;
-  graph_init_brick(&g, n, c->c);
-
-  element_info ei;
-  graph_element_info_init(&ei);
+  graph_init_brick(&g, 0, c->c);
 
   struct array nlist;
   graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
 
   laplacian l;
   laplacian_init(&l, &nlist, ei, c, bfr);
-  scalar u = 1, v = 1;
-  laplacian_op(&v, l, &u, bfr);
-  laplacian_free(&l);
 
+  uint size = laplacian_size(l);
+  laplacian_op(NULL, l, NULL, bfr);
+
+  laplacian_free(&l);
   graph_restore(NULL, &nlist, cr, bfr);
-  graph_element_info_free(&ei);
   graph_free(&g);
 
-  parrsb_test_error(fabs(v) > PARRSB_TEST_EPS, c);
+  parrsb_test(size == 0, c);
+}
+
+static int test_brick_05(const element_info ei, struct crystal *cr,
+                         buffer *bfr) {
+  const struct comm *c = &(cr->comm);
+
+  graph_t g;
+  graph_init_brick(&g, 1, c->c);
+
+  struct array nlist;
+  graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
+
+  laplacian l;
+  laplacian_init(&l, &nlist, ei, c, bfr);
+
+  uint size = laplacian_size(l);
+  scalar u = 1, v = 1;
+  laplacian_op(&v, l, &u, bfr);
+
+  laplacian_free(&l);
+  graph_restore(NULL, &nlist, cr, bfr);
+  graph_free(&g);
+
+  parrsb_test(size == 0 || fabs(v) < PARRSB_TEST_EPS, c);
+}
+
+static int test_brick_10(const element_info ei, struct crystal *cr,
+                         buffer *bfr) {
+  const struct comm *c = &(cr->comm);
+
+  graph_t g;
+  if (c->id < c->np / 2)
+    graph_init_brick(&g, 1, c->c);
+  else
+    graph_init_brick(&g, 0, c->c);
+
+  struct array nlist;
+  graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
+
+  laplacian l;
+  laplacian_init(&l, &nlist, ei, c, bfr);
+  printf("proc %02d done\n", c->id), fflush(stdout);
+
+  uint size = laplacian_size(l);
+  scalar u = 1, v = 1;
+  laplacian_op(&v, l, &u, bfr);
+
+  laplacian_free(&l);
+  graph_restore(NULL, &nlist, cr, bfr);
+  graph_free(&g);
+
+  parrsb_test(size == 0 || fabs(v) < PARRSB_TEST_EPS, c);
 }
 
 int main(int argc, char *argv[]) {
@@ -39,9 +88,15 @@ int main(int argc, char *argv[]) {
   buffer bfr;
   buffer_init(&bfr, 1024);
 
-  int err = 0;
-  err |= test_brick_00(&cr, &bfr);
+  element_info ei;
+  graph_element_info_init(&ei);
 
+  int err = 0;
+  err |= test_brick_00(ei, &cr, &bfr);
+  err |= test_brick_05(ei, &cr, &bfr);
+  err |= test_brick_10(ei, &cr, &bfr);
+
+  graph_element_info_free(&ei);
   buffer_free(&bfr);
   crystal_free(&cr);
   comm_free(&c);

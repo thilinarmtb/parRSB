@@ -8,9 +8,9 @@
 #define PARRSB_TEST_TOL 1e-12
 #define PARRSB_TEST_EPS 1e-15
 
-#define parrsb_test_error(cond, c)                                             \
+#define parrsb_test(cond, c)                                                   \
   do {                                                                         \
-    sint err = (cond);                                                         \
+    sint err = !(cond);                                                        \
     sint wrk;                                                                  \
     comm_allreduce(c, gs_int, gs_add, &err, 1, &wrk);                          \
     return err;                                                                \
