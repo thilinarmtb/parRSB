@@ -142,11 +142,13 @@ static void mesh_load_balance(struct array *elist, uint nel,
   free(pe);
 }
 
-static void mesh_restore(int *part, struct crystal *cr, struct array *elist,
-                         size_t usize, buffer *bfr) {
+static void mesh_restore(int *part, struct array *elist, size_t usize,
+                         struct crystal *cr, buffer *bfr) {
   sarray_transfer_(elist, usize, offsetof(struct rcb_element, origin), 1, cr);
-  uint nel = elist->n;
 
+  if (!part) goto free_array;
+
+  uint nel = elist->n;
   if (usize == sizeof(struct rsb_element))
     sarray_sort(struct rsb_element, elist->ptr, nel, globalId, 1, bfr);
   else if (usize == sizeof(struct rcb_element))
@@ -158,6 +160,7 @@ static void mesh_restore(int *part, struct crystal *cr, struct array *elist,
     part[e] = element->origin;
   }
 
+free_array:
   array_free(elist);
 }
 
@@ -201,7 +204,7 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   comm_free(&ca);
 
   parrsb_print(c, verbose, "parrsb_part_mesh_v0: restore original input");
-  mesh_restore(part, cr, &elist, ei->size, bfr);
+  mesh_restore(part, &elist, ei->size, cr, bfr);
 
   free(ei);
 }
