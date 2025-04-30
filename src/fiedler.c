@@ -23,16 +23,16 @@ inline static void ortho(scalar *q, uint lelt, ulong n, const struct comm *c) {
 }
 
 static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint n,
-                       ulong nelg, int niter, double tol, scalar *f,
-                       laplacian gl, const struct comm *c) {
+                       ulong ng, int niter, double tol, const scalar *f,
+                       laplacian l, const struct comm *c) {
   scalar *r = tcalloc(scalar, 3 * n);
   scalar *p = r + n;
   scalar *w = p + n;
 
   for (uint i = 0; i < n; i++) r[i] = f[i];
-  ortho(r, n, nelg, c);
+  ortho(r, n, ng, c);
 
-  scalar rtz1 = 1, pap = 0, alpha, beta, rtz2, pap_old;
+  scalar rtz1 = 1, pap = 0, alpha, beta, rtz2, pap0;
   scalar rtr = dot(r, r, n), buf[2];
   comm_allreduce(c, gs_scalar, gs_add, &rtr, 1, buf);
   scalar rnorm = sqrt(rtr), rtol = rnorm * tol;
@@ -49,36 +49,29 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint n,
     beta = rtz1 / rtz2;
     if (iter == 0) beta = 0.0;
 
-    // add2s1(p,r,beta,n)
     for (uint i = 0; i < n; i++) p[i] = beta * p[i] + r[i];
+    ortho(p, n, ng, c);
 
-    scalar pp = dot(p, p, n);
-    comm_allreduce(c, gs_scalar, gs_add, &pp, 1, buf);
+    laplacian_op(w, l, p);
 
-    // vec_ortho(c, p, nelg);
-    ortho(p, n, nelg, c);
-
-    laplacian_op(w, gl, p);
-
-    pap_old = pap, pap = dot(w, p, n);
+    pap0 = pap;
+    pap = dot(w, p, n);
     comm_allreduce(c, gs_scalar, gs_add, &pap, 1, buf);
 
     alpha = rtz1 / pap;
-    // vec_axpby(r, r, 1.0, w, -1.0 * alpha);
     for (uint i = 0; i < n; i++) r[i] = r[i] - alpha * w[i];
 
     rtr = dot(r, r, n);
     comm_allreduce(c, gs_scalar, gs_add, &rtr, 1, buf);
     rnorm = sqrt(rtr), rni = 1.0 / rnorm;
 
-    // vec_scale(rr[iter + 1], r, rni);
     for (uint i = 0; i < n; i++) rr[(iter + 1) * n + i] = r[i] * rni;
 
     if (iter == 0) {
       diag[iter] = pap / rtz1;
     } else {
-      diag[iter] = (beta * beta * pap_old + pap) / rtz1;
-      upper[iter - 1] = -beta * pap_old / sqrt(rtz2 * rtz1);
+      diag[iter] = (beta * beta * pap0 + pap) / rtz1;
+      upper[iter - 1] = -beta * pap0 / sqrt(rtz2 * rtz1);
     }
 
     if (rnorm < rtol) {
