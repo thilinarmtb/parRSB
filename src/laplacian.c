@@ -82,11 +82,11 @@ static uint csr_size(laplacian l) {
   return L->n;
 }
 
-static void csr_op(scalar *v, const laplacian l, scalar *u, buffer *bfr) {
+static void csr_op(scalar *v, const laplacian l, scalar *u) {
   struct csr_laplacian *L = (struct csr_laplacian *)l->data;
 
   for (uint i = 0; i < L->n; i++) L->wrk[L->di[i]] = u[i];
-  gs(L->wrk, gs_scalar, gs_add, 0, L->gsh, bfr);
+  gs(L->wrk, gs_scalar, gs_add, 0, L->gsh, 0);
 
   for (uint i = 0; i < L->n; i++) {
     scalar s = 0;
@@ -133,7 +133,7 @@ static void gs_weighted_init(laplacian l, const struct array *elist,
   L->wrk = tcalloc(scalar, npts);
   for (uint i = 0; i < ne; i++)
     for (uint j = 0; j < nv; j++) L->wrk[nv * i + j] = 1.0;
-  gs(L->wrk, gs_scalar, gs_add, 0, L->gsh, bfr);
+  gs(L->wrk, gs_scalar, gs_add, 0, L->gsh, 0);
 
   L->diag = tcalloc(scalar, ne);
   for (uint i = 0; i < ne; i++) {
@@ -147,7 +147,7 @@ static uint gs_weighted_size(laplacian l) {
   return L->n;
 }
 
-static void gs_weighted_op(scalar *v, laplacian l, scalar *u, buffer *bfr) {
+static void gs_weighted_op(scalar *v, laplacian l, scalar *u) {
   unsigned nv = l->nv;
 
   struct gs_laplacian *L = l->data;
@@ -155,7 +155,7 @@ static void gs_weighted_op(scalar *v, laplacian l, scalar *u, buffer *bfr) {
   for (uint i = 0; i < ne; i++)
     for (uint j = 0; j < nv; j++) L->wrk[nv * i + j] = u[i];
 
-  gs(L->wrk, gs_scalar, gs_add, 0, L->gsh, bfr);
+  gs(L->wrk, gs_scalar, gs_add, 0, L->gsh, 0);
 
   for (uint i = 0; i < ne; i++) {
     v[i] = L->diag[i] * u[i];
@@ -200,12 +200,12 @@ uint laplacian_size(laplacian l) {
   return 0;
 }
 
-int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *buf) {
+int laplacian_op(scalar *v, laplacian l, scalar *u) {
   if (!l || !l->data) return 1;
 
   switch (l->type) {
-  case CSR: csr_op(v, l, u, buf); break;
-  case GS: gs_weighted_op(v, l, u, buf); break;
+  case CSR: csr_op(v, l, u); break;
+  case GS: gs_weighted_op(v, l, u); break;
   default: break;
   }
 

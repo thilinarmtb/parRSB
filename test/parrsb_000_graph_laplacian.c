@@ -14,7 +14,7 @@ static int test_brick_00(const element_info ei, struct crystal *cr,
   laplacian_init(&l, &nlist, ei, c, bfr);
 
   uint size = laplacian_size(l);
-  laplacian_op(NULL, l, NULL, bfr);
+  laplacian_op(NULL, l, NULL);
 
   laplacian_free(&l);
   graph_restore(NULL, &nlist, cr, bfr);
@@ -38,7 +38,7 @@ static int test_brick_05(const element_info ei, struct crystal *cr,
 
   uint size = laplacian_size(l);
   scalar u = 1, v = 1;
-  laplacian_op(&v, l, &u, bfr);
+  laplacian_op(&v, l, &u);
 
   laplacian_free(&l);
   graph_restore(NULL, &nlist, cr, bfr);
@@ -65,7 +65,7 @@ static int test_brick_10(const element_info ei, struct crystal *cr,
 
   uint size = laplacian_size(l);
   scalar u = 1, v = 1;
-  laplacian_op(&v, l, &u, bfr);
+  laplacian_op(&v, l, &u);
 
   laplacian_free(&l);
   graph_restore(NULL, &nlist, cr, bfr);
@@ -89,7 +89,7 @@ static int test_brick_15(const element_info ei, struct crystal *cr,
 
   uint size = laplacian_size(l);
   scalar u = 1, v = 1;
-  laplacian_op(&v, l, &u, bfr);
+  laplacian_op(&v, l, &u);
 
   laplacian_free(&l);
   graph_restore(NULL, &nlist, cr, bfr);
@@ -115,7 +115,7 @@ static int test_brick_20(const element_info ei, struct crystal *cr,
   scalar *u = tcalloc(scalar, size);
   scalar *v = tcalloc(scalar, size);
   for (uint i = 0; i < size; i++) u[i] = 1;
-  laplacian_op(v, l, u, bfr);
+  laplacian_op(v, l, u);
 
   scalar normv = norm2(v, size);
 

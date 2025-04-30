@@ -24,7 +24,7 @@ inline static void ortho(scalar *q, uint lelt, ulong n, const struct comm *c) {
 
 static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint n,
                        ulong nelg, int niter, double tol, scalar *f,
-                       laplacian gl, const struct comm *gsc, buffer *bfr) {
+                       laplacian gl, const struct comm *c) {
   scalar *r = tcalloc(scalar, 3 * n);
   scalar *p = r + n;
   scalar *w = p + n;
@@ -111,7 +111,7 @@ static int lanczos(scalar *fiedler, laplacian l, scalar *initv,
   for (; (iter == miter) && (ipass < (uint)opts->rsb_max_passes); ipass++) {
     metric_tic(c, RSB_LANCZOS);
     iter = lanczos_aux(alpha, beta, rr, n, nelg, miter, opts->rsb_tol, initv, l,
-                       c, bfr);
+                       c);
     metric_toc(c, RSB_LANCZOS);
 
     // Use TQLI and find the minimum eigenvalue and associated vector

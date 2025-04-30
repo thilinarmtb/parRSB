@@ -149,7 +149,7 @@ INTERN int laplacian_init(laplacian *l, struct array *elements,
                           const element_info ei, const struct comm *c,
                           buffer *bfr);
 INTERN uint laplacian_size(laplacian l);
-INTERN int laplacian_op(scalar *v, laplacian l, scalar *u, buffer *bfr);
+INTERN int laplacian_op(scalar *v, laplacian l, scalar *u);
 INTERN int laplacian_free(laplacian *l);
 
 /*
