@@ -11,7 +11,7 @@ static int test_brick_00(const element_info ei, struct crystal *cr,
   graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
 
   laplacian l;
-  laplacian_init(&l, &nlist, ei, c, bfr);
+  laplacian_init(&l, &nlist, ei, c);
 
   uint size = laplacian_size(l);
   laplacian_op(NULL, l, NULL);
@@ -34,7 +34,7 @@ static int test_brick_05(const element_info ei, struct crystal *cr,
   graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
 
   laplacian l;
-  laplacian_init(&l, &nlist, ei, c, bfr);
+  laplacian_init(&l, &nlist, ei, c);
 
   uint size = laplacian_size(l);
   scalar u = 1, v = 1;
@@ -61,7 +61,7 @@ static int test_brick_10(const element_info ei, struct crystal *cr,
   graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
 
   laplacian l;
-  laplacian_init(&l, &nlist, ei, c, bfr);
+  laplacian_init(&l, &nlist, ei, c);
 
   uint size = laplacian_size(l);
   scalar u = 1, v = 1;
@@ -85,7 +85,7 @@ static int test_brick_15(const element_info ei, struct crystal *cr,
   graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
 
   laplacian l;
-  laplacian_init(&l, &nlist, ei, c, bfr);
+  laplacian_init(&l, &nlist, ei, c);
 
   uint size = laplacian_size(l);
   scalar u = 1, v = 1;
@@ -109,7 +109,7 @@ static int test_brick_20(const element_info ei, struct crystal *cr,
   graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
 
   laplacian l;
-  laplacian_init(&l, &nlist, ei, c, bfr);
+  laplacian_init(&l, &nlist, ei, c);
 
   uint size = laplacian_size(l);
   scalar *u = tcalloc(scalar, size);

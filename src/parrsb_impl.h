@@ -146,8 +146,7 @@ INTERN int rib(struct array *elements, const element_info ei,
 typedef struct laplacian *laplacian;
 
 INTERN int laplacian_init(laplacian *l, struct array *elements,
-                          const element_info ei, const struct comm *c,
-                          buffer *bfr);
+                          const element_info ei, const struct comm *c);
 INTERN uint laplacian_size(laplacian l);
 INTERN int laplacian_op(scalar *v, laplacian l, scalar *u);
 INTERN int laplacian_free(laplacian *l);
@@ -171,7 +170,7 @@ INTERN void rsb(struct array *elements, const element_info ei,
                 buffer *bfr);
 
 INTERN int fiedler(scalar *fiedler, laplacian l, const parrsb_options opts,
-                   const struct comm *gsc, buffer *buf);
+                   const struct comm *c);
 
 /*
  * Find the number of disconnected components in the graph.

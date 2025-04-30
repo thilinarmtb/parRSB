@@ -95,8 +95,8 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint n,
 }
 
 static int lanczos(scalar *fiedler, laplacian l, scalar *initv,
-                   const struct comm *c, const parrsb_options opts, slong nelg,
-                   buffer *bfr) {
+                   const struct comm *c, const parrsb_options opts,
+                   slong nelg) {
   uint miter = opts->rsb_max_iter;
   if (miter > nelg) miter = nelg;
   uint n = laplacian_size(l);
@@ -144,7 +144,7 @@ static int lanczos(scalar *fiedler, laplacian l, scalar *initv,
 }
 
 int fiedler(scalar *f, laplacian l, const parrsb_options opts,
-            const struct comm *c, buffer *bfr) {
+            const struct comm *c) {
   // Return if the number of processes is equal to 1 or rsb algorithm is set to
   // something other than lanczos.
   if (c->np == 1 || opts->rsb_algo > 0) return 1;
@@ -170,7 +170,7 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
 
   int iter = 0;
   switch (opts->rsb_algo) {
-  case 0: iter = lanczos(f, l, vi, c, opts, ng, bfr); break;
+  case 0: iter = lanczos(f, l, vi, c, opts, ng); break;
   default: break;
   }
   metric_acc(RSB_FIEDLER_CALC_NITER, iter);

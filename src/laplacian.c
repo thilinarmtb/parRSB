@@ -39,8 +39,7 @@ static void filter_entries(struct array *nlist, const struct comm *c) {
   nlist->n = n;
 }
 
-static void csr_init(laplacian l, struct array *nlist, const struct comm *c,
-                     buffer *bfr) {
+static void csr_init(laplacian l, struct array *nlist, const struct comm *c) {
   filter_entries(nlist, c);
 
   const graph_element pe = (const graph_element)nlist->ptr;
@@ -57,8 +56,7 @@ static void csr_init(laplacian l, struct array *nlist, const struct comm *c,
   L->v = tcalloc(scalar, nnz);
   L->wrk = tcalloc(scalar, nnz);
 
-  buffer_reserve(bfr, nnz * sizeof(slong));
-  slong *ids = (slong *)bfr->ptr;
+  slong *ids = tcalloc(slong, nnz);
   uint n = 0;
   rn = 0;
   while (n < nlist->n) {
@@ -75,6 +73,7 @@ static void csr_init(laplacian l, struct array *nlist, const struct comm *c,
   }
 
   L->gsh = gs_setup(ids, nnz, c, 0, gs_crystal_router, 0);
+  free(ids);
 }
 
 static uint csr_size(laplacian l) {
@@ -114,21 +113,20 @@ struct gs_laplacian {
 };
 
 static void gs_weighted_init(laplacian l, const struct array *elist,
-                             const struct comm *c, buffer *bfr) {
+                             const struct comm *c) {
   uint ne = elist->n;
   uint nv = l->nv;
   uint npts = nv * ne;
 
-  buffer_reserve(bfr, npts * sizeof(slong));
-
   const struct rsb_element *pe = (const struct rsb_element *)elist->ptr;
-  slong *vertices = (slong *)bfr->ptr;
+  slong *vertices = tcalloc(slong, npts);
   for (uint i = 0; i < ne; i++)
     for (uint j = 0; j < nv; j++) vertices[i * nv + j] = pe[i].vertices[j];
 
   struct gs_laplacian *L = l->data = tcalloc(struct gs_laplacian, 1);
   L->n = ne;
   L->gsh = gs_setup(vertices, npts, c, 0, gs_crystal_router, 0);
+  free(vertices);
 
   L->wrk = tcalloc(scalar, npts);
   for (uint i = 0; i < ne; i++)
@@ -174,14 +172,14 @@ static void gs_weighted_free(laplacian l) {
  * Laplacian - user API.
  */
 int laplacian_init(laplacian *l_, struct array *arr, const element_info ei,
-                   const struct comm *c, buffer *buf) {
+                   const struct comm *c) {
   laplacian l = *l_ = tcalloc(struct laplacian, 1);
   l->nv = ei->nv;
   l->type = (l->nv > 0) ? GS : CSR;
 
   switch (l->type) {
-  case CSR: csr_init(l, arr, c, buf); break;
-  case GS: gs_weighted_init(l, arr, c, buf); break;
+  case CSR: csr_init(l, arr, c); break;
+  case GS: gs_weighted_init(l, arr, c); break;
   default: break;
   }
 
