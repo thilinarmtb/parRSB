@@ -771,7 +771,7 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
 
 int parrsb_part_mesh(int *part, const long long *const vtx,
                      const double *const xyz, const int *const tag,
-                     const int nel, const int nv, const parrsb_options options,
+                     const int ne, const int nv, const parrsb_options options,
                      MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
@@ -815,13 +815,13 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
     MPI_Abort(c.c, EXIT_FAILURE);
   }
 
-  slong nelg = nel, wrk;
-  comm_allreduce(&c, gs_long, gs_add, &nelg, 1, &wrk);
+  slong ng = ne, wrk;
+  comm_allreduce(&c, gs_long, gs_add, &ng, 1, &wrk);
   parrsb_print(&c, verbose,
-               "parRSB: # elements = %lld, # vertices/element = %d", nelg, nv);
+               "parRSB: # elements = %lld, # vertices/element = %d", ng, nv);
 
   buffer bfr;
-  buffer_init(&bfr, (nel + 1) * 72);
+  buffer_init(&bfr, (ne + 1) * 72);
 
   struct crystal cr;
   crystal_init(&cr, &c);
@@ -832,16 +832,15 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
   const double t = comm_time();
 
   if (options->tagged == 1)
-    parrsb_part_mesh_v1(part, vtx, xyz, tag, nel, nv, options, &c, &cr, &bfr);
+    parrsb_part_mesh_v1(part, vtx, xyz, tag, ne, nv, options, &c, &cr, &bfr);
   if (options->tagged == 0)
-    parrsb_part_mesh_v0(part, vtx, xyz, nel, nv, options, &c, &cr, &bfr);
+    parrsb_part_mesh_v0(part, vtx, xyz, ne, nv, options, &c, &cr, &bfr);
 
   parrsb_print(&c, verbose, "par%s finished in %g seconds.",
                ALGO[options->partitioner], comm_time() - t);
-
   metric_rsb_print(&c, options->profile_level);
-  metric_finalize();
 
+  metric_finalize();
   crystal_free(&cr);
   buffer_free(&bfr);
   comm_free(&c);
