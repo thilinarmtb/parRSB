@@ -39,10 +39,40 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 // Macro for finding max of two numbers.
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+
+/*
+ * Compile time constants.
+ */
 // Maximum dimension of the mesh.
 #define MAXDIM 3
 // Maximum number of vertices per element in the mesh.
 #define MAXNV 8
+// Maximum depth of the call stack for arena.
+#define MAXDEPTH 32
+
+/*
+ * Arena implementation with gslib buffer.
+ */
+struct arena {
+  buffer bfr;
+  uint num_offset;
+  size_t previous_offset[MAXDEPTH];
+  size_t current_offset;
+};
+
+typedef struct arena *arena_t;
+
+INTERN void arena_init(arena_t *arena, size_t size);
+
+INTERN void arena_start(arena_t arena);
+
+INTERN void *arena_alloc(arena_t arena, size_t size);
+
+#define arena_talloc(T, size) (T *)arean_alloc(arena, sizeof(T) * (size))
+
+INTERN void arena_stop(arena_t arena);
+
+INTERN void arena_free(arena_t *arena);
 
 /*
  * parRSB configuration options.
