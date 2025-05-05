@@ -198,7 +198,7 @@ INTERN void rsb(struct array *elements, const element_info ei,
                 buffer *bfr);
 
 INTERN int fiedler(scalar *fiedler, laplacian l, const parrsb_options opts,
-                   const struct comm *c);
+                   const struct comm *c, arena_t arena);
 
 /*
  * Find the number of disconnected components in the graph.

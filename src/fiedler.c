@@ -5,10 +5,17 @@
 #include <math.h>
 #include <time.h>
 
-inline static scalar dot(scalar *y, scalar *x, uint n) {
+inline static scalar dot(const scalar *y, const scalar *x, uint n) {
   scalar result = 0.0;
   for (uint i = 0; i < n; i++) result += x[i] * y[i];
   return result;
+}
+
+inline static scalar norm2(const scalar *r, uint n, const struct comm *c) {
+  scalar wrk;
+  scalar norm = dot(r, r, n);
+  comm_allreduce(c, gs_scalar, gs_add, &norm, 1, &wrk);
+  return sqrt(norm);
 }
 
 inline static void ortho(scalar *q, uint lelt, ulong n, const struct comm *c) {
@@ -136,45 +143,43 @@ static int lanczos(scalar *fiedler, laplacian l, scalar *initv,
   return (ipass - 1) * miter + iter;
 }
 
-int fiedler(scalar *f, laplacian l, const parrsb_options opts,
-            const struct comm *c) {
-  // Return if the number of processes is equal to 1 or rsb algorithm is set to
-  // something other than lanczos.
-  if (c->np == 1 || opts->rsb_algo > 0) return 1;
-
-  metric_tic(c, RSB_FIEDLER);
-
-  uint n = laplacian_size(l);
+static slong set_rhs(scalar *r, uint n, const struct comm *c) {
   slong out[2][1], wrk[2][1], in = n;
   comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
   slong start = out[0][0], ng = out[1][0];
 
-  scalar *vi = tcalloc(scalar, n);
   for (uint i = 0; i < n; i++) {
-    vi[i] = start + i + 1.0;
-    if (start + i < ng / 2) vi[i] += 1000 * ng;
+    r[i] = start + i + 1.0;
+    if ((start + i) < ng / 2) r[i] += 1e3 * ng;
   }
 
-  ortho(vi, n, ng, c);
-  scalar norm = dot(vi, vi, n);
-  comm_allreduce(c, gs_scalar, gs_add, &norm, 1, wrk);
-  scalar normi = 1.0 / sqrt(norm);
-  for (uint i = 0; i < n; i++) vi[i] *= normi;
+  ortho(r, n, ng, c);
 
-  int iter = 0;
-  switch (opts->rsb_algo) {
-  case 0: iter = lanczos(f, l, vi, c, opts, ng); break;
-  default: break;
-  }
+  scalar normi = 1.0 / norm2(r, n, c);
+  for (uint i = 0; i < n; i++) r[i] *= normi;
+
+  return ng;
+}
+
+int fiedler(scalar *f, laplacian l, const parrsb_options opts,
+            const struct comm *c, arena_t arena) {
+  // Return if the number of processes is equal to 1.
+  if (c->np == 1) return 0;
+  // Or if rsb algorithm is set to something other than lanczos.
+  if (opts->rsb_algo > 0) return 1;
+
+  metric_tic(c, RSB_FIEDLER);
+  uint n = laplacian_size(l);
+  scalar *r = arena_tstart(scalar, arena, n);
+  slong ng = set_rhs(r, n, c);
+
+  int iter = lanczos(f, l, r, c, opts, ng);
   metric_acc(RSB_FIEDLER_CALC_NITER, iter);
 
-  norm = dot(f, f, n);
-  comm_allreduce(c, gs_scalar, gs_add, &norm, 1, wrk);
-  normi = 1.0 / sqrt(norm);
+  scalar normi = 1.0 / norm2(f, n, c);
   for (uint i = 0; i < n; i++) f[i] *= normi;
 
-  free(vi);
-
+  arena_stop(arena);
   metric_toc(c, RSB_FIEDLER);
 
   return 0;
