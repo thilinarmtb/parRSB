@@ -106,11 +106,14 @@ static int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
   uint miter = opts->rsb_max_iter;
   if (miter > ng) miter = ng;
 
-  scalar *alpha = tcalloc(scalar, miter);
-  scalar *beta = tcalloc(scalar, miter - 1);
-  scalar *rr = tcalloc(scalar, (miter + 1) * n);
-  scalar *evecs = tcalloc(scalar, miter * miter);
-  scalar *evals = tcalloc(scalar, miter);
+  size_t capacity = 3 * miter - 1 + (miter + 1) * n + miter * miter;
+  arena_tstart(scalar, arena, capacity);
+
+  scalar *alpha = arena_talloc(scalar, arena, miter);
+  scalar *beta = arena_talloc(scalar, arena, miter - 1);
+  scalar *rr = arena_talloc(scalar, arena, (miter + 1) * n);
+  scalar *evals = arena_talloc(scalar, arena, miter);
+  scalar *evecs = arena_talloc(scalar, arena, miter * miter);
 
   uint iter = miter, ipass = 0;
   for (; (iter == miter) && (ipass < (uint)opts->rsb_max_passes); ipass++) {
@@ -142,8 +145,7 @@ static int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
     metric_toc(c, RSB_LANCZOS_TQLI);
   }
 
-  free(alpha), free(beta), free(rr), free(evecs), free(evals);
-
+  arena_stop(arena);
   return (ipass - 1) * miter + iter;
 }
 
