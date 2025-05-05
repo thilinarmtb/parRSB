@@ -29,9 +29,13 @@ inline static void ortho(scalar *q, uint lelt, ulong n, const struct comm *c) {
   for (uint i = 0; i < lelt; i++) q[i] -= sum;
 }
 
-static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint n,
-                       ulong ng, int niter, double tol, const scalar *f,
-                       laplacian l, const struct comm *c) {
+static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, laplacian l,
+                       const scalar *f, int niter, double tol,
+                       const struct comm *c) {
+  uint n = laplacian_size(l);
+  slong ng = n, wrk;
+  comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
+
   scalar *r = tcalloc(scalar, 3 * n);
   scalar *p = r + n;
   scalar *w = p + n;
@@ -94,15 +98,17 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, uint n,
   return iter;
 }
 
-static int lanczos(scalar *fiedler, laplacian l, scalar *initv,
-                   const struct comm *c, const parrsb_options opts,
-                   slong nelg) {
-  uint miter = opts->rsb_max_iter;
-  if (miter > nelg) miter = nelg;
+static int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
+                   const parrsb_options opts) {
   uint n = laplacian_size(l);
+  slong ng = n, wrk;
+  comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
 
-  scalar *alpha = tcalloc(scalar, 2 * miter - 1);
-  scalar *beta = alpha + miter;
+  uint miter = opts->rsb_max_iter;
+  if (miter > ng) miter = ng;
+
+  scalar *alpha = tcalloc(scalar, miter);
+  scalar *beta = tcalloc(scalar, miter - 1);
   scalar *rr = tcalloc(scalar, (miter + 1) * n);
   scalar *evecs = tcalloc(scalar, miter * miter);
   scalar *evals = tcalloc(scalar, miter);
@@ -110,8 +116,7 @@ static int lanczos(scalar *fiedler, laplacian l, scalar *initv,
   uint iter = miter, ipass = 0;
   for (; (iter == miter) && (ipass < (uint)opts->rsb_max_passes); ipass++) {
     metric_tic(c, RSB_LANCZOS);
-    iter = lanczos_aux(alpha, beta, rr, n, nelg, miter, opts->rsb_tol, initv, l,
-                       c);
+    iter = lanczos_aux(alpha, beta, rr, l, vi, miter, opts->rsb_tol, c);
     metric_toc(c, RSB_LANCZOS);
 
     // Use TQLI and find the minimum eigenvalue and associated vector
@@ -128,22 +133,22 @@ static int lanczos(scalar *fiedler, laplacian l, scalar *initv,
     }
 
     for (uint i = 0; i < n; i++) {
-      fiedler[i] = 0.0;
+      f[i] = 0.0;
       for (uint j = 0; j < iter; j++)
-        fiedler[i] += rr[j * n + i] * evecs[eval_min_idx * iter + j];
+        f[i] += rr[j * n + i] * evecs[eval_min_idx * iter + j];
     }
-    ortho(fiedler, n, nelg, c);
-    for (uint i = 0; i < n; i++) initv[i] = fiedler[i];
+    ortho(f, n, ng, c);
+    for (uint i = 0; i < n; i++) vi[i] = f[i];
 
     metric_toc(c, RSB_LANCZOS_TQLI);
   }
 
-  free(alpha), free(rr), free(evecs), free(evals);
+  free(alpha), free(beta), free(rr), free(evecs), free(evals);
 
   return (ipass - 1) * miter + iter;
 }
 
-static slong set_rhs(scalar *r, uint n, const struct comm *c) {
+static void set_rhs(scalar *r, uint n, const struct comm *c) {
   slong out[2][1], wrk[2][1], in = n;
   comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
   slong start = out[0][0], ng = out[1][0];
@@ -157,8 +162,6 @@ static slong set_rhs(scalar *r, uint n, const struct comm *c) {
 
   scalar normi = 1.0 / norm2(r, n, c);
   for (uint i = 0; i < n; i++) r[i] *= normi;
-
-  return ng;
 }
 
 int fiedler(scalar *f, laplacian l, const parrsb_options opts,
@@ -171,9 +174,9 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
   metric_tic(c, RSB_FIEDLER);
   uint n = laplacian_size(l);
   scalar *r = arena_tstart(scalar, arena, n);
-  slong ng = set_rhs(r, n, c);
+  set_rhs(r, n, c);
 
-  int iter = lanczos(f, l, r, c, opts, ng);
+  int iter = lanczos(f, l, r, c, opts);
   metric_acc(RSB_FIEDLER_CALC_NITER, iter);
 
   scalar normi = 1.0 / norm2(f, n, c);
