@@ -172,8 +172,12 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
   // Or if rsb algorithm is set to something other than lanczos.
   if (opts->rsb_algo > 0) return 1;
 
-  metric_tic(c, RSB_FIEDLER);
   uint n = laplacian_size(l);
+  slong ng = n, wrk;
+  comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
+  if (ng == 0) return 0;
+
+  metric_tic(c, RSB_FIEDLER);
   scalar *r = arena_tstart(scalar, arena, n);
   set_rhs(r, n, c);
 
@@ -185,6 +189,5 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
 
   arena_stop(arena);
   metric_toc(c, RSB_FIEDLER);
-
   return 0;
 }
