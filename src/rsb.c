@@ -348,9 +348,11 @@ static void check_partition(const struct comm *gc, const parrsb_options opts) {
 
 void rsb(struct array *elements, const element_info ei,
          const parrsb_options options, const struct comm *comms, buffer *bfr) {
-  const struct comm *gc = &comms[0];
+  arena_t arena;
+  arena_init(&arena);
 
-  scalar *f = tcalloc(scalar, elements->n + 1);
+  scalar *f = arena_tstart(scalar, arena, elements->n + 1);
+  const struct comm *gc = &comms[0];
   const uint levels = options->levels;
   for (uint level = 0; level < levels; level++) {
     struct comm lc;
@@ -379,7 +381,7 @@ void rsb(struct array *elements, const element_info ei,
     comm_free(&lc);
   }
 
-  free(f);
-
   check_partition(gc, options);
+  arena_stop(arena);
+  arena_free(&arena);
 }
