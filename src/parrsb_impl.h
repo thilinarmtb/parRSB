@@ -54,21 +54,19 @@
  * Arena implementation with gslib buffer.
  */
 struct arena {
-  buffer bfr;
-  uint num_offset;
-  size_t previous_offset[MAXDEPTH];
-  size_t current_offset;
+  uint n;
+  buffer bfr[MAXDEPTH];
 };
 
 typedef struct arena *arena_t;
 
-INTERN void arena_init(arena_t *arena, size_t size);
+INTERN void arena_init(arena_t *arena);
 
-INTERN void arena_start(arena_t arena);
+INTERN void *arena_start(arena_t arena, size_t capacity);
+#define arena_tstart(T, arena, n) (T *)arena_start(arena, sizeof(T) * (n));
 
 INTERN void *arena_alloc(arena_t arena, size_t size);
-
-#define arena_talloc(T, size) (T *)arean_alloc(arena, sizeof(T) * (size))
+#define arena_talloc(T, arena, n) (T *)arena_alloc(arena, sizeof(T) * (n))
 
 INTERN void arena_stop(arena_t arena);
 
