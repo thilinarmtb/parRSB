@@ -31,14 +31,15 @@ inline static void ortho(scalar *q, uint lelt, ulong n, const struct comm *c) {
 
 static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, laplacian l,
                        const scalar *f, int niter, double tol,
-                       const struct comm *c) {
+                       const struct comm *c, arena_t arena) {
   uint n = laplacian_size(l);
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
 
-  scalar *r = tcalloc(scalar, 3 * n);
-  scalar *p = r + n;
-  scalar *w = p + n;
+  arena_tstart(scalar, arena, 3 * n);
+  scalar *r = arena_talloc(scalar, arena, n);
+  scalar *p = arena_talloc(scalar, arena, n);
+  scalar *w = arena_talloc(scalar, arena, n);
 
   for (uint i = 0; i < n; i++) r[i] = f[i];
   ortho(r, n, ng, c);
@@ -90,16 +91,14 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, laplacian l,
       break;
     }
   }
-
   metric_set(TOL_FNL, rnorm);
 
-  free(r);
-
+  arena_stop(arena);
   return iter;
 }
 
 static int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
-                   const parrsb_options opts) {
+                   const parrsb_options opts, arena_t arena) {
   uint n = laplacian_size(l);
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
@@ -116,7 +115,7 @@ static int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
   uint iter = miter, ipass = 0;
   for (; (iter == miter) && (ipass < (uint)opts->rsb_max_passes); ipass++) {
     metric_tic(c, RSB_LANCZOS);
-    iter = lanczos_aux(alpha, beta, rr, l, vi, miter, opts->rsb_tol, c);
+    iter = lanczos_aux(alpha, beta, rr, l, vi, miter, opts->rsb_tol, c, arena);
     metric_toc(c, RSB_LANCZOS);
 
     // Use TQLI and find the minimum eigenvalue and associated vector
@@ -176,7 +175,7 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
   scalar *r = arena_tstart(scalar, arena, n);
   set_rhs(r, n, c);
 
-  int iter = lanczos(f, l, r, c, opts);
+  int iter = lanczos(f, l, r, c, opts, arena);
   metric_acc(RSB_FIEDLER_CALC_NITER, iter);
 
   scalar normi = 1.0 / norm2(f, n, c);
