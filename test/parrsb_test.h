@@ -12,7 +12,7 @@
   do {                                                                         \
     sint err = !(cond);                                                        \
     sint wrk;                                                                  \
-    comm_allreduce(c, gs_int, gs_add, &err, 1, &wrk);                          \
+    comm_allreduce((c), gs_int, gs_add, &err, 1, &wrk);                        \
     return err;                                                                \
   } while (0)
 
