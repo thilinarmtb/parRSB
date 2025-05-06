@@ -19,9 +19,25 @@ struct csr_laplacian {
   struct gs_data *gsh;
 };
 
+static void csr_print(const laplacian l, const struct comm *c) {
+  struct csr_laplacian *L = (struct csr_laplacian *)l->data;
+  for (uint i = 0; i < c->np; i++) {
+    if (i == c->id) {
+      for (uint i = 0; i < L->n; i++) {
+        printf("rank %02d (j=%u, je=%u): ", c->id, L->off[i], L->off[i + 1]);
+        for (uint j = L->off[i], je = L->off[i + 1]; j < je; j++)
+          printf("%e ", L->v[j]);
+        printf("\n");
+      }
+    }
+    fflush(stdout);
+    comm_barrier(c);
+  }
+}
+
 static void filter_entries(struct array *nlist, const struct comm *c) {
   // Find the minimum and maximum row ids.
-  slong max = LONG_MIN, min = LONG_MAX;
+  slong max = 0, min = LONG_MAX;
   const graph_element pe = (const graph_element)nlist->ptr;
   for (uint i = 0; i < nlist->n; i++) {
     if (pe[i].u > (ulong)max) max = pe[i].u;
@@ -57,19 +73,19 @@ static void csr_init(laplacian l, struct array *nlist, const struct comm *c) {
   L->wrk = tcalloc(scalar, nnz);
 
   slong *ids = tcalloc(slong, nnz);
-  uint n = 0;
-  rn = 0;
+  uint n = nnz = rn = 0;
   while (n < nlist->n) {
     uint i = n;
     while ((i < nlist->n) && (pe[n].u == pe[i].u) && (pe[i].v < pe[i].u))
-      L->v[i] = -1, ids[i] = -pe[i].v, i++;
+      L->v[nnz] = -1, ids[nnz] = -pe[i].v, i++, nnz++;
 
-    uint d = L->di[rn++] = i;
+    L->di[rn++] = nnz, nnz++;
 
     while ((i < nlist->n) && (pe[n].u == pe[i].u))
-      L->v[i + 1] = -1, ids[i + 1] = -pe[i].v, i++;
+      L->v[nnz] = -1, ids[nnz] = -pe[i].v, i++, nnz++;
 
-    ids[d] = pe[n].u, L->v[d] = i - n, L->off[rn] = i + 1, n = i;
+    uint d = L->di[rn - 1];
+    ids[d] = pe[n].u, L->v[d] = i - n, L->off[rn] = nnz, n = i;
   }
 
   L->gsh = gs_setup(ids, nnz, c, 0, gs_crystal_router, 0);
