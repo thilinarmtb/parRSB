@@ -5,7 +5,7 @@ static int test_brick_00(const element_info ei, struct crystal *cr,
   const struct comm *c = &(cr->comm);
 
   graph_t g;
-  graph_init_brick(&g, 0, c->c);
+  graph_init(&g, 0, c->c);
 
   struct array nlist;
   graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
@@ -27,7 +27,7 @@ static int test_brick_05(const element_info ei, struct crystal *cr,
   const struct comm *c = &(cr->comm);
 
   graph_t g;
-  graph_init_brick(&g, 1, c->c);
+  graph_init(&g, 1, c->c);
 
   struct array nlist;
   graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
@@ -51,9 +51,9 @@ static int test_brick_10(const element_info ei, struct crystal *cr,
 
   graph_t g;
   if (c->id >= c->np / 2)
-    graph_init_brick(&g, 1, c->c);
+    graph_init(&g, 1, c->c);
   else
-    graph_init_brick(&g, 0, c->c);
+    graph_init(&g, 0, c->c);
 
   struct array nlist;
   graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
@@ -76,7 +76,7 @@ static int test_brick_15(const element_info ei, struct crystal *cr,
   const struct comm *c = &(cr->comm);
 
   graph_t g;
-  graph_init_brick(&g, c->id % 2, c->c);
+  graph_init(&g, c->id % 2, c->c);
 
   struct array nlist;
   graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
@@ -101,7 +101,7 @@ static int test_brick_20(const element_info ei, struct crystal *cr,
 #define SIZE 2
 
   graph_t g;
-  graph_init_brick(&g, SIZE, c->c);
+  graph_init(&g, SIZE, c->c);
 
   struct array nlist;
   graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);
@@ -129,7 +129,7 @@ static int test_brick_25(const element_info ei, struct crystal *cr,
   const struct comm *c = &(cr->comm);
 
   graph_t g;
-  graph_init_brick(&g, c->id, c->c);
+  graph_init(&g, c->id, c->c);
 
   struct array nlist;
   graph_load_balance(&nlist, g->n, g->nodes, g->offsets, g->neighbors, cr, bfr);

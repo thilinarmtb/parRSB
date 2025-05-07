@@ -29,7 +29,7 @@ typedef struct graph_t *graph_t;
  * brick is a $N x 1 x 1$ graph or a mesh with N vertices or elements.
  * Here, $N * = \sum_{i=1}^{P}{n}$ and $P$ is the number of processes.
  */
-static inline void graph_init_brick(graph_t *graph, unsigned n, MPI_Comm comm) {
+static inline void graph_init(graph_t *graph, unsigned n, MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 
