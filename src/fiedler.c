@@ -106,14 +106,15 @@ static int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
   uint miter = opts->rsb_max_iter;
   if (miter > ng) miter = ng;
 
-  size_t capacity = 3 * miter - 1 + (miter + 1) * n + miter * miter;
-  arena_tstart(scalar, arena, capacity);
-
+  size_t cap1 = 3 * miter - 1 + miter * miter;
+  arena_tstart(scalar, arena, cap1);
   scalar *alpha = arena_talloc(scalar, arena, miter);
   scalar *beta = arena_talloc(scalar, arena, miter - 1);
-  scalar *rr = arena_talloc(scalar, arena, (miter + 1) * n);
   scalar *evals = arena_talloc(scalar, arena, miter);
   scalar *evecs = arena_talloc(scalar, arena, miter * miter);
+
+  size_t cap2 = (miter + 1) * n;
+  scalar *rr = arena_tstart(scalar, arena, cap2);
 
   uint iter = miter, ipass = 0;
   for (; (iter == miter) && (ipass < (uint)opts->rsb_max_passes); ipass++) {
@@ -146,6 +147,7 @@ static int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
   }
 
   arena_stop(arena);
+  arena_stop(arena);
   return (ipass - 1) * miter + iter;
 }
 
@@ -173,6 +175,8 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
   if (opts->rsb_algo > 0) return 1;
 
   uint n = laplacian_size(l);
+
+  // Return if the global problem size is zero.
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
   if (ng == 0) return 0;
