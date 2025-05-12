@@ -31,15 +31,14 @@ inline static void ortho(scalar *q, uint lelt, ulong n, const struct comm *c) {
 
 static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, laplacian l,
                        const scalar *f, int niter, double tol,
-                       const struct comm *c, arena_t arena) {
+                       const struct comm *c) {
   uint n = laplacian_size(l);
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
 
-  arena_tstart(scalar, arena, 3 * n);
-  scalar *r = arena_talloc(scalar, arena, n);
-  scalar *p = arena_talloc(scalar, arena, n);
-  scalar *w = arena_talloc(scalar, arena, n);
+  scalar *r = tcalloc(scalar, n);
+  scalar *p = tcalloc(scalar, n);
+  scalar *w = tcalloc(scalar, n);
 
   for (uint i = 0; i < n; i++) r[i] = f[i];
   ortho(r, n, ng, c);
@@ -93,12 +92,12 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, laplacian l,
   }
   metric_set(TOL_FNL, rnorm);
 
-  arena_stop(arena);
+  free(r), free(p), free(w);
   return iter;
 }
 
 static int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
-                   const parrsb_options opts, arena_t arena) {
+                   const parrsb_options opts) {
   uint n = laplacian_size(l);
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
@@ -106,20 +105,16 @@ static int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
   uint miter = opts->rsb_max_iter;
   if (miter > ng) miter = ng;
 
-  size_t cap1 = 3 * miter - 1 + miter * miter;
-  arena_tstart(scalar, arena, cap1);
-  scalar *alpha = arena_talloc(scalar, arena, miter);
-  scalar *beta = arena_talloc(scalar, arena, miter - 1);
-  scalar *evals = arena_talloc(scalar, arena, miter);
-  scalar *evecs = arena_talloc(scalar, arena, miter * miter);
-
-  size_t cap2 = (miter + 1) * n;
-  scalar *rr = arena_tstart(scalar, arena, cap2);
+  scalar *alpha = tcalloc(scalar, miter);
+  scalar *beta = tcalloc(scalar, miter - 1);
+  scalar *evals = tcalloc(scalar, miter);
+  scalar *evecs = tcalloc(scalar, miter * miter);
+  scalar *rr = tcalloc(scalar, (miter + 1) * n);
 
   uint iter = miter, ipass = 0;
   for (; (iter == miter) && (ipass < (uint)opts->rsb_max_passes); ipass++) {
     metric_tic(c, RSB_LANCZOS);
-    iter = lanczos_aux(alpha, beta, rr, l, vi, miter, opts->rsb_tol, c, arena);
+    iter = lanczos_aux(alpha, beta, rr, l, vi, miter, opts->rsb_tol, c);
     metric_toc(c, RSB_LANCZOS);
 
     // Use TQLI and find the minimum eigenvalue and associated vector
@@ -146,8 +141,7 @@ static int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
     metric_toc(c, RSB_LANCZOS_TQLI);
   }
 
-  arena_stop(arena);
-  arena_stop(arena);
+  free(alpha), free(beta), free(evals), free(evecs), free(rr);
   return (ipass - 1) * miter + iter;
 }
 
@@ -168,7 +162,7 @@ static void set_rhs(scalar *r, uint n, const struct comm *c) {
 }
 
 int fiedler(scalar *f, laplacian l, const parrsb_options opts,
-            const struct comm *c, arena_t arena) {
+            const struct comm *c) {
   // Return if the number of processes is equal to 1.
   if (c->np == 1) return 0;
   // Or if rsb algorithm is set to something other than lanczos.
@@ -182,16 +176,16 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
   if (ng == 0) return 0;
 
   metric_tic(c, RSB_FIEDLER);
-  scalar *r = arena_tstart(scalar, arena, n);
+  scalar *r = tcalloc(scalar, n);
   set_rhs(r, n, c);
 
-  int iter = lanczos(f, l, r, c, opts, arena);
+  int iter = lanczos(f, l, r, c, opts);
   metric_acc(RSB_FIEDLER_CALC_NITER, iter);
 
   scalar normi = 1.0 / norm2(f, n, c);
   for (uint i = 0; i < n; i++) f[i] *= normi;
 
-  arena_stop(arena);
+  free(r);
   metric_toc(c, RSB_FIEDLER);
   return 0;
 }

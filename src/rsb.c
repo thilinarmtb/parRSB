@@ -348,10 +348,7 @@ static void check_partition(const struct comm *gc, const parrsb_options opts) {
 
 void rsb(struct array *elements, const element_info ei,
          const parrsb_options options, const struct comm *comms, buffer *bfr) {
-  arena_t arena;
-  arena_init(&arena);
-
-  scalar *f = arena_tstart(scalar, arena, elements->n + 1);
+  scalar *f = tcalloc(scalar, elements->n + 1);
   const struct comm *gc = &comms[0];
   const uint levels = options->levels;
   for (uint level = 0; level < levels; level++) {
@@ -368,7 +365,7 @@ void rsb(struct array *elements, const element_info ei,
       // Setup the laplacian and find the Fiedler vector.
       laplacian l;
       laplacian_init(&l, elements, ei, &lc);
-      fiedler(f, l, options, &lc, arena);
+      fiedler(f, l, options, &lc);
       laplacian_free(&l);
 
       // Bisect the elements by Fiedler value.
@@ -382,6 +379,5 @@ void rsb(struct array *elements, const element_info ei,
   }
 
   check_partition(gc, options);
-  arena_stop(arena);
-  arena_free(&arena);
+  free(f);
 }
