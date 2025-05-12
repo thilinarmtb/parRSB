@@ -25,7 +25,7 @@ struct graph_t {
 
 typedef struct graph_t *graph_t;
 
-typedef enum { PATH = 0, RING } graph_type_t;
+typedef enum { PATH = 0, RING, COMPLETE } graph_type_t;
 
 /*
  * Path is a $N x 1 x 1$ graph or a mesh with N vertices or elements.
@@ -42,6 +42,8 @@ static inline void graph_init(graph_t *graph, unsigned n, graph_type_t type,
 
   graph_t g = *graph = tcalloc(struct graph_t, 1);
   g->n = n;
+
+  if (ng == 0) return;
 
   g->nodes = tcalloc(long long, n);
   for (uint i = 0; i < n; i++) g->nodes[i] = start + i;
@@ -70,7 +72,15 @@ static inline void graph_init(graph_t *graph, unsigned n, graph_type_t type,
       g->neighbors[count++] = ((node - 1) == 0) ? ng : (node - 1);
       g->neighbors[count++] = ((node + 1) > ng) ? 1 : (node + 1);
     }
-  } else {
+  } else if (type == COMPLETE) {
+    for (uint i = 0; i < n; i++) g->offsets[i + 1] = g->offsets[i] + ng - 1;
+
+    g->neighbors = tcalloc(long long, g->offsets[n]);
+    slong nn = 0;
+    for (uint i = 0; i < n; i++) {
+      for (ulong j = 0; j < i; j++) g->neighbors[nn++] = j + 1;
+      for (ulong j = i + 1; (slong)j < ng; j++) g->neighbors[nn++] = j + 1;
+    }
   }
 
   comm_free(&c);
