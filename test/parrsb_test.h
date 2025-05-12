@@ -25,11 +25,14 @@ struct graph_t {
 
 typedef struct graph_t *graph_t;
 
+typedef enum { PATH = 0, RING } graph_type_t;
+
 /*
- * brick is a $N x 1 x 1$ graph or a mesh with N vertices or elements.
- * Here, $N * = \sum_{i=1}^{P}{n}$ and $P$ is the number of processes.
+ * Path is a $N x 1 x 1$ graph or a mesh with N vertices or elements.
+ * Here, $N = \sum_{i=1}^{P}{n}$ and $P$ is the number of processes.
  */
-static inline void graph_init(graph_t *graph, unsigned n, MPI_Comm comm) {
+static inline void graph_init(graph_t *graph, unsigned n, graph_type_t type,
+                              MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 
@@ -44,17 +47,30 @@ static inline void graph_init(graph_t *graph, unsigned n, MPI_Comm comm) {
   for (uint i = 0; i < n; i++) g->nodes[i] = start + i;
 
   g->offsets = tcalloc(unsigned, n + 1);
-  for (uint i = 0; i < n; i++) {
-    slong node = start + i;
-    g->offsets[i + 1] = g->offsets[i] + (node > 1) + (node < ng);
-  }
+  if (type == PATH) {
+    for (uint i = 0; i < n; i++) {
+      slong node = start + i;
+      g->offsets[i + 1] = g->offsets[i] + (node > 1) + (node < ng);
+    }
 
-  g->neighbors = tcalloc(long long, g->offsets[n]);
-  uint nn = 0;
-  for (uint i = 0; i < n; i++) {
-    slong node = start + i;
-    if (node > 1) g->neighbors[nn++] = node - 1;
-    if (node < ng) g->neighbors[nn++] = node + 1;
+    g->neighbors = tcalloc(long long, g->offsets[n]);
+    uint count = 0;
+    for (uint i = 0; i < n; i++) {
+      slong node = start + i;
+      if (node > 1) g->neighbors[count++] = node - 1;
+      if (node < ng) g->neighbors[count++] = node + 1;
+    }
+  } else if (type == RING) {
+    for (uint i = 0; i < n; i++) g->offsets[i + 1] = g->offsets[i] + 2;
+
+    g->neighbors = tcalloc(long long, g->offsets[n]);
+    uint count = 0;
+    for (uint i = 0; i < n; i++) {
+      slong node = start + i;
+      g->neighbors[count++] = ((node - 1) == 0) ? ng : (node - 1);
+      g->neighbors[count++] = ((node + 1) > ng) ? 1 : (node + 1);
+    }
+  } else {
   }
 
   comm_free(&c);
