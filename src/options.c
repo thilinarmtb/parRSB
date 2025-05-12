@@ -29,7 +29,7 @@ int parrsb_options_copy(parrsb_options *dest, const parrsb_options src) {
 }
 
 void parrsb_options_print(const parrsb_options options) {
-#define PRINT_OPTION(OPT, STR, FMT) printf("%s = " FMT "", STR, options->OPT)
+#define PRINT_OPTION(OPT, STR, FMT) printf("%s = " FMT "\n", STR, options->OPT)
 
   PRINT_OPTION(partitioner, "PARRSB_PARTITIONER", "%d");
   PRINT_OPTION(tagged, "PARRSB_TAGGED", "%d");
