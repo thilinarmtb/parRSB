@@ -76,11 +76,11 @@ static inline void graph_init(graph_t *graph, unsigned n, graph_type_t type,
     for (uint i = 0; i < n; i++) g->offsets[i + 1] = g->offsets[i] + ng - 1;
 
     g->neighbors = tcalloc(long long, g->offsets[n]);
-    slong nn = 0;
+    slong count = 0;
     for (uint i = 0; i < n; i++) {
       ulong node = start + i;
-      for (ulong j = 0; j < node; j++) g->neighbors[nn++] = j + 1;
-      for (ulong j = node + 1; (slong)j < ng; j++) g->neighbors[nn++] = j + 1;
+      for (ulong j = 1; j < node; j++) g->neighbors[count++] = j;
+      for (ulong j = node + 1; (slong)j <= ng; j++) g->neighbors[count++] = j;
     }
   }
 
