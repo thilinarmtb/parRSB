@@ -36,7 +36,10 @@ static scalar test_base(const element_info ei, unsigned n, graph_type_t type,
   graph_restore(NULL, &nlist, cr, bfr);
   graph_free(&g);
 
-  return normv / normf;
+  if (fabs(normf) < PARRSB_TEST_EPS)
+    return 0;
+  else
+    return normv / normf;
 }
 
 static int test_complete_00(const element_info ei, struct crystal *cr,
@@ -47,8 +50,8 @@ static int test_complete_00(const element_info ei, struct crystal *cr,
   const struct comm *c = &(cr->comm);
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
-  // parrsb_test((fabs(ev - ng) / ng) < PARRSB_TEST_EPS, c);
-  return 0;
+
+  parrsb_test(ng <= 1 || ((fabs(ev - ng) / ng) < PARRSB_TEST_EPS), c);
 }
 
 int main(int argc, char *argv[]) {
