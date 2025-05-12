@@ -94,9 +94,11 @@ static inline void graph_free(graph_t *graph) {
   free(*graph), *graph = 0;
 }
 
-static scalar norm2(const scalar *u, unsigned n) {
+static scalar norm2(const scalar *u, unsigned n, const struct comm *c) {
   scalar v = 0;
   for (uint i = 0; i < n; i++) v += u[i] * u[i];
+  scalar wrk;
+  comm_allreduce(c, gs_scalar, gs_add, &v, 1, &wrk);
   return sqrt(v);
 }
 

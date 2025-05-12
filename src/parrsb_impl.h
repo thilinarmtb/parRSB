@@ -197,6 +197,9 @@ INTERN void rsb(struct array *elements, const element_info ei,
                 const parrsb_options options, const struct comm *comms,
                 buffer *bfr);
 
+INTERN int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
+                   const parrsb_options opts);
+
 INTERN int fiedler(scalar *fiedler, laplacian l, const parrsb_options opts,
                    const struct comm *c);
 

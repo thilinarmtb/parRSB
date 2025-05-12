@@ -96,8 +96,8 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, laplacian l,
   return iter;
 }
 
-static int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
-                   const parrsb_options opts) {
+int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
+            const parrsb_options opts) {
   uint n = laplacian_size(l);
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);

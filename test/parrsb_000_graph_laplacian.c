@@ -22,15 +22,18 @@ static int test_base(const element_info ei, unsigned n, graph_type_t type,
   } else {
     u = tcalloc(scalar, 2 * size), v = u + size;
     for (unsigned i = 0; i < 2 * size; i++) u[i] = 1;
-
     laplacian_op(v, l, u);
   }
 
 check_and_finalize:
-  scalar normv = norm2(v, size);
+  scalar normv = norm2(v, size, c);
+
   free(u);
   laplacian_free(&l);
-  parrsb_test(size == 0 || normv < PARRSB_TEST_EPS, c);
+  graph_restore(NULL, &nlist, cr, bfr);
+  graph_free(&g);
+
+  parrsb_test(size == 0 || normv < PARRSB_TEST_TOL, c);
 }
 
 static int test_path_00(const element_info ei, struct crystal *cr,
