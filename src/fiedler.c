@@ -18,15 +18,17 @@ inline static scalar norm2(const scalar *r, uint n, const struct comm *c) {
   return sqrt(norm);
 }
 
-inline static void ortho(scalar *q, uint lelt, ulong n, const struct comm *c) {
+inline static void ortho(scalar *q, uint n, ulong ng, const struct comm *c) {
+  if (ng == 0) return;
+
   scalar sum = 0.0;
-  for (uint i = 0; i < lelt; i++) sum += q[i];
+  for (uint i = 0; i < n; i++) sum += q[i];
 
   scalar wrk;
   comm_allreduce(c, gs_scalar, gs_add, &sum, 1, &wrk);
-  sum /= n;
+  sum /= ng;
 
-  for (uint i = 0; i < lelt; i++) q[i] -= sum;
+  for (uint i = 0; i < n; i++) q[i] -= sum;
 }
 
 static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, laplacian l,
@@ -101,6 +103,7 @@ int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
   uint n = laplacian_size(l);
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
+  if (ng == 0) return 0;
 
   uint miter = opts->rsb_max_iter;
   if (miter > ng) miter = ng;
@@ -168,24 +171,20 @@ int fiedler(scalar *f, laplacian l, const parrsb_options opts,
   // Or if rsb algorithm is set to something other than lanczos.
   if (opts->rsb_algo > 0) return 1;
 
-  uint n = laplacian_size(l);
-
-  // Return if the global problem size is zero.
-  slong ng = n, wrk;
-  comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
-  if (ng == 0) return 0;
-
   metric_tic(c, RSB_FIEDLER);
+
+  uint n = laplacian_size(l);
   scalar *r = tcalloc(scalar, n);
   set_rhs(r, n, c);
-
   int iter = lanczos(f, l, r, c, opts);
+  free(r);
+
   metric_acc(RSB_FIEDLER_CALC_NITER, iter);
 
   scalar normi = 1.0 / norm2(f, n, c);
   for (uint i = 0; i < n; i++) f[i] *= normi;
 
-  free(r);
   metric_toc(c, RSB_FIEDLER);
+
   return 0;
 }
