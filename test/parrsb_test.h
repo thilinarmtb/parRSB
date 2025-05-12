@@ -3,6 +3,10 @@
 
 #include <math.h>
 
+#ifndef M_PI
+#define M_PI 3.1415926535897932
+#endif
+
 #include <parrsb_impl.h>
 
 #define PARRSB_TEST_TOL 1e-12
