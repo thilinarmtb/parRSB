@@ -78,8 +78,9 @@ static inline void graph_init(graph_t *graph, unsigned n, graph_type_t type,
     g->neighbors = tcalloc(long long, g->offsets[n]);
     slong nn = 0;
     for (uint i = 0; i < n; i++) {
-      for (ulong j = 0; j < i; j++) g->neighbors[nn++] = j + 1;
-      for (ulong j = i + 1; (slong)j < ng; j++) g->neighbors[nn++] = j + 1;
+      ulong node = start + i;
+      for (ulong j = 0; j < node; j++) g->neighbors[nn++] = j + 1;
+      for (ulong j = node + 1; (slong)j < ng; j++) g->neighbors[nn++] = j + 1;
     }
   }
 
