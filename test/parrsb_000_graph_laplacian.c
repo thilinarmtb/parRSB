@@ -49,6 +49,48 @@ static int test_empty_complete(const element_info ei, struct crystal *cr,
   parrsb_test(n == 0, c);
 }
 
+static int test_single_node_path(const element_info ei, struct crystal *cr,
+                                 buffer *bfr) {
+  const struct comm *c = &(cr->comm);
+
+  laplacian l;
+  test_base(&l, ei, c->id == 0, PATH, cr, bfr);
+  uint n = laplacian_size(l);
+  laplacian_free(&l);
+
+  slong ng = n, wrk;
+  comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
+  parrsb_test(ng == 1, c);
+}
+
+static int test_single_node_ring(const element_info ei, struct crystal *cr,
+                                 buffer *bfr) {
+  const struct comm *c = &(cr->comm);
+
+  laplacian l;
+  test_base(&l, ei, c->id == 0, RING, cr, bfr);
+  uint n = laplacian_size(l);
+  laplacian_free(&l);
+
+  slong ng = n, wrk;
+  comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
+  parrsb_test(ng == 1, c);
+}
+
+static int test_single_node_complete(const element_info ei, struct crystal *cr,
+                                     buffer *bfr) {
+  const struct comm *c = &(cr->comm);
+
+  laplacian l;
+  test_base(&l, ei, c->id == 0, COMPLETE, cr, bfr);
+  uint n = laplacian_size(l);
+  laplacian_free(&l);
+
+  slong ng = n, wrk;
+  comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
+  parrsb_test(ng == 1, c);
+}
+
 int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);
   MPI_Comm comm = MPI_COMM_WORLD;
@@ -69,6 +111,9 @@ int main(int argc, char *argv[]) {
   err |= test_empty_path(ei, &cr, &bfr);
   err |= test_empty_ring(ei, &cr, &bfr);
   err |= test_empty_complete(ei, &cr, &bfr);
+  err |= test_single_node_path(ei, &cr, &bfr);
+  err |= test_single_node_ring(ei, &cr, &bfr);
+  err |= test_single_node_complete(ei, &cr, &bfr);
 
   graph_element_info_free(&ei);
   buffer_free(&bfr);
