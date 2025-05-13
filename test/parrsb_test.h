@@ -47,13 +47,25 @@ static inline void graph_init(graph_t *graph, unsigned n, graph_type_t type,
   graph_t g = *graph = tcalloc(struct graph_t, 1);
   g->n = n;
 
-  if (ng == 0) return;
-
   g->nodes = tcalloc(long long, n);
   for (uint i = 0; i < n; i++) g->nodes[i] = start + i;
 
   g->offsets = tcalloc(unsigned, n + 1);
-  if (type == PATH) {
+  if (type == COMPLETE) {
+    if (ng < 2) return;
+
+    for (uint i = 0; i < n; i++) g->offsets[i + 1] = g->offsets[i] + ng - 1;
+
+    g->neighbors = tcalloc(long long, g->offsets[n]);
+    slong count = 0;
+    for (uint i = 0; i < n; i++) {
+      ulong node = start + i;
+      for (ulong j = 1; j < node; j++) g->neighbors[count++] = j;
+      for (ulong j = node + 1; (slong)j <= ng; j++) g->neighbors[count++] = j;
+    }
+  } else if (type == PATH) {
+    if (ng < 2) return;
+
     for (uint i = 0; i < n; i++) {
       slong node = start + i;
       g->offsets[i + 1] = g->offsets[i] + (node > 1) + (node < ng);
@@ -67,6 +79,8 @@ static inline void graph_init(graph_t *graph, unsigned n, graph_type_t type,
       if (node < ng) g->neighbors[count++] = node + 1;
     }
   } else if (type == RING) {
+    if (ng < 3) return;
+
     for (uint i = 0; i < n; i++) g->offsets[i + 1] = g->offsets[i] + 2;
 
     g->neighbors = tcalloc(long long, g->offsets[n]);
@@ -75,16 +89,6 @@ static inline void graph_init(graph_t *graph, unsigned n, graph_type_t type,
       slong node = start + i;
       g->neighbors[count++] = ((node - 1) == 0) ? ng : (node - 1);
       g->neighbors[count++] = ((node + 1) > ng) ? 1 : (node + 1);
-    }
-  } else if (type == COMPLETE) {
-    for (uint i = 0; i < n; i++) g->offsets[i + 1] = g->offsets[i] + ng - 1;
-
-    g->neighbors = tcalloc(long long, g->offsets[n]);
-    slong count = 0;
-    for (uint i = 0; i < n; i++) {
-      ulong node = start + i;
-      for (ulong j = 1; j < node; j++) g->neighbors[count++] = j;
-      for (ulong j = node + 1; (slong)j <= ng; j++) g->neighbors[count++] = j;
     }
   }
 
