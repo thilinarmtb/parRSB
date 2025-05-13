@@ -14,19 +14,18 @@ static int test_base(const element_info ei, unsigned n, graph_type_t type,
   laplacian_init(&l, &nlist, ei, c);
 
   uint size = laplacian_size(l);
-  scalar *u = 0, *v = 0;
+  scalar *u = tcalloc(scalar, size);
+  scalar *v = tcalloc(scalar, size);
+  for (uint i = 0; i < size; i++) v[i] = u[i] = 1;
 
-  if (size == 0) {
+  if (size == 0)
     laplacian_op(NULL, l, NULL);
-  } else {
-    u = tcalloc(scalar, 2 * size), v = u + size;
-    for (unsigned i = 0; i < 2 * size; i++) u[i] = 1;
+  else
     laplacian_op(v, l, u);
-  }
 
   scalar normv = norm2(v, size, c);
 
-  free(u);
+  free(u), free(v);
   laplacian_free(&l);
   graph_restore(NULL, &nlist, cr, bfr);
   graph_free(&g);
