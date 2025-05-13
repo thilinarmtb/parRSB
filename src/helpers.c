@@ -1,6 +1,5 @@
 #include "parrsb_impl.h"
 
-#include <getopt.h>
 #include <stdarg.h>
 #include <sys/resource.h>
 
@@ -170,46 +169,6 @@ int parrsb_dist_mesh(unsigned int *nelt_, long long **vl_, double **coord_,
   return 0;
 }
 
-int parrsb_setup_mesh(unsigned *nelt, unsigned *nv, long long **vl,
-                      double **coord, parrsb_cmd_line_opts *in, MPI_Comm comm) {
-  int id, err;
-  MPI_Comm_rank(comm, &id);
-
-  // Read the geometry from the .re2 file.
-  unsigned int nbcs;
-  long long *bcs = NULL;
-  err = parrsb_read_mesh(nelt, nv, NULL, coord, &nbcs, &bcs, in->mesh, comm, 1);
-  parrsb_check_error(err, comm);
-
-  // Find connectivity.
-  *vl = (long long *)calloc(*nelt * *nv, sizeof(long long));
-  err = (*vl == NULL);
-  parrsb_check_error(err, comm);
-
-  int ndim = nv_to_ndim(*nv);
-  err = parrsb_conn_mesh(*vl, *coord, *nelt, ndim, bcs, nbcs, in->tol, comm);
-  parrsb_check_error(err, comm);
-
-  // Partition the mesh.
-  int *part = (int *)calloc(*nelt, sizeof(int));
-  err = (part == NULL);
-  parrsb_check_error(err, comm);
-
-  parrsb_options opt;
-  parrsb_options_get_default(&opt);
-  err = parrsb_part_mesh(part, *vl, *coord, NULL, *nelt, *nv, opt, comm);
-  parrsb_options_free(&opt);
-  parrsb_check_error(err, comm);
-
-  // Redistribute data based on identified partitions
-  err = parrsb_dist_mesh(nelt, vl, coord, part, *nv, comm);
-  parrsb_check_error(err, comm);
-
-  free(part), free(bcs);
-
-  return 0;
-}
-
 void parrsb_get_part_stat(int *nc, int *ns, int *nss, int *nel, long long *vtx,
                           int nelt, int nv, MPI_Comm ce) {
   struct comm comm;
@@ -301,81 +260,6 @@ void parrsb_get_part_stat(int *nc, int *ns, int *nss, int *nel, long long *vtx,
     nel[0] = nelMin;
     nel[1] = nelMax;
     nel[2] = nelSum;
-  }
-}
-
-void parrsb_print_part_stat(long long *vtx, unsigned nelt, unsigned nv,
-                            MPI_Comm ce) {
-  int id, np;
-  MPI_Comm_rank(ce, &id);
-  MPI_Comm_size(ce, &np);
-
-  int nc[3], ns[3], nss[3], nel[3];
-  parrsb_get_part_stat(&nc[0], &ns[0], &nss[0], &nel[0], vtx, nelt, nv, ce);
-
-  if (id == 0) {
-    printf("Min neighbors: %d | Max neighbors: %d | Avg neighbors: %lf\n",
-           nc[0], nc[1], (double)nc[2] / np);
-    printf("Min nvolume: %d | Max nvolume: %d | Avg nvolume: %lf\n", ns[0],
-           ns[1], (double)ns[2] / np);
-    printf("Min volume: %d | Max volume: %d | Avg volume: %lf\n", nss[0],
-           nss[1], (double)nss[2] / np);
-    printf("Min elements: %d | Max elements: %d\n", nel[0], nel[1]);
-    fflush(stdout);
-  }
-}
-
-// TODO: Print options supported by parRSB.
-static void print_help(void) {}
-
-parrsb_cmd_line_opts *parrsb_parse_cmd_opts(int argc, char *argv[]) {
-  parrsb_cmd_line_opts *in = tcalloc(parrsb_cmd_line_opts, 1);
-
-  in->mesh = NULL, in->tol = 2e-1;
-  in->test = 0, in->dump = 0, in->verbose = 0, in->nactive = INT_MAX;
-
-  static struct option long_options[] = {{"mesh", required_argument, 0, 0},
-                                         {"tol", optional_argument, 0, 10},
-                                         {"test", optional_argument, 0, 20},
-                                         {"dump", optional_argument, 0, 30},
-                                         {"nactive", optional_argument, 0, 40},
-                                         {"verbose", optional_argument, 0, 50},
-                                         {"help", optional_argument, 0, 99},
-                                         {0, 0, 0, 0}};
-
-  size_t len;
-  for (;;) {
-    int c = getopt_long(argc, argv, "", long_options, NULL);
-    if (c == -1) break;
-
-    switch (c) {
-    case 0:
-      len = strnlen(optarg, PATH_MAX);
-      in->mesh = tcalloc(char, len + 1);
-      strncpy(in->mesh, optarg, len);
-      break;
-    case 10: in->tol = atof(optarg); break;
-    case 20: in->test = 1; break;
-    case 30: in->dump = 1; break;
-    case 40: in->nactive = atoi(optarg); break;
-    case 50: in->verbose = atoi(optarg); break;
-    case 99: print_help(); break;
-    default: exit(EXIT_FAILURE);
-    }
-  }
-
-  if (in->mesh == NULL) {
-    fprintf(stderr, "Required argument `--mesh` was not found !\n");
-    exit(EXIT_FAILURE);
-  }
-
-  return in;
-}
-
-void parrsb_cmd_opts_free(parrsb_cmd_line_opts *opts) {
-  if (opts) {
-    if (opts->mesh) free(opts->mesh);
-    free(opts);
   }
 }
 

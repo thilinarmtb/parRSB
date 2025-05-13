@@ -1,7 +1,7 @@
 /*
  * Generate connectivity (.co2) from Nek5000 mesh (.re2) file.
  */
-#include "parrsb.h"
+#include "parrsb_example.h"
 
 static void test_parcon(long long *vlp, char *name, MPI_Comm comm) {
   unsigned int nelt;
