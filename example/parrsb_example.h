@@ -3,8 +3,14 @@
 
 #include <parrsb.h>
 
+#define _POSIX_C_SOURCE 1
 #include <getopt.h>
+#include <limits.h>
 #include <math.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX BUFSIZ
+#endif
 
 static void parrsb_print_part_stat(long long *vtx, unsigned nelt, unsigned nv,
                                    MPI_Comm ce) {
