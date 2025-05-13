@@ -51,7 +51,7 @@ static void filter_entries(struct array *nlist, const struct comm *c) {
   // Filter out all the entires `< min` and `> max`.
   uint n = 0;
   for (uint i = 0; i < nlist->n; i++)
-    if (pe[i].v >= (ulong)min || pe[i].v <= (ulong)max) pe[n++] = pe[i];
+    if ((pe[i].v >= (ulong)min) && (pe[i].v <= (ulong)max)) pe[n++] = pe[i];
   nlist->n = n;
 }
 
