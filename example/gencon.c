@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);
   MPI_Comm world = MPI_COMM_WORLD;
 
-  parrsb_cmd_line_opts *in = parrsb_parse_cmd_opts(argc, argv);
+  parrsb_example_opts *in = parrsb_parse_cmd_opts(argc, argv);
   parrsb_check_error(in == NULL, world);
 
   // Read the geometry from the .re2 file.

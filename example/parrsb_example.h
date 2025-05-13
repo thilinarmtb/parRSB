@@ -34,10 +34,10 @@ typedef struct {
   int dump;    // dump the connectivity or map file, default: 1
   int nactive; // # of active MPI ranks, default: INT_MAX
   int verbose; // Verbosity, default: 0
-} parrsb_cmd_line_opts;
+} parrsb_example_opts;
 
-static parrsb_cmd_line_opts *parrsb_parse_cmd_opts(int argc, char *argv[]) {
-  parrsb_cmd_line_opts *in = tcalloc(parrsb_cmd_line_opts, 1);
+static parrsb_example_opts *parrsb_parse_cmd_opts(int argc, char *argv[]) {
+  parrsb_example_opts *in = tcalloc(parrsb_example_opts, 1);
 
   in->mesh = NULL, in->tol = 2e-1;
   in->test = 0, in->dump = 0, in->verbose = 0, in->nactive = INT_MAX;
@@ -90,7 +90,7 @@ static parrsb_cmd_line_opts *parrsb_parse_cmd_opts(int argc, char *argv[]) {
   return in;
 }
 
-static void parrsb_cmd_opts_free(parrsb_cmd_line_opts *opts) {
+static void parrsb_cmd_opts_free(parrsb_example_opts *opts) {
   if (opts) {
     if (opts->mesh) free(opts->mesh);
     free(opts);
