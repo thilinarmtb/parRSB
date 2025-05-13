@@ -97,7 +97,23 @@ static void parrsb_cmd_opts_free(parrsb_example_opts *opts) {
   }
 }
 
-void parrsb_check_error_(int err, char *file, int line, MPI_Comm comm);
+static void parrsb_check_error_(int err, char *file, int line, MPI_Comm comm) {
+  int sum;
+  MPI_Allreduce(&err, &sum, 1, MPI_INT, MPI_SUM, comm);
+
+  if (sum == 0) return;
+
+  int id;
+  MPI_Comm_rank(comm, &id);
+
+  if (id == 0) {
+    fprintf(stderr, "parrsb_check_error failure in %s:%d\n", file, line);
+    fflush(stderr);
+  }
+  MPI_Finalize();
+  exit(EXIT_FAILURE);
+}
+
 #define parrsb_check_error(err, comm)                                          \
   parrsb_check_error_(err, __FILE__, __LINE__, comm)
 

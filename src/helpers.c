@@ -263,22 +263,6 @@ void parrsb_get_part_stat(int *nc, int *ns, int *nss, int *nel, long long *vtx,
   }
 }
 
-void parrsb_check_error_(int err, char *file, int line, MPI_Comm comm) {
-  int sum;
-  MPI_Allreduce(&err, &sum, 1, MPI_INT, MPI_SUM, comm);
-
-  if (sum != 0) {
-    int id;
-    MPI_Comm_rank(comm, &id);
-    if (id == 0) {
-      fprintf(stderr, "parrsb_check_error failure in %s:%d\n", file, line);
-      fflush(stderr);
-    }
-    MPI_Finalize();
-    exit(EXIT_FAILURE);
-  }
-}
-
 #define WRITE_T(dest, val, T, nunits)                                          \
   do {                                                                         \
     memcpy(dest, (val), sizeof(T) * nunits);                                   \
