@@ -118,13 +118,18 @@ jobs:
           # Build parRSB
           export GSLIBPATH=`pwd`/gslib/build/
           make -j4 test
-      - name: Test graph laplacian operator
+      - name: Test graph laplacian matrix
         shell: bash
         run: |
           cd ${TESTDIR}
           ${MPIEXE} -np ${{ matrix.np }} ./parrsb_000_graph_laplacian
+      - name: Test graph laplacian operator
+        shell: bash
+        run: |
+          cd ${TESTDIR}
+          ${MPIEXE} -np ${{ matrix.np }} ./parrsb_050_graph_laplacian_op
       - name: Test graph laplacian eigenvalues
         shell: bash
         run: |
           cd ${TESTDIR}
-          ${MPIEXE} -np ${{ matrix.np }} ./parrsb_050_graph_eigenvalues
+          ${MPIEXE} -np ${{ matrix.np }} ./parrsb_100_graph_eigenvalues
