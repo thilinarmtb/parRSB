@@ -3,7 +3,7 @@
  */
 #include "parrsb_example.h"
 
-static void test_parcon(long long *vlp, char *name, MPI_Comm comm) {
+static void check_connectivity(long long *vlp, char *name, MPI_Comm comm) {
   unsigned int nelt;
   unsigned nv;
   long long *vls = NULL;
@@ -68,38 +68,36 @@ static void test_parcon(long long *vlp, char *name, MPI_Comm comm) {
 
 int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);
-  MPI_Comm world = MPI_COMM_WORLD;
+  MPI_Comm comm = MPI_COMM_WORLD;
 
-  parrsb_example_opts *in = parrsb_parse_cmd_opts(argc, argv);
-  parrsb_check_error(in == NULL, world);
+  parrsb_example_opts in = parrsb_example_opts_parse(argc, argv, comm);
 
   // Read the geometry from the .re2 file.
   unsigned int nelt, nbcs, nv;
-  double *coord = NULL;
-  long long *bcs = NULL;
-  int err = parrsb_read_mesh(&nelt, &nv, NULL, &coord, &nbcs, &bcs, in->mesh,
-                             world, 1);
-  parrsb_check_error(err, world);
+  double *coord = 0;
+  long long *bcs = 0;
+  int err =
+      parrsb_read_mesh(&nelt, &nv, 0, &coord, &nbcs, &bcs, in->mesh, comm, 1);
+  parrsb_check_error(err, comm);
 
-  // Find connectivity based on the coordinates.
+  // Find connectivity.
   unsigned ndim = (nv == 8 ? 3 : 2);
   long long *vl = (long long *)calloc(nelt * nv, sizeof(long long));
-  parrsb_check_error(vl == NULL, world);
-  err = parrsb_conn_mesh(vl, coord, nelt, ndim, bcs, nbcs, in->tol, world);
-  parrsb_check_error(err, world);
+  err = parrsb_conn_mesh(vl, coord, nelt, ndim, bcs, nbcs, in->tol, comm);
+  parrsb_check_error(err, comm);
 
   // Write connectivity to a .co2 file if dump is on.
   if (in->dump) {
-    err = parrsb_dump_con(in->mesh, nelt, nv, vl, world);
-    parrsb_check_error(err, world);
+    err = parrsb_dump_con(in->mesh, nelt, nv, vl, comm);
+    parrsb_check_error(err, comm);
   }
 
   // Turns on testing if test is on
-  if (in->test) test_parcon(vl, in->mesh, world);
+  if (in->test) check_connectivity(vl, in->mesh, comm);
 
   // Free resources
   free(vl), free(coord), free(bcs);
-  parrsb_cmd_opts_free(in);
+  parrsb_example_opts_free(&in);
   MPI_Finalize();
 
   return 0;
