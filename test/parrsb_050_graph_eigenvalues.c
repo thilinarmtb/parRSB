@@ -51,9 +51,23 @@ static int test_path_00(const element_info ei, struct crystal *cr,
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
 
-  scalar eva = 2 * (1 - cos(M_PI * 1 / ng));
+  scalar eva = 2 * (1 - cos((M_PI * 1) / ng));
 
   parrsb_test(ng <= 1 || ((fabs(evc - eva) / eva) < PARRSB_TEST_EPS), c);
+}
+
+static int test_ring_00(const element_info ei, struct crystal *cr,
+                        buffer *bfr) {
+  sint n = 1;
+  scalar evc = test_base(ei, n, RING, cr, bfr);
+
+  const struct comm *c = &(cr->comm);
+  slong ng = n, wrk;
+  comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
+
+  scalar eva = 2 * (1 - cos((2 * M_PI * 1) / ng));
+
+  parrsb_test(ng <= 2 || ((fabs(evc - eva) / eva) < PARRSB_TEST_EPS), c);
 }
 
 static int test_complete_00(const element_info ei, struct crystal *cr,
@@ -65,7 +79,6 @@ static int test_complete_00(const element_info ei, struct crystal *cr,
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
   scalar eva = ng;
-
 
   parrsb_test(ng <= 1 || ((fabs(evc - eva) / eva) < PARRSB_TEST_EPS), c);
 }
@@ -88,6 +101,7 @@ int main(int argc, char *argv[]) {
 
   int err = 0;
   err |= test_path_00(ei, &cr, &bfr);
+  err |= test_ring_00(ei, &cr, &bfr);
   err |= test_complete_00(ei, &cr, &bfr);
 
   graph_element_info_free(&ei);
