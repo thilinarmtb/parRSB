@@ -91,6 +91,60 @@ static int test_single_node_complete(const element_info ei, struct crystal *cr,
   parrsb_test(ng == 1, c);
 }
 
+static int test_multiple_node_path(const element_info ei, struct crystal *cr,
+                                   buffer *bfr) {
+  const struct comm *c = &(cr->comm);
+
+  sint n = 2;
+
+  laplacian l;
+  test_base(&l, ei, n, PATH, cr, bfr);
+
+  uint m = laplacian_size(l);
+
+  slong out[2][1], wrk[2][1], in = m;
+  comm_scan(out, c, gs_long, gs_add, &in, 1, wrk);
+  slong start = out[0][0] + 1, ng = out[1][0];
+
+  scalar *u = tcalloc(scalar, m);
+  scalar *v = tcalloc(scalar, m);
+
+  int err = 0;
+  for (slong i = 1; i <= ng; i++) {
+    for (uint j = 0; j < m; j++) {
+      if ((start + j) == i)
+        u[j] = 1;
+      else
+        u[j] = 0;
+    }
+
+    laplacian_op(v, l, u);
+
+    for (uint j = 0; j < m; j++) {
+      slong li = start + j;
+      if ((i > 1) && (i < ng)) {
+        if (li == (i - 1)) err |= (fabs(v[j] + 1) > PARRSB_TEST_EPS);
+        if (li == i) err |= (fabs((v[j] - 2) / 2.0) > PARRSB_TEST_EPS);
+        if (li == (i + 1)) err |= (fabs(v[j] + 1) > PARRSB_TEST_EPS);
+      }
+
+      if (i == 1) {
+        if (li == i) err |= (fabs(v[j] - 1) > PARRSB_TEST_EPS);
+        if (li == (i + 1)) err |= (fabs(v[j] + 1) > PARRSB_TEST_EPS);
+      }
+
+      if (i == ng) {
+        if (li == (i - 1)) err |= (fabs(v[j] + 1) > PARRSB_TEST_EPS);
+        if (li == i) err |= (fabs(v[j] - 1) > PARRSB_TEST_EPS);
+      }
+    }
+  }
+
+  free(u), free(v);
+  laplacian_free(&l);
+  parrsb_test(err == 0, c);
+}
+
 int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);
   MPI_Comm comm = MPI_COMM_WORLD;
@@ -114,6 +168,7 @@ int main(int argc, char *argv[]) {
   err |= test_single_node_path(ei, &cr, &bfr);
   err |= test_single_node_ring(ei, &cr, &bfr);
   err |= test_single_node_complete(ei, &cr, &bfr);
+  err |= test_multiple_node_path(ei, &cr, &bfr);
 
   graph_element_info_free(&ei);
   buffer_free(&bfr);

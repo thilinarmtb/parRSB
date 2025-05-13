@@ -14,10 +14,10 @@
 
 #define parrsb_test(cond, c)                                                   \
   do {                                                                         \
-    sint err = !(cond);                                                        \
-    sint wrk;                                                                  \
-    comm_allreduce((c), gs_int, gs_add, &err, 1, &wrk);                        \
-    return err;                                                                \
+    sint err__ = !(cond);                                                      \
+    sint wrk__;                                                                \
+    comm_allreduce((c), gs_int, gs_add, &err__, 1, &wrk__);                    \
+    return err__;                                                              \
   } while (0)
 
 struct graph_t {
