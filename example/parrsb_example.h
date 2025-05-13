@@ -33,20 +33,36 @@ flush:
   fflush(stdout);
 }
 
-typedef struct {
+struct parrsb_example_opts {
   char *mesh;  // Mesh name, required.
   double tol;  // gencon tolerance, default: 0.2
   int test;    // run tests, default: 0
   int dump;    // dump the connectivity or map file, default: 1
   int nactive; // # of active MPI ranks, default: INT_MAX
   int verbose; // Verbosity, default: 0
-} parrsb_example_opts;
+};
 
-static parrsb_example_opts *parrsb_parse_cmd_opts(int argc, char *argv[]) {
-  parrsb_example_opts *in = tcalloc(parrsb_example_opts, 1);
+typedef struct parrsb_example_opts *parrsb_example_opts;
 
-  in->mesh = NULL, in->tol = 2e-1;
-  in->test = 0, in->dump = 0, in->verbose = 0, in->nactive = INT_MAX;
+static void parrsb_example_opts_free(parrsb_example_opts *opts) {
+  if (!opts || !(*opts)) return;
+  if ((*opts)->mesh) free((*opts)->mesh);
+  free(*opts), *opts = 0;
+}
+
+static parrsb_example_opts parrsb_example_opts_parse(int argc, char *argv[],
+                                                     MPI_Comm comm) {
+  parrsb_example_opts in = tcalloc(struct parrsb_example_opts, 1);
+
+  in->mesh = 0;
+  in->tol = 2e-1;
+  in->test = 0;
+  in->dump = 0;
+  in->verbose = 0;
+  in->nactive = INT_MAX;
+
+  int rank;
+  MPI_Comm_rank(comm, &rank);
 
   static struct option long_options[] = {{"mesh", required_argument, 0, 0},
                                          {"tol", optional_argument, 0, 10},
@@ -74,14 +90,17 @@ static parrsb_example_opts *parrsb_parse_cmd_opts(int argc, char *argv[]) {
     case 40: in->nactive = atoi(optarg); break;
     case 50: in->verbose = atoi(optarg); break;
     case 99:
-      printf("`--mesh (required), Name of the input mesh (.re2 file)\n");
-      printf("--tol (optional, default = 0.2), Tolerance used for mesh "
-             "connectivity.\n");
-      printf("--test (optional), Run tests in `genmap`/`gencon` examples.\n");
-      printf("--dump (optional), Dump `.co2`/`.ma2` file(s) after running "
-             "`gencon`/`genmap`.\n");
-      printf("--nactive (optional, default: `INT_MAX`), Number of active "
-             "processes.\n");
+      if (rank == 0) {
+        printf("`--mesh (required), Name of the input mesh (.re2 file)\n");
+        printf("--tol (optional, default = 0.2), Tolerance used for mesh "
+               "connectivity.\n");
+        printf("--test (optional), Run tests in `genmap`/`gencon` examples.\n");
+        printf("--dump (optional), Dump `.co2`/`.ma2` file(s) after running "
+               "`gencon`/`genmap`.\n");
+        printf("--nactive (optional, default: `INT_MAX`), Number of active "
+               "processes.\n");
+      }
+      parrsb_example_opts_free(&in);
       exit(EXIT_SUCCESS);
       break;
     default: exit(EXIT_FAILURE); break;
@@ -94,13 +113,6 @@ static parrsb_example_opts *parrsb_parse_cmd_opts(int argc, char *argv[]) {
   }
 
   return in;
-}
-
-static void parrsb_cmd_opts_free(parrsb_example_opts *opts) {
-  if (opts) {
-    if (opts->mesh) free(opts->mesh);
-    free(opts);
-  }
 }
 
 static void parrsb_check_error_(int err, char *file, int line, MPI_Comm comm) {
