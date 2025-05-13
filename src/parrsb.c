@@ -879,6 +879,9 @@ int graph_load_balance(struct array *nlist, uint nn, const long long *nodes,
       g.v = neighbors[j];
       array_cat(struct graph_element, nlist, &g, 1);
     }
+    // Add a self edge.
+    g.v = g.u;
+    array_cat(struct graph_element, nlist, &g, 1);
   }
 
   sarray_transfer(struct graph_element, nlist, proc, 0, cr);

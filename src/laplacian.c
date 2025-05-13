@@ -79,13 +79,13 @@ static void csr_init(laplacian l, struct array *nlist, const struct comm *c) {
     while ((i < nlist->n) && (pe[n].u == pe[i].u) && (pe[i].v < pe[i].u))
       L->v[nnz] = -1, ids[nnz] = -pe[i].v, i++, nnz++;
 
-    L->di[rn++] = nnz, nnz++;
+    L->di[rn++] = nnz, nnz++, i++;
 
     while ((i < nlist->n) && (pe[n].u == pe[i].u))
       L->v[nnz] = -1, ids[nnz] = -pe[i].v, i++, nnz++;
 
     uint d = L->di[rn - 1];
-    ids[d] = pe[n].u, L->v[d] = i - n, L->off[rn] = nnz, n = i;
+    ids[d] = pe[n].u, L->v[d] = i - n - 1, L->off[rn] = nnz, n = i;
   }
 
   L->gsh = gs_setup(ids, nnz, c, 0, gs_crystal_router, 0);
