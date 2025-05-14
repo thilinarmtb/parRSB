@@ -39,6 +39,8 @@ INSTALLDIR = $(PROJDIR)/install
 ifneq ($(strip $(DESTDIR)),)
 	INSTALLDIR = $(DESTDIR)
 endif
+LIBDIR = $(INSTALLDIR)/lib
+INCDIR = $(INSTALLDIR)/include
 
 SRC.c = $(wildcard $(SRCDIR)/*.c)
 SRC.o = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%.o,$(SRC.c))
@@ -60,9 +62,9 @@ lib: $(SRC.o) | $(BUILDDIR)
 	@$(AR) cr $(LIB.a) $?
 	@ranlib $(LIB.a)
 
-install: lib | $(INSTALLDIR)
-	@cp -v $(LIB.a) $(INSTALLDIR)/lib 2>/dev/null
-	@cp $(SRCDIR)/*.h $(INSTALLDIR)/include 2>/dev/null
+install: lib | $(INCDIR) $(LIBDIR)
+	@cp -v $(LIB.a) $(INSTALLDIR)/lib
+	@cp -v $(SRCDIR)/*.h $(INSTALLDIR)/include
 
 example: $(EXAMPLE.bin) | lib install
 
@@ -94,6 +96,8 @@ $(BUILDDIR):
 	@mkdir -p $(BUILDDIR)/example
 	@mkdir -p $(BUILDDIR)/test
 
-$(INSTALLDIR):
-	@mkdir -p $(INSTALLDIR)/lib 2>/dev/null
-	@mkdir -p $(INSTALLDIR)/include 2>/dev/null
+$(INCDIR):
+	@mkdir -p $(INSTALLDIR)/include
+
+$(LIBDIR):
+	@mkdir -p $(INSTALLDIR)/lib
