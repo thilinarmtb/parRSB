@@ -98,14 +98,14 @@ int main(int argc, char *argv[]) {
   buffer_init(&bfr, 1024);
 
   element_info ei;
-  graph_element_info_init(&ei);
+  element_info_init(&ei);
 
   int err = 0;
   err |= test_path_00(ei, &cr, &bfr);
   err |= test_ring_00(ei, &cr, &bfr);
   err |= test_complete_00(ei, &cr, &bfr);
 
-  graph_element_info_free(&ei);
+  element_info_free(&ei);
   buffer_free(&bfr);
   crystal_free(&cr);
   comm_free(&c);

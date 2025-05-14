@@ -890,7 +890,7 @@ int graph_load_balance(struct array *nlist, uint nn, const long long *nodes,
   return 0;
 }
 
-void graph_element_info_init(element_info *ei_) {
+void element_info_init(element_info *ei_) {
   element_info ei = *ei_ = tcalloc(struct element_info, 1);
   ei->nv = 0;
   ei->nd = 0;
@@ -898,7 +898,7 @@ void graph_element_info_init(element_info *ei_) {
   ei->align = ALIGNOF(struct graph_element);
 }
 
-void graph_element_info_free(element_info *ei) {
+void element_info_free(element_info *ei) {
   if (!ei || !(*ei)) return;
 
   free(*ei), *ei = 0;
@@ -945,7 +945,7 @@ int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
   metric_init();
 
   element_info ei;
-  graph_element_info_init(&ei);
+  element_info_init(&ei);
 
   struct array nlist;
   graph_load_balance(&nlist, num_nodes, nodes, offsets, neighbors, &cr, &bfr);
@@ -971,7 +971,7 @@ int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
   metric_rsb_print(&c, options->profile_level);
 
   graph_restore(part, &nlist, &cr, &bfr);
-  graph_element_info_free(&ei);
+  element_info_free(&ei);
   metric_finalize();
   crystal_free(&cr);
   buffer_free(&bfr);

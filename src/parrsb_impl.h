@@ -109,11 +109,11 @@ struct element_info {
 
 typedef struct element_info *element_info;
 
-INTERN void graph_element_info_init(element_info *ei);
-
-INTERN void graph_element_info_free(element_info *ei);
-
 typedef enum { MESH = 0, GRAPH = 1 } element_t;
+
+INTERN void element_info_init(element_info *ei);
+
+INTERN void element_info_free(element_info *ei);
 
 INTERN element_t element_info_type(element_info ei);
 
