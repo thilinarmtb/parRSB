@@ -50,9 +50,7 @@ TEST.c = $(wildcard $(TESTDIR)/*.c)
 TEST.bin = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%,$(TEST.c))
 LIB.a = $(BUILDDIR)/lib/libparRSB.a
 
-INCFLAGS = -I$(SRCDIR) -I$(GSLIBPATH)/include
-CCCMD = $(CC) $(CFLAGS) $(INCFLAGS) $(PP)
-LDFLAGS += -L$(INSTALLDIR)/lib -lparRSB -L$(GSLIBPATH)/lib -lgs -lm
+LDFLAGS += -L$(LIBDIR) -lparRSB -L$(GSLIBPATH)/lib -lgs -lm
 
 .PHONY: all lib install example format clean
 
@@ -85,10 +83,10 @@ print-%:
 	@true
 
 $(BUILDDIR)/%.o: $(PROJDIR)/%.c | $(BUILDDIR)
-	$(CCCMD) -c $< -o $@
+	$(CC) $(CFLAGS) -I$(SRCDIR) -I$(GSLIBPATH)/include $(PP) -c $< -o $@
 
 $(BUILDDIR)/%: $(PROJDIR)/%.c | lib install
-	$(CCCMD) $< -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) -I$(INCDIR) -I$(GSLIBPATH)/include $< -o $@ $(LDFLAGS)
 
 $(BUILDDIR):
 	@mkdir -p $(BUILDDIR)/lib
