@@ -12,7 +12,7 @@
 #define PARRSB_TEST_TOL 1e-12
 #define PARRSB_TEST_EPS 1e-15
 
-#define parrsb_test(cond, c)                                                   \
+#define parrsb_assert(cond, c)                                                 \
   do {                                                                         \
     sint err__ = !(cond);                                                      \
     sint wrk__;                                                                \

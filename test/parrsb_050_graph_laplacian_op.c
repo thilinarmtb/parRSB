@@ -30,7 +30,7 @@ static int test_base(const element_info ei, unsigned n, graph_type_t type,
   graph_restore(NULL, &nlist, cr, bfr);
   graph_free(&g);
 
-  parrsb_test(size == 0 || normv < PARRSB_TEST_TOL, c);
+  parrsb_assert(size == 0 || normv < PARRSB_TEST_TOL, c);
 }
 
 static int test_path_00(const element_info ei, struct crystal *cr,

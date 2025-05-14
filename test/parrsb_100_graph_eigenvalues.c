@@ -53,7 +53,7 @@ static int test_path_00(const element_info ei, struct crystal *cr,
 
   scalar eva = 2 * (1 - cos((M_PI * 1) / ng));
 
-  parrsb_test(((fabs(evc - eva) / eva) < PARRSB_TEST_EPS), c);
+  parrsb_assert(((fabs(evc - eva) / eva) < PARRSB_TEST_EPS), c);
 }
 
 static int test_ring_00(const element_info ei, struct crystal *cr,
@@ -67,7 +67,7 @@ static int test_ring_00(const element_info ei, struct crystal *cr,
 
   scalar eva = 2 * (1 - cos((2 * M_PI * 1) / ng));
 
-  parrsb_test(((fabs(evc - eva) / eva) < PARRSB_TEST_EPS), c);
+  parrsb_assert(((fabs(evc - eva) / eva) < PARRSB_TEST_EPS), c);
 }
 
 static int test_complete_00(const element_info ei, struct crystal *cr,
@@ -80,7 +80,7 @@ static int test_complete_00(const element_info ei, struct crystal *cr,
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
   scalar eva = ng;
 
-  parrsb_test(((fabs(evc - eva) / eva) < PARRSB_TEST_EPS), c);
+  parrsb_assert(((fabs(evc - eva) / eva) < PARRSB_TEST_EPS), c);
 }
 
 int main(int argc, char *argv[]) {

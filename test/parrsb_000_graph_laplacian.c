@@ -24,7 +24,7 @@ static int test_empty_path(const element_info ei, struct crystal *cr,
   laplacian_free(&l);
 
   const struct comm *c = &(cr->comm);
-  parrsb_test(n == 0, c);
+  parrsb_assert(n == 0, c);
 }
 
 static int test_empty_ring(const element_info ei, struct crystal *cr,
@@ -35,7 +35,7 @@ static int test_empty_ring(const element_info ei, struct crystal *cr,
   laplacian_free(&l);
 
   const struct comm *c = &(cr->comm);
-  parrsb_test(n == 0, c);
+  parrsb_assert(n == 0, c);
 }
 
 static int test_empty_complete(const element_info ei, struct crystal *cr,
@@ -46,7 +46,7 @@ static int test_empty_complete(const element_info ei, struct crystal *cr,
   laplacian_free(&l);
 
   const struct comm *c = &(cr->comm);
-  parrsb_test(n == 0, c);
+  parrsb_assert(n == 0, c);
 }
 
 static int test_single_node_path(const element_info ei, struct crystal *cr,
@@ -60,7 +60,7 @@ static int test_single_node_path(const element_info ei, struct crystal *cr,
 
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
-  parrsb_test(ng == 1, c);
+  parrsb_assert(ng == 1, c);
 }
 
 static int test_single_node_ring(const element_info ei, struct crystal *cr,
@@ -74,7 +74,7 @@ static int test_single_node_ring(const element_info ei, struct crystal *cr,
 
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
-  parrsb_test(ng == 1, c);
+  parrsb_assert(ng == 1, c);
 }
 
 static int test_single_node_complete(const element_info ei, struct crystal *cr,
@@ -88,7 +88,7 @@ static int test_single_node_complete(const element_info ei, struct crystal *cr,
 
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
-  parrsb_test(ng == 1, c);
+  parrsb_assert(ng == 1, c);
 }
 
 static int test_multiple_node_path(const element_info ei, struct crystal *cr,
@@ -142,7 +142,7 @@ static int test_multiple_node_path(const element_info ei, struct crystal *cr,
 
   free(u), free(v);
   laplacian_free(&l);
-  parrsb_test(err == 0, c);
+  parrsb_assert(err == 0, c);
 }
 
 static int test_multiple_node_ring(const element_info ei, struct crystal *cr,
@@ -198,7 +198,7 @@ static int test_multiple_node_ring(const element_info ei, struct crystal *cr,
 
   free(u), free(v);
   laplacian_free(&l);
-  parrsb_test(err == 0, c);
+  parrsb_assert(err == 0, c);
 }
 
 static int test_multiple_node_complete(const element_info ei,
@@ -241,7 +241,7 @@ static int test_multiple_node_complete(const element_info ei,
 
   free(u), free(v);
   laplacian_free(&l);
-  parrsb_test(err == 0, c);
+  parrsb_assert(err == 0, c);
 }
 
 int main(int argc, char *argv[]) {
