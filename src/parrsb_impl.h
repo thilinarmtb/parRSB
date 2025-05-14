@@ -51,28 +51,6 @@
 #define MAXDEPTH 32
 
 /*
- * Arena implementation with gslib buffer.
- */
-struct arena {
-  uint n;
-  buffer bfr[MAXDEPTH];
-};
-
-typedef struct arena *arena_t;
-
-INTERN void arena_init(arena_t *arena);
-
-INTERN void *arena_start(arena_t arena, size_t capacity);
-#define arena_tstart(T, arena, n) (T *)arena_start(arena, sizeof(T) * (n));
-
-INTERN void *arena_alloc(arena_t arena, size_t size);
-#define arena_talloc(T, arena, n) (T *)arena_alloc(arena, sizeof(T) * (n))
-
-INTERN void arena_stop(arena_t arena);
-
-INTERN void arena_free(arena_t *arena);
-
-/*
  * parRSB configuration options.
  */
 struct parrsb_options {
