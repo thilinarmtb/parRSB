@@ -13,7 +13,6 @@ static void check_connectivity(long long *vlp, char *name, MPI_Comm comm) {
   uint size = nelt * nv;
   slong *minp = tcalloc(slong, size);
   slong *maxp = tcalloc(slong, size);
-  parrsb_check_error(minp == NULL || maxp == NULL, comm);
 
   struct comm c;
   comm_init(&c, comm);
@@ -44,7 +43,8 @@ static void check_connectivity(long long *vlp, char *name, MPI_Comm comm) {
   gs(maxp, gs_long, gs_max, 0, gsh, &bfr);
   gs_free(gsh);
 
-  for (err = 0, i = 0; i < size; i++) {
+  err = 0;
+  for (i = 0; i < size; i++) {
     if (minp[i] != maxp[i]) {
       err = 1;
       break;

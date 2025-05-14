@@ -31,10 +31,6 @@ typedef struct graph_t *graph_t;
 
 typedef enum { PATH = 0, RING, COMPLETE } graph_type_t;
 
-/*
- * Path is a $N x 1 x 1$ graph or a mesh with N vertices or elements.
- * Here, $N = \sum_{i=1}^{P}{n}$ and $P$ is the number of processes.
- */
 static inline void graph_init(graph_t *graph, unsigned n, graph_type_t type,
                               MPI_Comm comm) {
   struct comm c;

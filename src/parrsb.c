@@ -209,7 +209,7 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   free(ei);
 }
 
-void parrsb_check_tagged_partitions(const long long *const eids,
+static void check_tagged_partitions(const long long *const eids,
                                     const long long *const vtx, const uint nel,
                                     const unsigned nv, const uint ntags,
                                     const struct comm *const c,
