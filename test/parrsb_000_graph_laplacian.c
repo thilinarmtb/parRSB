@@ -259,7 +259,7 @@ int main(int argc, char *argv[]) {
   buffer_init(&bfr, 1024);
 
   element_info ei;
-  element_info_init(&ei);
+  element_info_init(&ei, GRAPH);
 
   int err = 0;
   err |= test_empty_path(ei, &cr, &bfr);

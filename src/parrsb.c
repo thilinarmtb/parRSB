@@ -890,12 +890,15 @@ int graph_load_balance(struct array *nlist, uint nn, const long long *nodes,
   return 0;
 }
 
-void element_info_init(element_info *ei_) {
+void element_info_init(element_info *ei_, element_t type) {
   element_info ei = *ei_ = tcalloc(struct element_info, 1);
   ei->nv = 0;
   ei->nd = 0;
-  ei->size = sizeof(struct graph_element);
-  ei->align = ALIGNOF(struct graph_element);
+
+  if (type == GRAPH) {
+    ei->size = sizeof(struct graph_element);
+    ei->align = ALIGNOF(struct graph_element);
+  }
 }
 
 void element_info_free(element_info *ei) {
@@ -945,7 +948,7 @@ int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
   metric_init();
 
   element_info ei;
-  element_info_init(&ei);
+  element_info_init(&ei, GRAPH);
 
   struct array nlist;
   graph_load_balance(&nlist, num_nodes, nodes, offsets, neighbors, &cr, &bfr);

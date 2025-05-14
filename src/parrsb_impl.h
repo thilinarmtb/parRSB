@@ -111,7 +111,7 @@ typedef struct element_info *element_info;
 
 typedef enum { MESH = 0, GRAPH = 1 } element_t;
 
-INTERN void element_info_init(element_info *ei);
+INTERN void element_info_init(element_info *ei, element_t type);
 
 INTERN void element_info_free(element_info *ei);
 
