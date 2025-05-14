@@ -50,6 +50,18 @@ void parrsb_options_print(const parrsb_options_t options) {
 #undef PRINT_OPTION
 }
 
+int parrsb_options_set_partitioner(parrsb_options_t options, int partitioner) {
+  if (partitioner < 0 || partitioner > 2) return 1;
+  options->partitioner = partitioner;
+  return 0;
+}
+
+int parrsb_options_set_rsb_algo(parrsb_options_t options, int algo) {
+  if (algo != 0) return 1;
+  options->rsb_algo = algo;
+  return 0;
+}
+
 int parrsb_options_free(parrsb_options_t *options) {
   if (!options) return 1;
   if (*options) free(*options), *options = 0;
