@@ -22,7 +22,7 @@ static void partition(long long *vl, double *coord, unsigned nelt, unsigned nv,
   // Partition the mesh.
   int *part = (int *)calloc(nelt, sizeof(int));
 
-  parrsb_options options;
+  parrsb_options_t options;
   parrsb_options_get_default(&options);
   int err = parrsb_part_mesh(part, vl, coord, NULL, nelt, nv, options, comm);
   parrsb_options_free(&options);

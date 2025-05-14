@@ -41,7 +41,7 @@ specified in the command line.
 
 ```C
 int parrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
-                     int nel, int nv, parrsb_options opts, MPI_Comm comm)
+                     int nel, int nv, parrsb_options_t opts, MPI_Comm comm)
 ```
 
 See `example/genmap.c` for an example.

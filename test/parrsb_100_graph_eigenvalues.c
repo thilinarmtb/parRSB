@@ -23,7 +23,7 @@ static scalar test_eigenvalue(const element_info ei, unsigned n,
   scalar *f = tcalloc(scalar, 2 * size), *v = f + size;
   for (uint i = 0; i < size; i++) v[i] = start + i;
 
-  parrsb_options opts;
+  parrsb_options_t opts;
   parrsb_options_get_default(&opts);
   lanczos(f, l, v, c, opts);
   parrsb_options_free(&opts);

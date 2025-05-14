@@ -99,7 +99,7 @@ static int lanczos_aux(scalar *diag, scalar *upper, scalar *rr, laplacian l,
 }
 
 int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
-            const parrsb_options opts) {
+            const parrsb_options_t opts) {
   uint n = laplacian_size(l);
   slong ng = n, wrk;
   comm_allreduce(c, gs_long, gs_add, &ng, 1, &wrk);
@@ -164,7 +164,7 @@ static void set_rhs(scalar *r, uint n, const struct comm *c) {
   for (uint i = 0; i < n; i++) r[i] *= normi;
 }
 
-int fiedler(scalar *f, laplacian l, const parrsb_options opts,
+int fiedler(scalar *f, laplacian l, const parrsb_options_t opts,
             const struct comm *c) {
   // Return if the number of processes is equal to 1.
   if (c->np == 1) return 0;

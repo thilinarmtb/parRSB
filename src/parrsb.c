@@ -9,7 +9,7 @@
 
 static char *ALGO[3] = {"RSB", "RCB", "RIB"};
 
-static void options_update(parrsb_options options) {
+static void options_update(parrsb_options_t options) {
 #define OPT_UPDATE(opt, var, is_int)                                           \
   do {                                                                         \
     const char *val = getenv(var);                                             \
@@ -47,7 +47,8 @@ static void initialize_node_comm(struct comm *c, const struct comm *const gc) {
   MPI_Comm_free(&node);
 }
 
-static void initialize_levels(struct comm *const comms, parrsb_options options,
+static void initialize_levels(struct comm *const comms,
+                              parrsb_options_t options,
                               const struct comm *const c) {
   const int verbose = options->verbose_level;
 
@@ -166,7 +167,8 @@ free_array:
 
 static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
                                 const double *const xyz, const uint nel,
-                                const unsigned nv, const parrsb_options options,
+                                const unsigned nv,
+                                const parrsb_options_t options,
                                 const struct comm *const c,
                                 struct crystal *const cr, buffer *const bfr) {
   element_info ei = tcalloc(struct element_info, 1);
@@ -299,7 +301,7 @@ static void check_tagged_partitions(const long long *const eids,
 static void parrsb_part_mesh_v1(int *part, const long long *const vtx,
                                 const double *const xyz, const int *const tag,
                                 const uint nel, const unsigned nv,
-                                const parrsb_options options,
+                                const parrsb_options_t options,
                                 const struct comm *const c,
                                 struct crystal *const cr, buffer *const bfr) {
   const int verbose = options->verbose_level;
@@ -771,7 +773,7 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
 
 int parrsb_part_mesh(int *part, const long long *const vtx,
                      const double *const xyz, const int *const tag,
-                     const int ne, const int nv, const parrsb_options options,
+                     const int ne, const int nv, const parrsb_options_t options,
                      MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
@@ -924,7 +926,7 @@ free_array:
 
 int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
                       const unsigned *offsets, const long long *neighbors,
-                      const parrsb_options options, const MPI_Comm comm) {
+                      const parrsb_options_t options, const MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 

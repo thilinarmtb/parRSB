@@ -137,7 +137,7 @@ element_type_t element_info_type(element_info ei) {
 }
 
 static void prepartition(struct array *arr, const element_info ei,
-                         const parrsb_options options, const struct comm *c,
+                         const parrsb_options_t options, const struct comm *c,
                          buffer *bfr) {
   if (element_info_type(ei) != MESH) return;
 
@@ -264,7 +264,7 @@ static void bisect(struct comm *c, struct array *elements, const scalar *f,
 }
 
 static void calc_stats(const struct array *elements, const struct comm *gc,
-                       const struct comm *lc, const parrsb_options options,
+                       const struct comm *lc, const parrsb_options_t options,
                        const element_info ei, buffer *bfr) {
   // Find the number of disconnected components.
   if (options->find_disconnected_comps == 1) {
@@ -279,7 +279,8 @@ static void calc_stats(const struct array *elements, const struct comm *gc,
   metric_push_level();
 }
 
-static void check_partition(const struct comm *gc, const parrsb_options opts) {
+static void check_partition(const struct comm *gc,
+                            const parrsb_options_t opts) {
   sint max_levels = metric_get_levels();
   uint miter = opts->rsb_max_iter;
   uint mpass = opts->rsb_max_passes;
@@ -347,7 +348,8 @@ static void check_partition(const struct comm *gc, const parrsb_options opts) {
 }
 
 void rsb(struct array *elements, const element_info ei,
-         const parrsb_options options, const struct comm *comms, buffer *bfr) {
+         const parrsb_options_t options, const struct comm *comms,
+         buffer *bfr) {
   scalar *f = tcalloc(scalar, elements->n + 1);
   const struct comm *gc = &comms[0];
   const uint levels = options->levels;

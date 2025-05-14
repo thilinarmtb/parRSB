@@ -16,19 +16,19 @@ static struct parrsb_options default_options = {.partitioner = 0,
                                                 .rsb_mg_grammian = 0,
                                                 .rsb_mg_factor = 2};
 
-int parrsb_options_get_default(parrsb_options *options) {
+int parrsb_options_get_default(parrsb_options_t *options) {
   *options = tcalloc(struct parrsb_options, 1);
   memcpy(*options, &default_options, sizeof(struct parrsb_options));
   return 0;
 }
 
-int parrsb_options_copy(parrsb_options *dest, const parrsb_options src) {
+int parrsb_options_copy(parrsb_options_t *dest, const parrsb_options_t src) {
   *dest = tcalloc(struct parrsb_options, 1);
   memcpy(*dest, src, sizeof(struct parrsb_options));
   return 0;
 }
 
-void parrsb_options_print(const parrsb_options options) {
+void parrsb_options_print(const parrsb_options_t options) {
 #define PRINT_OPTION(OPT, STR, FMT) printf("%s = " FMT "\n", STR, options->OPT)
 
   PRINT_OPTION(partitioner, "PARRSB_PARTITIONER", "%d");
@@ -50,7 +50,7 @@ void parrsb_options_print(const parrsb_options options) {
 #undef PRINT_OPTION
 }
 
-int parrsb_options_free(parrsb_options *options) {
+int parrsb_options_free(parrsb_options_t *options) {
   if (!options) return 1;
   if (*options) free(*options), *options = 0;
   return 0;

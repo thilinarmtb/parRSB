@@ -172,13 +172,13 @@ struct rsb_element {
 typedef struct rsb_element *rsb_element;
 
 INTERN void rsb(struct array *elements, const element_info ei,
-                const parrsb_options options, const struct comm *comms,
+                const parrsb_options_t options, const struct comm *comms,
                 buffer *bfr);
 
 INTERN int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
-                   const parrsb_options opts);
+                   const parrsb_options_t opts);
 
-INTERN int fiedler(scalar *fiedler, laplacian l, const parrsb_options opts,
+INTERN int fiedler(scalar *fiedler, laplacian l, const parrsb_options_t opts,
                    const struct comm *c);
 
 /*
