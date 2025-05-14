@@ -109,13 +109,13 @@ struct element_info {
 
 typedef struct element_info *element_info;
 
-typedef enum { MESH = 0, GRAPH = 1 } element_t;
+typedef enum { MESH = 0, GRAPH = 1 } element_type_t;
 
-INTERN void element_info_init(element_info *ei, element_t type);
+INTERN void element_info_init(element_info *ei, element_type_t type);
 
 INTERN void element_info_free(element_info *ei);
 
-INTERN element_t element_info_type(element_info ei);
+INTERN element_type_t element_info_type(element_info ei);
 
 /*
  * Base element for mesh and graph partitioning. All of the structures used for

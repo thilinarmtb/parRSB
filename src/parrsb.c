@@ -890,7 +890,7 @@ int graph_load_balance(struct array *nlist, uint nn, const long long *nodes,
   return 0;
 }
 
-void element_info_init(element_info *ei_, element_t type) {
+void element_info_init(element_info *ei_, element_type_t type) {
   element_info ei = *ei_ = tcalloc(struct element_info, 1);
   ei->nv = 0;
   ei->nd = 0;

@@ -131,7 +131,7 @@ static uint get_level_cuts(const uint level, const uint levels,
   return cuts;
 }
 
-element_t element_info_type(element_info ei) {
+element_type_t element_info_type(element_info ei) {
   if (ei->nv > 0) return MESH;
   return GRAPH;
 }
