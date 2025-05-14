@@ -1,7 +1,7 @@
 #include "parrsb_test.h"
 
-static int test_base(const element_info ei, unsigned n, graph_type_t type,
-                     struct crystal *cr, buffer *bfr) {
+static int test_laplacian(const element_info ei, unsigned n, graph_type_t type,
+                          struct crystal *cr, buffer *bfr) {
   const struct comm *c = &(cr->comm);
 
   graph_t g;
@@ -35,101 +35,101 @@ static int test_base(const element_info ei, unsigned n, graph_type_t type,
 
 static int test_path_00(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
-  return test_base(ei, 0, PATH, cr, bfr);
+  return test_laplacian(ei, 0, PATH, cr, bfr);
 }
 
 static int test_ring_00(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
-  return test_base(ei, 0, RING, cr, bfr);
+  return test_laplacian(ei, 0, RING, cr, bfr);
 }
 
 static int test_complete_00(const element_info ei, struct crystal *cr,
                             buffer *bfr) {
-  return test_base(ei, 0, COMPLETE, cr, bfr);
+  return test_laplacian(ei, 0, COMPLETE, cr, bfr);
 }
 
 static int test_path_05(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
-  return test_base(ei, 1, PATH, cr, bfr);
+  return test_laplacian(ei, 1, PATH, cr, bfr);
 }
 
 static int test_ring_05(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
-  return test_base(ei, 1, RING, cr, bfr);
+  return test_laplacian(ei, 1, RING, cr, bfr);
 }
 
 static int test_complete_05(const element_info ei, struct crystal *cr,
                             buffer *bfr) {
-  return test_base(ei, 1, COMPLETE, cr, bfr);
+  return test_laplacian(ei, 1, COMPLETE, cr, bfr);
 }
 
 static int test_path_10(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
-  return test_base(ei, 2, PATH, cr, bfr);
+  return test_laplacian(ei, 2, PATH, cr, bfr);
 }
 
 static int test_ring_10(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
-  return test_base(ei, 2, RING, cr, bfr);
+  return test_laplacian(ei, 2, RING, cr, bfr);
 }
 
 static int test_complete_10(const element_info ei, struct crystal *cr,
                             buffer *bfr) {
-  return test_base(ei, 2, COMPLETE, cr, bfr);
+  return test_laplacian(ei, 2, COMPLETE, cr, bfr);
 }
 
 static int test_path_15(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
   const struct comm *c = &(cr->comm);
-  return test_base(ei, c->id % 2, PATH, cr, bfr);
+  return test_laplacian(ei, c->id % 2, PATH, cr, bfr);
 }
 
 static int test_ring_15(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
   const struct comm *c = &(cr->comm);
-  return test_base(ei, c->id % 2, RING, cr, bfr);
+  return test_laplacian(ei, c->id % 2, RING, cr, bfr);
 }
 
 static int test_complete_15(const element_info ei, struct crystal *cr,
                             buffer *bfr) {
   const struct comm *c = &(cr->comm);
-  return test_base(ei, c->id % 2, COMPLETE, cr, bfr);
+  return test_laplacian(ei, c->id % 2, COMPLETE, cr, bfr);
 }
 
 static int test_path_20(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
   const struct comm *c = &(cr->comm);
-  return test_base(ei, c->id >= c->np / 2, PATH, cr, bfr);
+  return test_laplacian(ei, c->id >= c->np / 2, PATH, cr, bfr);
 }
 
 static int test_ring_20(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
   const struct comm *c = &(cr->comm);
-  return test_base(ei, c->id >= c->np / 2, RING, cr, bfr);
+  return test_laplacian(ei, c->id >= c->np / 2, RING, cr, bfr);
 }
 
 static int test_complete_20(const element_info ei, struct crystal *cr,
                             buffer *bfr) {
   const struct comm *c = &(cr->comm);
-  return test_base(ei, c->id >= c->np / 2, COMPLETE, cr, bfr);
+  return test_laplacian(ei, c->id >= c->np / 2, COMPLETE, cr, bfr);
 }
 
 static int test_path_25(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
   const struct comm *c = &(cr->comm);
-  return test_base(ei, c->id, PATH, cr, bfr);
+  return test_laplacian(ei, c->id, PATH, cr, bfr);
 }
 
 static int test_ring_25(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
   const struct comm *c = &(cr->comm);
-  return test_base(ei, c->id, RING, cr, bfr);
+  return test_laplacian(ei, c->id, RING, cr, bfr);
 }
 
 static int test_complete_25(const element_info ei, struct crystal *cr,
                             buffer *bfr) {
   const struct comm *c = &(cr->comm);
-  return test_base(ei, c->id, COMPLETE, cr, bfr);
+  return test_laplacian(ei, c->id, COMPLETE, cr, bfr);
 }
 
 int main(int argc, char *argv[]) {

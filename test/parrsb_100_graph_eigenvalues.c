@@ -1,7 +1,8 @@
 #include "parrsb_test.h"
 
-static scalar test_base(const element_info ei, unsigned n, graph_type_t type,
-                        struct crystal *cr, buffer *bfr) {
+static scalar test_eigenvalue(const element_info ei, unsigned n,
+                              graph_type_t type, struct crystal *cr,
+                              buffer *bfr) {
   const struct comm *c = &(cr->comm);
 
   graph_t g;
@@ -45,7 +46,7 @@ static scalar test_base(const element_info ei, unsigned n, graph_type_t type,
 static int test_path_00(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
   sint n = 3;
-  scalar evc = test_base(ei, n, PATH, cr, bfr);
+  scalar evc = test_eigenvalue(ei, n, PATH, cr, bfr);
 
   const struct comm *c = &(cr->comm);
   slong ng = n, wrk;
@@ -59,7 +60,7 @@ static int test_path_00(const element_info ei, struct crystal *cr,
 static int test_ring_00(const element_info ei, struct crystal *cr,
                         buffer *bfr) {
   sint n = 3;
-  scalar evc = test_base(ei, n, RING, cr, bfr);
+  scalar evc = test_eigenvalue(ei, n, RING, cr, bfr);
 
   const struct comm *c = &(cr->comm);
   slong ng = n, wrk;
@@ -73,7 +74,7 @@ static int test_ring_00(const element_info ei, struct crystal *cr,
 static int test_complete_00(const element_info ei, struct crystal *cr,
                             buffer *bfr) {
   sint n = 3;
-  scalar evc = test_base(ei, n, COMPLETE, cr, bfr);
+  scalar evc = test_eigenvalue(ei, n, COMPLETE, cr, bfr);
 
   const struct comm *c = &(cr->comm);
   slong ng = n, wrk;

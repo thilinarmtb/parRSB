@@ -1,7 +1,8 @@
 #include "parrsb_test.h"
 
-static void test_base(laplacian *l, const element_info ei, unsigned n,
-                      graph_type_t type, struct crystal *cr, buffer *bfr) {
+static void test_laplacian_init(laplacian *l, const element_info ei, unsigned n,
+                                graph_type_t type, struct crystal *cr,
+                                buffer *bfr) {
   const struct comm *c = &(cr->comm);
 
   graph_t g;
@@ -19,7 +20,7 @@ static void test_base(laplacian *l, const element_info ei, unsigned n,
 static int test_empty_path(const element_info ei, struct crystal *cr,
                            buffer *bfr) {
   laplacian l;
-  test_base(&l, ei, 0, PATH, cr, bfr);
+  test_laplacian_init(&l, ei, 0, PATH, cr, bfr);
   uint n = laplacian_size(l);
   laplacian_free(&l);
 
@@ -30,7 +31,7 @@ static int test_empty_path(const element_info ei, struct crystal *cr,
 static int test_empty_ring(const element_info ei, struct crystal *cr,
                            buffer *bfr) {
   laplacian l;
-  test_base(&l, ei, 0, RING, cr, bfr);
+  test_laplacian_init(&l, ei, 0, RING, cr, bfr);
   uint n = laplacian_size(l);
   laplacian_free(&l);
 
@@ -41,7 +42,7 @@ static int test_empty_ring(const element_info ei, struct crystal *cr,
 static int test_empty_complete(const element_info ei, struct crystal *cr,
                                buffer *bfr) {
   laplacian l;
-  test_base(&l, ei, 0, COMPLETE, cr, bfr);
+  test_laplacian_init(&l, ei, 0, COMPLETE, cr, bfr);
   uint n = laplacian_size(l);
   laplacian_free(&l);
 
@@ -54,7 +55,7 @@ static int test_single_node_path(const element_info ei, struct crystal *cr,
   const struct comm *c = &(cr->comm);
 
   laplacian l;
-  test_base(&l, ei, c->id == 0, PATH, cr, bfr);
+  test_laplacian_init(&l, ei, c->id == 0, PATH, cr, bfr);
   uint n = laplacian_size(l);
   laplacian_free(&l);
 
@@ -68,7 +69,7 @@ static int test_single_node_ring(const element_info ei, struct crystal *cr,
   const struct comm *c = &(cr->comm);
 
   laplacian l;
-  test_base(&l, ei, c->id == 0, RING, cr, bfr);
+  test_laplacian_init(&l, ei, c->id == 0, RING, cr, bfr);
   uint n = laplacian_size(l);
   laplacian_free(&l);
 
@@ -82,7 +83,7 @@ static int test_single_node_complete(const element_info ei, struct crystal *cr,
   const struct comm *c = &(cr->comm);
 
   laplacian l;
-  test_base(&l, ei, c->id == 0, COMPLETE, cr, bfr);
+  test_laplacian_init(&l, ei, c->id == 0, COMPLETE, cr, bfr);
   uint n = laplacian_size(l);
   laplacian_free(&l);
 
@@ -98,7 +99,7 @@ static int test_multiple_node_path(const element_info ei, struct crystal *cr,
   sint n = 2;
 
   laplacian l;
-  test_base(&l, ei, n, PATH, cr, bfr);
+  test_laplacian_init(&l, ei, n, PATH, cr, bfr);
 
   uint m = laplacian_size(l);
 
@@ -152,7 +153,7 @@ static int test_multiple_node_ring(const element_info ei, struct crystal *cr,
   sint n = 3;
 
   laplacian l;
-  test_base(&l, ei, n, RING, cr, bfr);
+  test_laplacian_init(&l, ei, n, RING, cr, bfr);
 
   uint m = laplacian_size(l);
 
@@ -208,7 +209,7 @@ static int test_multiple_node_complete(const element_info ei,
   sint n = 2;
 
   laplacian l;
-  test_base(&l, ei, n, COMPLETE, cr, bfr);
+  test_laplacian_init(&l, ei, n, COMPLETE, cr, bfr);
 
   uint m = laplacian_size(l);
 
