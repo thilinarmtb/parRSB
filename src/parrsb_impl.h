@@ -3,11 +3,25 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include "parrsb.h"
-#include "types.h"
-
 #include <float.h>
 #include <stdlib.h>
+
+#include "gslib.h"
+#include "parrsb.h"
+
+typedef double scalar;
+#define SCALAR_MAX DBL_MAX
+#define SCALAR_MIN DBL_MIN
+#define SCALAR_TOL 1e-12
+#define gs_scalar gs_double
+
+#if !defined(GSLIB_USE_MPI)
+#error "gslib needs to be compiled with MPI"
+#endif
+
+#if !defined(GSLIB_USE_GLOBAL_LONG_LONG)
+#error "gslib needs to be compiled with GLOBAL_LONG_LONG"
+#endif
 
 /*
  * Set the visibility of a symbol.

@@ -1,12 +1,16 @@
 #ifndef _PARRSB_EXAMPLE_H_
 #define _PARRSB_EXAMPLE_H_
 
+#define _POSIX_C_SOURCE 200809L
+
+#include <gslib.h>
 #include <parrsb.h>
 
-#define _POSIX_C_SOURCE 1
 #include <getopt.h>
 #include <limits.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX BUFSIZ

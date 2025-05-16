@@ -294,9 +294,12 @@ int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
   return 0;
 }
 
-//=============================================================================
-// Fortran interface
-//
+/*
+ * Fortran interface.
+ */
+#define fparrsb_conn_mesh                                                      \
+  GS_FORTRAN_UNPREFIXED(fparrsb_conn_mesh, FPARRSB_CONN_MESH)
+
 void fparrsb_conn_mesh(long long *vtx, double *coord, int *nelt, int *ndim,
                        long long *pinfo, int *npinfo, double *tol,
                        MPI_Fint *fcomm, int *err) {

@@ -10,7 +10,7 @@ static void check_connectivity(long long *vlp, char *name, MPI_Comm comm) {
   int err = parrsb_read_mesh(&nelt, &nv, &vls, NULL, NULL, NULL, name, comm, 2);
   parrsb_check_error(err, comm);
 
-  uint size = nelt * nv;
+  unsigned size = nelt * nv;
   slong *minp = tcalloc(slong, size);
   slong *maxp = tcalloc(slong, size);
 
@@ -18,7 +18,7 @@ static void check_connectivity(long long *vlp, char *name, MPI_Comm comm) {
   comm_init(&c, comm);
   struct gs_data *gsh = gs_setup(vls, size, &c, 0, gs_pairwise, 0);
 
-  uint i;
+  unsigned i;
   for (i = 0; i < size; i++) minp[i] = maxp[i] = vlp[i];
 
   buffer bfr;
