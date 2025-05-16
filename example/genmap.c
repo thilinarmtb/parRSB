@@ -71,11 +71,10 @@ int main(int argc, char *argv[]) {
   if (rank >= in->nactive) goto finalize;
 
   // Read the geometry from the .re2 file.
-  unsigned int nelt, nbcs, nv;
+  unsigned nelt, nbcs, nv, err;
   double *coord = 0;
   long long *bcs = 0;
-  int err =
-      parrsb_read_mesh(&nelt, &nv, 0, &coord, &nbcs, &bcs, in->mesh, comm, 1);
+  err = parrsb_read_mesh(&nelt, &nv, 0, &coord, &nbcs, &bcs, in->mesh, comm, 1);
   parrsb_check_error(err, comm);
 
   // Find connectivity.

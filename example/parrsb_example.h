@@ -3,18 +3,20 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include <gslib.h>
-#include <parrsb.h>
-
 #include <getopt.h>
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX BUFSIZ
 #endif
+
+#include <gslib.h>
+
+#include <parrsb.h>
 
 static void parrsb_print_part_stat(long long *vtx, unsigned nelt, unsigned nv,
                                    MPI_Comm ce) {

@@ -3,57 +3,51 @@
  */
 #include "parrsb_example.h"
 
-static void check_connectivity(long long *vlp, char *name, MPI_Comm comm) {
-  unsigned int nelt;
-  unsigned nv;
-  long long *vls = NULL;
-  int err = parrsb_read_mesh(&nelt, &nv, &vls, NULL, NULL, NULL, name, comm, 2);
-  parrsb_check_error(err, comm);
-
+static void check_connectivity_aux(unsigned nelt, unsigned nv,
+                                   const long long *vl1, const long long *vl2,
+                                   struct comm *c, buffer *bfr) {
   unsigned size = nelt * nv;
-  slong *minp = tcalloc(slong, size);
-  slong *maxp = tcalloc(slong, size);
+  long long *minp = tcalloc(long long, size);
+  long long *maxp = tcalloc(long long, size);
+
+  for (unsigned i = 0; i < size; i++) minp[i] = maxp[i] = vl2[i];
+  struct gs_data *gsh = gs_setup(vl1, size, c, 0, gs_pairwise, 0);
+  gs(minp, gs_long, gs_min, 0, gsh, bfr);
+  gs(maxp, gs_long, gs_max, 0, gsh, bfr);
+  gs_free(gsh);
+
+  unsigned err = 0;
+  for (unsigned i = 0; i < size; i++) {
+    if (minp[i] != maxp[i]) {
+      err = 1;
+      break;
+    }
+  }
+
+  free(minp), free(maxp);
+
+  parrsb_check_error(err, c->c);
+}
+
+static void check_connectivity(long long *vlp, char *name, MPI_Comm comm) {
+  unsigned nelt, nv, err;
+  long long *vls = NULL;
+  err = parrsb_read_mesh(&nelt, &nv, &vls, NULL, NULL, NULL, name, comm, 2);
+  parrsb_check_error(err, comm);
 
   struct comm c;
   comm_init(&c, comm);
-  struct gs_data *gsh = gs_setup(vls, size, &c, 0, gs_pairwise, 0);
-
-  unsigned i;
-  for (i = 0; i < size; i++) minp[i] = maxp[i] = vlp[i];
 
   buffer bfr;
   buffer_init(&bfr, 1024);
-  gs(minp, gs_long, gs_min, 0, gsh, &bfr);
-  gs(maxp, gs_long, gs_max, 0, gsh, &bfr);
-  gs_free(gsh);
 
-  for (err = 0, i = 0; i < size; i++) {
-    if (minp[i] != maxp[i]) {
-      err = 1;
-      break;
-    }
-  }
-  parrsb_check_error(err, comm);
+  check_connectivity_aux(nelt, nv, vlp, vls, &c, &bfr);
+  check_connectivity_aux(nelt, nv, vls, vlp, &c, &bfr);
 
-  gsh = gs_setup(vlp, size, &c, 0, gs_pairwise, 0);
-
-  for (i = 0; i < size; i++) minp[i] = maxp[i] = vls[i];
-
-  gs(minp, gs_long, gs_min, 0, gsh, &bfr);
-  gs(maxp, gs_long, gs_max, 0, gsh, &bfr);
-  gs_free(gsh);
-
+  unsigned size = nelt * nv;
   err = 0;
-  for (i = 0; i < size; i++) {
-    if (minp[i] != maxp[i]) {
-      err = 1;
-      break;
-    }
-  }
-  parrsb_check_error(err, comm);
-
   if (c.np == 1) {
-    for (err = 0, i = 0; i < size; i++) {
+    for (unsigned i = 0; i < size; i++) {
       if (vls[i] != vlp[i]) {
         err = 1;
         break;
@@ -62,8 +56,7 @@ static void check_connectivity(long long *vlp, char *name, MPI_Comm comm) {
   }
   parrsb_check_error(err, comm);
 
-  comm_free(&c), buffer_free(&bfr);
-  free(minp), free(maxp), free(vls);
+  comm_free(&c), buffer_free(&bfr), free(vls);
 }
 
 int main(int argc, char *argv[]) {
@@ -73,11 +66,10 @@ int main(int argc, char *argv[]) {
   parrsb_example_opts in = parrsb_example_opts_parse(argc, argv, comm);
 
   // Read the geometry from the .re2 file.
-  unsigned int nelt, nbcs, nv;
+  unsigned nelt, nbcs, nv, err;
   double *coord = 0;
   long long *bcs = 0;
-  int err =
-      parrsb_read_mesh(&nelt, &nv, 0, &coord, &nbcs, &bcs, in->mesh, comm, 1);
+  err = parrsb_read_mesh(&nelt, &nv, 0, &coord, &nbcs, &bcs, in->mesh, comm, 1);
   parrsb_check_error(err, comm);
 
   // Find connectivity.
