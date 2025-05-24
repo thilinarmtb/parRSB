@@ -153,8 +153,8 @@ static size_t load_balance(struct array *elist, parrsb_options *options,
   return unit_size;
 }
 
-static void restore_original(int *part, int *seq, struct crystal *cr,
-                             struct array *elist, size_t usize, buffer *bfr) {
+static void restore_original(int *part, struct crystal *cr, struct array *elist,
+                             size_t usize, buffer *bfr) {
   sarray_transfer_(elist, usize, offsetof(struct rcb_element, origin), 1, cr);
   uint nel = elist->n;
 
@@ -169,17 +169,10 @@ static void restore_original(int *part, int *seq, struct crystal *cr,
     element = (struct rcb_element *)((char *)elist->ptr + e * usize);
     part[e] = element->origin; // element[e].origin;
   }
-
-  if (seq != NULL) {
-    for (e = 0; e < nel; e++) {
-      element = (struct rcb_element *)((char *)elist->ptr + e * usize);
-      seq[e] = element->seq; // element[e].seq;
-    }
-  }
 }
 
-int parrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
-                     int nel, int nv, parrsb_options options, MPI_Comm comm) {
+int parrsb_part_mesh(int *part, long long *vtx, double *coord, int nel, int nv,
+                     parrsb_options options, MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 
@@ -242,7 +235,7 @@ int parrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
   metric_finalize();
   comm_free(&ca);
 
-  restore_original(part, seq, &cr, &elist, esize, &bfr);
+  restore_original(part, &cr, &elist, esize, &bfr);
 
   // Report time and finish
   parrsb_barrier(&c);
@@ -258,10 +251,10 @@ int parrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
   return 0;
 }
 
-void fparrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
-                       int *nel, int *nv, int *options, int *comm, int *err) {
+void fparrsb_part_mesh(int *part, long long *vtx, double *coord, int *nel,
+                       int *nv, int *options, int *comm, int *err) {
   *err = 1;
   MPI_Comm c = MPI_Comm_f2c(*comm);
   parrsb_options opt = parrsb_default_options;
-  *err = parrsb_part_mesh(part, seq, vtx, coord, *nel, *nv, opt, c);
+  *err = parrsb_part_mesh(part, vtx, coord, *nel, *nv, opt, c);
 }

@@ -42,12 +42,12 @@ typedef struct {
 
 extern parrsb_options parrsb_default_options;
 
-int parrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
-                     int nel, int nv, parrsb_options options, MPI_Comm comm);
+int parrsb_part_mesh(int *part, long long *vtx, double *coord, int nel, int nv,
+                     parrsb_options options, MPI_Comm comm);
 
 #define fparrsb_part_mesh FORTRAN_UNPREFIXED(fparrsb_partmesh, FPARRSB_PARTMESH)
-void fparrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
-                       int *nel, int *nve, int *options, int *comm, int *err);
+void fparrsb_part_mesh(int *part, long long *vtx, double *coord, int *nel,
+                       int *nve, int *options, int *comm, int *err);
 
 void parrsb_reorder_dofs(long long *nid, unsigned n, unsigned nv,
                          const long long *ids, const MPI_Comm comm);

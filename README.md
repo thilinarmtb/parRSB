@@ -44,8 +44,8 @@ specified in the command line.
 ### C Interface
 
 ```C
-int parrsb_part_mesh(int *part, int *seq, long long *vtx, double *coord,
-                     int nel, int nv, parrsb_options opts, MPI_Comm comm)
+int parrsb_part_mesh(int *part, long long *vtx, double *coord, int nel, int nv,
+                     parrsb_options opts, MPI_Comm comm)
 ```
 
 See `example/genmap.c` for an example.
