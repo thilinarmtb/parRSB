@@ -8,6 +8,7 @@ SYNC_BY_REDUCTION ?= 1
 BLAS ?= 0
 BLASFLAGS ?= -lblas
 SHARED ?= 0
+VISIBILITY ?= hidden
 
 ########################## Don't touch what follows ###########################
 ifeq ($(GSLIBPATH),)
@@ -37,6 +38,10 @@ LIB.ext = a
 ifneq ($(SHARED),0)
   CFLAGS += -fPIC
   LIB.ext = so
+endif
+
+ifneq ($(strip $(VISIBILITY)),)
+  PP += -DPARRSB_VISIBILITY=$(strip $(VISIBILITY))
 endif
 
 MKFILEPATH = $(abspath $(lastword $(MAKEFILE_LIST)))

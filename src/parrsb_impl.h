@@ -26,7 +26,8 @@ typedef double scalar;
 /*
  * Set the visibility of a symbol.
  */
-#define VISIBILITY(mode) __attribute__((visibility(#mode)))
+#define VISIBILITY_(mode) __attribute__((visibility(#mode)))
+#define VISIBILITY(mode) VISIBILITY_(mode)
 
 /*
  * Declare a symbol as external.
@@ -40,10 +41,14 @@ typedef double scalar;
 /*
  * Declare a symbol as internal.
  */
+#if !defined(PARRSB_VISIBILITY)
+#define PARRSB_VISIBILITY hidden
+#endif
+
 #if defined(__cplusplus)
-#define INTERN extern "C" VISIBILITY(hidden)
+#define INTERN extern "C" VISIBILITY(PARRSB_VISIBILITY)
 #else
-#define INTERN extern VISIBILITY(hidden)
+#define INTERN extern VISIBILITY(PARRSB_VISIBILITY)
 #endif
 
 /*
