@@ -6,11 +6,13 @@
 int nv_to_ndim(int nv) { return (nv == 8) ? 3 : 2; }
 
 void parrsb_barrier(struct comm *c) {
-#if defined(PARRSB_SYNC_BY_REDUCTION)
+#if defined(PARRSB_SYNC_REDUCTION)
   sint dummy = c->id, wrk;
   comm_allreduce(c, gs_int, gs_max, &dummy, 1, &wrk);
-#else
+#elif defined(PARRSB_SYNC_BARRIER)
   comm_barrier(c);
+#else
+#error "Barrier method not defined!"
 #endif
 }
 

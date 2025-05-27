@@ -4,7 +4,7 @@ GSLIBPATH ?=
 LDFLAGS ?=
 INCFLAGS ?=
 DEBUG ?= 0
-SYNC_BY_REDUCTION ?= 1
+SYNC ?= reduction
 BLAS ?= 0
 BLASFLAGS ?= -lblas
 SHARED ?= 0
@@ -25,8 +25,10 @@ else
 endif
 
 PP =
-ifneq ($(SYNC_BY_REDUCTION),0)
-  PP += -DPARRSB_SYNC_BY_REDUCTION
+ifeq ($(strip $(SYNC)),reduction)
+  PP += -DPARRSB_SYNC_REDUCTION
+else ifeq ($(strip $(SYNC)),barrier)
+  PP += -DPARRSB_SYNC_BARRIER
 endif
 
 ifneq ($(BLAS),0)
