@@ -54,8 +54,6 @@ INSTALLDIR = $(PROJDIR)/install
 ifneq ($(strip $(DESTDIR)),)
   INSTALLDIR = $(DESTDIR)
 endif
-LIBDIR = $(INSTALLDIR)/lib
-INCDIR = $(INSTALLDIR)/include
 
 SRC.c = $(wildcard $(SRCDIR)/*.c)
 SRC.o = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%.o,$(SRC.c))
@@ -76,16 +74,18 @@ all: lib install example test
 
 lib: $(LIB)
 
-$(LIB.a): $(SRC.o) | $(BUILDDIR)
+$(LIB.a): $(SRC.o)
 	@$(AR) cr $@ $?
 	@ranlib $@
 
 $(LIB.so): $(SRC.o)
-	$(CC) -shared -o $@ $(SRC.o) $(LDFLAGS)
+	$(CC) -shared -o $@ $? $(LDFLAGS)
 
-install: lib | $(INCDIR) $(LIBDIR)
-	@cp -v $(LIB) $(INSTALLDIR)/lib
-	@cp -v $(SRCDIR)/*.h $(INSTALLDIR)/include
+install: lib
+	@mkdir -p $(INSTALLDIR)/include
+	@mkdir -p $(INSTALLDIR)/lib
+	@cp -v $(LIB) $(INSTALLDIR)/lib/
+	@cp -v $(SRCDIR)/*.h $(INSTALLDIR)/include/
 
 example: $(EXAMPLE.bin) | lib install
 
@@ -105,20 +105,14 @@ print-%:
 	$(info)
 	@true
 
-$(BUILDDIR)/%.o: $(PROJDIR)/%.c | $(BUILDDIR)
+$(BUILDDIR)/%.o: $(PROJDIR)/%.c | build
 	$(CC) $(CFLAGS) $(INCFLAGS) $(PP) -c $< -o $@
 
 $(BUILDDIR)/%: $(PROJDIR)/%.c | lib install
-	$(CC) $(INCFLAGS) -I$(SRCDIR)/test $< -o $@ -L$(LIBDIR) -lparRSB $(LDFLAGS)
+	$(CC) $(INCFLAGS) -I$(SRCDIR)/test $< -o $@ -L$(INSTALLDIR)/lib -lparRSB $(LDFLAGS)
 
-$(BUILDDIR):
+build:
 	@mkdir -p $(BUILDDIR)/lib
 	@mkdir -p $(BUILDDIR)/src
 	@mkdir -p $(BUILDDIR)/example
 	@mkdir -p $(BUILDDIR)/test
-
-$(INCDIR):
-	@mkdir -p $(INSTALLDIR)/include
-
-$(LIBDIR):
-	@mkdir -p $(INSTALLDIR)/lib
