@@ -3,11 +3,11 @@
 
 #include "gslib.h"
 
-#if !defined(MPI)
+#if !defined(GSLIB_USE_MPI)
 #error "gslib needs to be compiled with MPI"
 #endif
 
-#if !defined(GLOBAL_LONG_LONG)
+#if !defined(GSLIB_USE_GLOBAL_LONG_LONG)
 #error "gslib needs to be compiled with GLOBAL_LONG_LONG"
 #endif
 
@@ -45,14 +45,14 @@ extern parrsb_options parrsb_default_options;
 int parrsb_part_mesh(int *part, long long *vtx, double *coord, int nel, int nv,
                      parrsb_options options, MPI_Comm comm);
 
-#define fparrsb_part_mesh FORTRAN_UNPREFIXED(fparrsb_partmesh, FPARRSB_PARTMESH)
+#define fparrsb_part_mesh GS_FORTRAN_UNPREFIXED(fparrsb_partmesh, FPARRSB_PARTMESH)
 void fparrsb_part_mesh(int *part, long long *vtx, double *coord, int *nel,
                        int *nve, int *options, int *comm, int *err);
 
 void parrsb_reorder_dofs(long long *nid, unsigned n, unsigned nv,
                          const long long *ids, const MPI_Comm comm);
 #define fparrsb_reorder_dofs                                                   \
-  FORTRAN_UNPREFIXED(fparrsb_order_dofs, FPARRSB_ORDER_DOFS)
+  GS_FORTRAN_UNPREFIXED(fparrsb_order_dofs, FPARRSB_ORDER_DOFS)
 void fparrsb_reorder_dofs(long long *nid, int *n, int *nv, long long *ids,
                           int *comm, int *err);
 
@@ -64,7 +64,7 @@ int parrsb_conn_mesh(long long *vtx, double *coord, int nel, int nDim,
                      MPI_Comm comm, int verbose);
 
 #define fparrsb_conn_mesh                                                      \
-  FORTRAN_UNPREFIXED(fparrsb_conn_mesh, FPARRSB_CONN_MESH)
+  GS_FORTRAN_UNPREFIXED(fparrsb_conn_mesh, FPARRSB_CONN_MESH)
 void fparrsb_conn_mesh(long long *vtx, double *coord, int *nel, int *nDim,
                        long long *periodicInfo, int *nPeriodicFaces,
                        double *tol, MPI_Fint *fcomm, int *verbose, int *err);

@@ -444,7 +444,7 @@ void parrsb_vec_dump(const double *v, uint un, const char *name,
   comm_free(&c);
 }
 
-#define fparrsb_vec_dump FORTRAN_UNPREFIXED(fparrsb_vec_dump, FPARRSB_VEC_DUMP)
+#define fparrsb_vec_dump GS_FORTRAN_UNPREFIXED(fparrsb_vec_dump, FPARRSB_VEC_DUMP)
 void fparrsb_vec_dump(double *v, int *un, char *fname, int *len, int *fc,
                       int *err) {
   *err = 1;

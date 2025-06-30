@@ -3,11 +3,11 @@
 
 #include <gslib.h>
 
-#if !defined(MPI)
+#if !defined(GSLIB_USE_MPI)
 #error "gslib needs to be compiled with MPI"
 #endif
 
-#if !defined(GLOBAL_LONG_LONG)
+#if !defined(GSLIB_USE_GLOBAL_LONG_LONG)
 #error "gslib needs to be compiled with GLOBAL_LONG_LONG"
 #endif
 

@@ -264,7 +264,7 @@ void parrsb_fetch_nbrs(unsigned *nei, long long *eids, unsigned nv,
 }
 
 #define fparrsb_fetch_nbrs                                                     \
-  FORTRAN_UNPREFIXED(fparrsb_fetch_nbrs, FPARRSB_FETCH_NBRS)
+  GS_FORTRAN_UNPREFIXED(fparrsb_fetch_nbrs, FPARRSB_FETCH_NBRS)
 void fparrsb_fetch_nbrs(int *nei, long long *eids, int *nv, long long *vids,
                         double *xyz, double *mask, double *mat, int *nwi,
                         int *frontier, MPI_Fint *comm, int *maxne, int *err) {
@@ -619,7 +619,7 @@ void parrsb_fetch_nbrs_v2(unsigned *nei, slong *eids, unsigned nv, slong *vids,
 }
 
 #define fparrsb_fetch_nbrs_v2                                                  \
-  FORTRAN_UNPREFIXED(fparrsb_fetch_nbrs_v2, FPARRSB_FETCH_NBRS_V2)
+  GS_FORTRAN_UNPREFIXED(fparrsb_fetch_nbrs_v2, FPARRSB_FETCH_NBRS_V2)
 void fparrsb_fetch_nbrs_v2(sint *nei, slong *eids, sint *nv, slong *vids,
                            double *xyz, double *mask, double *mat,
                            sint *frontier, sint *nw, sint *wids, MPI_Fint *comm,

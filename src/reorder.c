@@ -225,7 +225,7 @@ void parrsb_reorder_dofs(long long *nid, unsigned n, unsigned nv,
 }
 
 #define fparrsb_reorder_dofs                                                   \
-  FORTRAN_UNPREFIXED(fparrsb_order_dofs, FPARRSB_ORDER_DOFS)
+  GS_FORTRAN_UNPREFIXED(fparrsb_order_dofs, FPARRSB_ORDER_DOFS)
 void fparrsb_reorder_dofs(long long *nid, int *n, int *nv, long long *ids,
                           MPI_Fint *comm, int *err) {
   *err = 1;
