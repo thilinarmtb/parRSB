@@ -1450,11 +1450,11 @@ int parrsb_conn_mesh(long long *vtx, double *coord, int nelt, int ndim,
 //
 void fparrsb_conn_mesh(long long *vtx, double *coord, int *nelt, int *ndim,
                        long long *periodicInfo, int *nPeriodicFaces,
-                       double *tol, MPI_Fint *fcomm, int *verbose, int *err) {
+                       double *tol, MPI_Fint *fcomm, int *err) {
   *err = 1;
   MPI_Comm c = MPI_Comm_f2c(*fcomm);
   *err = parrsb_conn_mesh(vtx, coord, *nelt, *ndim, periodicInfo,
-                          *nPeriodicFaces, *tol, c, *verbose);
+                          *nPeriodicFaces, *tol, c, 1);
 }
 
 #undef GC_MAX_FACES
