@@ -9,11 +9,11 @@ Note, any initial distribution of mesh elements is valid.
 ### Build Instructions
 
 Download `gslib` from [here](https://github.com/Nek5000/gslib) and follow the
-build instructions there to build it. Then set the `GSLIBPATH` variable to point
+build instructions there to build it. Then set the `GSLIB_DIR` variable to point
 to the `gslib` build directory.
 
 ```sh
-make CC=mpicc GSLIBPATH=<path to gslib>/build  all
+make CC=mpicc GSLIB_DIR=<path to gslib>/build  all
 ```
 
 ### Run Example

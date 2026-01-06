@@ -1,6 +1,6 @@
 CC ?= mpicc
 CFLAGS ?= -std=c99 -Wall -Wextra -Wpedantic -Wno-unused-function -Wno-c23-extensions
-GSLIBPATH ?=
+GSLIB_DIR ?=
 LDFLAGS ?=
 INCFLAGS ?=
 DEBUG ?= 0
@@ -11,11 +11,11 @@ SHARED ?= 0
 VISIBILITY ?= hidden
 
 ########################## Don't touch what follows ###########################
-ifeq ($(GSLIBPATH),)
-  $(error Specify GSLIBPATH=<path to gslib build>)
+ifeq ($(GSLIB_DIR),)
+  $(error Specify GSLIB_DIR=<path to gslib build>)
 else
-  LDFLAGS += -L$(GSLIBPATH)/lib -lgs
-  INCFLAGS += -I$(GSLIBPATH)/include
+  LDFLAGS += -L$(GSLIB_DIR)/lib -lgs
+  INCFLAGS += -I$(GSLIB_DIR)/include
 endif
 
 ifneq ($(DEBUG),0)

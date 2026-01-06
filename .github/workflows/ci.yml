@@ -37,7 +37,7 @@ jobs:
           make -C gslib -j4
 
           # Build parRSB
-          export GSLIBPATH=`pwd`/gslib/build/
+          export GSLIB_DIR=`pwd`/gslib/build/
           make -j4 example
 
           # Clone tests
@@ -116,7 +116,7 @@ jobs:
           make -C gslib -j4
 
           # Build parRSB
-          export GSLIBPATH=`pwd`/gslib/build/
+          export GSLIB_DIR=`pwd`/gslib/build/
           make -j4 test
       - name: Test graph laplacian matrix
         shell: bash
