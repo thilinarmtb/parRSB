@@ -1,9 +1,11 @@
 name: parRSB tests
 on:
   push:
-    branch: [main]
+    branches:
+      - master
   pull_request:
-    branch: [main]
+    branches:
+      - master
 env:
   GITHUB.TOKEN: ${{ secrets.token }}
   MPIEXE: "mpirun --oversubscribe"
