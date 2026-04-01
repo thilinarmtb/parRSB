@@ -186,8 +186,9 @@ static int transfer_boundary_faces(Mesh mesh, struct comm *c) {
 //     ordering, nv = 8 if ndim == 3 (Hex) or nv = 4 if ndim = 2 (Quad).
 // Output:
 //   vtx[nelt, nv]: Global numbering of vertices of elements
-int parrsb_conn_mesh(long long *vtx, double *coord, uint nelt, unsigned ndim,
-                     long long *pinfo, int npinfo, double tol, MPI_Comm comm) {
+int parrsb_conn_mesh(long long *vtx, const double *const coord, unsigned nelt,
+                     unsigned ndim, const long long *const pinfo, int npinfo,
+                     double tol, MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 
