@@ -30,16 +30,18 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
                      const int nel, const int nv,
                      const parrsb_options_t options, MPI_Comm comm);
 
-int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
-                      const unsigned *offsets, const long long *neighbors,
+int parrsb_part_graph(int *part, unsigned num_nodes,
+                      const long long *const nodes,
+                      const unsigned *const offsets,
+                      const long long *const neighbors,
                       const parrsb_options_t options, const MPI_Comm comm);
 
 /*
- * Connectivity calculation algorithms.
+ * Connectivity calculation algorithms for SEM meshes.
  */
-int parrsb_conn_mesh(long long *vtx, double *coord, unsigned nel, unsigned nDim,
-                     long long *periodicInfo, int nPeriodicFaces, double tol,
-                     MPI_Comm comm);
+int parrsb_conn_mesh(long long *vtx, const double *const coord, unsigned nel,
+                     unsigned ndim, const long long *const pinfo, int npinfo,
+                     double tol, MPI_Comm comm);
 
 /*
  * I/O routines.
