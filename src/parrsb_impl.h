@@ -108,11 +108,11 @@ typedef struct element_info *element_info;
 
 typedef enum { MESH = 0, GRAPH = 1 } element_type_t;
 
-INTERN void element_info_init(element_info *ei, element_type_t type);
+void element_info_init(element_info *ei, element_type_t type);
 
-INTERN void element_info_free(element_info *ei);
+void element_info_free(element_info *ei);
 
-INTERN element_type_t element_info_type(element_info ei);
+element_type_t element_info_type(element_info ei);
 
 /*
  * Base element for mesh and graph partitioning. All of the structures used for
@@ -138,13 +138,12 @@ struct graph_element {
 
 typedef struct graph_element *graph_element;
 
-INTERN int graph_load_balance(struct array *nlist, uint nn,
-                              const long long *nodes, const unsigned *offsets,
-                              const long long *neighbors, struct crystal *cr,
-                              buffer *bfr);
+int graph_load_balance(struct array *nlist, uint nn, const long long *nodes,
+                       const unsigned *offsets, const long long *neighbors,
+                       struct crystal *cr, buffer *bfr);
 
-INTERN void graph_restore(int *part, struct array *nlist, struct crystal *cr,
-                          buffer *bfr);
+void graph_restore(int *part, struct array *nlist, struct crystal *cr,
+                   buffer *bfr);
 
 /*
  * RCB / RIB. `struct rcb_element` is used for mesh partitioning with RCB and
@@ -170,11 +169,11 @@ INTERN int rib(struct array *elements, const element_info ei,
  */
 typedef struct laplacian *laplacian;
 
-INTERN int laplacian_init(laplacian *l, struct array *elements,
-                          const element_info ei, const struct comm *c);
-INTERN uint laplacian_size(laplacian l);
-INTERN int laplacian_op(scalar *v, laplacian l, scalar *u);
-INTERN int laplacian_free(laplacian *l);
+int laplacian_init(laplacian *l, struct array *elements, const element_info ei,
+                   const struct comm *c);
+uint laplacian_size(laplacian l);
+int laplacian_op(scalar *v, laplacian l, scalar *u);
+int laplacian_free(laplacian *l);
 
 /*
  * RSB. `struct rsb_element` = `struct rcb_element` + `vertices`. Order is
@@ -194,8 +193,8 @@ INTERN void rsb(struct array *elements, const element_info ei,
                 const parrsb_options_t options, const struct comm *comms,
                 buffer *bfr);
 
-INTERN int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
-                   const parrsb_options_t opts);
+int lanczos(scalar *f, laplacian l, scalar *vi, const struct comm *c,
+            const parrsb_options_t opts);
 
 INTERN int fiedler(scalar *fiedler, laplacian l, const parrsb_options_t opts,
                    const struct comm *c);
