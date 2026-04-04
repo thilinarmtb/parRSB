@@ -51,6 +51,7 @@ function(add_binary src)
   else()
     target_link_libraries(${name} PRIVATE parRSB gs::gs MPI::MPI_C m)
   endif()
+  install(TARGETS ${name} RUNTIME DESTINATION bin)
   target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src")
 endfunction()
 
@@ -70,7 +71,6 @@ endif()
 
 install(TARGETS parRSB
   EXPORT parRSBTargets
-  RUNTIME DESTINATION bin
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   PUBLIC_HEADER DESTINATION include
