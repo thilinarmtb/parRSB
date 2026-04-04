@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.18)
 project(parRSB LANGUAGES C VERSION 0.9.3)
 
+#Link:https://gitlab.kitware.com/cmake/community/wikis/doc/cmake/RPATH-handling
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH};${CMAKE_INSTALL_PREFIX}/lib")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 option(PARRSB_DEBUG "Build with debug symbols instead of -O2" OFF)
 option(PARRSB_SHARED "Build a shared library instead of static" ON)
 option(PARRSB_EXAMPLES "Build parRSB examples" ON)
