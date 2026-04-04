@@ -26,7 +26,11 @@ jobs:
     env:
       TESTDIR: ${{ github.workspace }}/install/bin
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout actions
+        uses: actions/checkout@v6
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ inputs.debug_enabled }}
       - name: Install apt dependencies
         shell: bash
         run: |
@@ -43,6 +47,7 @@ jobs:
         shell: bash
         run: |
           cmake -B build -S . -DCMAKE_INSTALL_PREFIX=./install -Dgs_DIR=./gslib/install/lib/cmake/gs
+          cmake --build build --target install
       - name: Test graph laplacian matrix
         shell: bash
         run: |
@@ -55,3 +60,6 @@ jobs:
         shell: bash
         run: |
           ${MPIEXE} -np ${{ matrix.np }} ${TESTDIR}/parrsb_100_graph_eigenvalues
+      - name: Block to allow inspecting failures
+        run: sleep 120m
+        if: ${{ failure() && inputs.debug_enabled }}
