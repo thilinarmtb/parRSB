@@ -3,6 +3,8 @@ project(parRSB LANGUAGES C VERSION 0.9.3)
 
 option(PARRSB_DEBUG "Build with debug symbols instead of -O2" OFF)
 option(PARRSB_SHARED "Build a shared library instead of static" ON)
+option(PARRSB_EXAMPLES "Build parRSB examples" OFF)
+option(PARRSB_TESTS "Build parRSB examples" OFF)
 set(PARRSB_SYNC "reduction" CACHE STRING "Sync mode: reduction | barrier")
 set(PARRSB_VISIBILITY "hidden" CACHE STRING "Symbol visibility: hidden | default")
 
@@ -57,15 +59,19 @@ function(add_bin source_file)
   add_dependencies(${name} parRSB)
 endfunction()
 
-file(GLOB EXAMPLE_SRCS "${CMAKE_SOURCE_DIR}/example/*.c")
-foreach(src ${EXAMPLE_SRCS})
-  add_bin(${src})
-endforeach()
+if(PARRSB_EXAMPLES)
+  file(GLOB EXAMPLE_SRCS "${CMAKE_SOURCE_DIR}/example/*.c")
+  foreach(src ${EXAMPLE_SRCS})
+    add_bin(${src})
+  endforeach()
+endif()
 
-file(GLOB TEST_SRCS "${CMAKE_SOURCE_DIR}/test/*.c")
-foreach(src ${TEST_SRCS})
-  add_bin(${src})
-endforeach()
+if(PARRSB_TESTS)
+  file(GLOB TEST_SRCS "${CMAKE_SOURCE_DIR}/test/*.c")
+  foreach(src ${TEST_SRCS})
+    add_bin(${src})
+  endforeach()
+endif()
 
 install(TARGETS parRSB
   EXPORT parRSBTargets
