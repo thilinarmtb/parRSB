@@ -3,7 +3,7 @@ project(parRSB LANGUAGES C VERSION 0.9.3)
 
 option(PARRSB_DEBUG "Build with debug symbols instead of -O2" OFF)
 option(PARRSB_SHARED "Build a shared library instead of static" ON)
-option(PARRSB_EXAMPLES "Build parRSB examples" OFF)
+option(PARRSB_EXAMPLES "Build parRSB examples" ON)
 option(PARRSB_TESTS "Build parRSB examples" OFF)
 set(PARRSB_SYNC "reduction" CACHE STRING "Sync mode: reduction | barrier")
 set(PARRSB_VISIBILITY "hidden" CACHE STRING "Symbol visibility: hidden | default")
@@ -40,9 +40,9 @@ if(NOT PARRSB_VISIBILITY STREQUAL "")
   target_compile_definitions(parRSB PRIVATE PARRSB_VISIBILITY=${PARRSB_VISIBILITY})
 endif()
 
-function(add_bin source_file)
-  get_filename_component(name "${source_file}" NAME_WE)
-  add_executable(${name} "${source_file}")
+function(add_binary src)
+  get_filename_component(name "${src}" NAME_WE)
+  add_executable(${name} "${src}")
   target_compile_options(${name} PRIVATE
     -std=c99
     -Wall -Wextra -Wpedantic
@@ -56,28 +56,21 @@ function(add_bin source_file)
     target_link_libraries(${name} PRIVATE parRSB gs::gs MPI::MPI_C m)
   endif()
   target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src")
-  add_dependencies(${name} parRSB)
 endfunction()
 
 if(PARRSB_EXAMPLES)
   file(GLOB EXAMPLE_SRCS "${CMAKE_SOURCE_DIR}/example/*.c")
   foreach(src ${EXAMPLE_SRCS})
-    add_bin(${src})
-  endforeach()
-endif()
-
-if(PARRSB_TESTS)
-  file(GLOB TEST_SRCS "${CMAKE_SOURCE_DIR}/test/*.c")
-  foreach(src ${TEST_SRCS})
-    add_bin(${src})
+    add_binary(${src})
   endforeach()
 endif()
 
 install(TARGETS parRSB
   EXPORT parRSBTargets
+  RUNTIME DESTINATION bin
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
-  INCLUDES DESTINATION include
+  PUBLIC_HEADER DESTINATION include
 )
 
 set(EXPORT_TARGETS_FILE "parRSBTargets.cmake")
