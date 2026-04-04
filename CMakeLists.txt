@@ -8,6 +8,14 @@ option(PARRSB_TESTS "Build parRSB examples" OFF)
 set(PARRSB_SYNC "reduction" CACHE STRING "Sync mode: reduction | barrier")
 set(PARRSB_VISIBILITY "hidden" CACHE STRING "Symbol visibility: hidden | default")
 
+set(PARRSB_FLAGS
+  -std=c99
+  -Wall -Wextra -Wpedantic
+  -Wno-unused-function
+  -Wno-c23-extensions
+  $<IF:$<BOOL:${PARRSB_DEBUG}>,-g -O0,-O2>
+)
+
 find_package(MPI REQUIRED)
 find_package(gs REQUIRED)
 
@@ -21,13 +29,7 @@ set_target_properties(parRSB PROPERTIES OUTPUT_NAME parRSB)
 set_target_properties(parRSB PROPERTIES VERSION ${PROJECT_VERSION}
     PUBLIC_HEADER src/parrsb.h)
 target_include_directories(parRSB PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_compile_options(parRSB PRIVATE
-  -std=c99
-  -Wall -Wextra -Wpedantic
-  -Wno-unused-function
-  -Wno-c23-extensions
-  $<IF:$<BOOL:${PARRSB_DEBUG}>,-g -O0,-O2>
-)
+target_compile_options(parRSB PRIVATE ${PARRSB_FLAGS})
 target_link_libraries(parRSB PRIVATE gs::gs MPI::MPI_C m)
 
 if(PARRSB_SYNC STREQUAL "reduction")
@@ -43,13 +45,7 @@ endif()
 function(add_binary src)
   get_filename_component(name "${src}" NAME_WE)
   add_executable(${name} "${src}")
-  target_compile_options(${name} PRIVATE
-    -std=c99
-    -Wall -Wextra -Wpedantic
-    -Wno-unused-function
-    -Wno-c23-extensions
-    $<IF:$<BOOL:${PARRSB_DEBUG}>,-g -O0,-O2>
-  )
+  target_compile_options(${name} PRIVATE ${PARRSB_FLAGS})
   if(PARRSB_SHARED)
     target_link_libraries(${name} PRIVATE parRSB gs::gs MPI::MPI_C m)
   else()
