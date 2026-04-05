@@ -21,6 +21,9 @@ env:
 jobs:
   install:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
     - name: Checkout actions
       uses: actions/checkout@v6
@@ -28,19 +31,16 @@ jobs:
       uses: mxschmitt/action-tmate@v3
       if: ${{ inputs.debug_enabled }}
     - name: Install apt dependencies
-      shell: bash
       run: |
         sudo apt -y update
         sudo apt install -y openmpi-bin libopenmpi-dev
         sudo apt install -y build-essential cmake
     - name: Build gslib
-      shell: bash
       run: |
         git clone https://github.com/thilinarmtb/gslib.git -b general_graph
         cmake -B ./gslib/build -S ./gslib -DCMAKE_INSTALL_PREFIX=./gslib/install
         cmake --build ./gslib/build --target install
     - name: Install parRSB
-      shell: bash
       run: |
         cmake -B build -S . -DCMAKE_INSTALL_PREFIX=${INST_DIR} -Dgs_DIR=./gslib/install/lib/cmake/gs
         cmake --build build --target install
@@ -56,6 +56,9 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     needs: install
+    defaults:
+      run:
+        shell: bash
     strategy:
       matrix:
         np: [1, 2, 3, 4]
@@ -66,7 +69,6 @@ jobs:
       uses: mxschmitt/action-tmate@v3
       if: ${{ inputs.debug_enabled }}
     - name: Install apt dependencies
-      shell: bash
       run: |
         sudo apt -y update
         sudo apt install -y openmpi-bin libopenmpi-dev
@@ -77,19 +79,15 @@ jobs:
         name: assets
         path: ${{ github.workspace }}
     - name: Make binaries executable
-      shell: bash
       run: |
         chmod -R +x ${BIN_DIR}/*
     - name: Test Laplacian matrix
-      shell: bash
       run: |
         ${MPIEXE} -np ${{ matrix.np }} ${BIN_DIR}/parrsb_000_graph_laplacian
     - name: Test Laplacian operator
-      shell: bash
       run: |
         ${MPIEXE} -np ${{ matrix.np }} ${BIN_DIR}/parrsb_050_graph_laplacian_op
     - name: Test Laplacian eigenvalues
-      shell: bash
       run: |
         ${MPIEXE} -np ${{ matrix.np }} ${BIN_DIR}/parrsb_100_graph_eigenvalues
     - name: Block to allow inspecting failures
@@ -98,6 +96,9 @@ jobs:
   cmake:
     runs-on: ubuntu-latest
     needs: install
+    defaults:
+      run:
+        shell: bash
     steps:
     - name: Checkout actions
       uses: actions/checkout@v6
@@ -105,7 +106,6 @@ jobs:
       uses: mxschmitt/action-tmate@v3
       if: ${{ inputs.debug_enabled }}
     - name: Install apt dependencies
-      shell: bash
       run: |
         sudo apt -y update
         sudo apt install -y openmpi-bin libopenmpi-dev
@@ -116,7 +116,6 @@ jobs:
         name: assets
         path: ${{ github.workspace }}
     - name: Test exported CMake targets
-      shell: bash
       run: |
         cd ./test/cmake
         cmake -S . -B build -DCMAKE_INSTALL_PREFIX=./install -DparRSB_DIR=${INST_DIR}/lib/cmake/parRSB
