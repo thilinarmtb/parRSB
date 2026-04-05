@@ -123,3 +123,24 @@ jobs:
     - name: Block to allow inspecting failures
       run: sleep 120m
       if: ${{ failure() && inputs.debug_enabled }}
+  dispatch:
+    runs-on: ubuntu-latest
+    needs: [unit, cmake]
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout actions
+      uses: actions/checkout@v6
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ inputs.debug_enabled }}
+    - name: Repository Dispatch
+      uses: peter-evans/repository-dispatch@v4
+      with:
+        token: ${{ secrets.PARRSB_PY_PAT }}
+        repository: thilinarmtb/parRSB.py
+        event-type: parrsb_event
+    - name: Block to allow inspecting failures
+      run: sleep 120m
+      if: ${{ failure() && inputs.debug_enabled }}
