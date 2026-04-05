@@ -16,50 +16,111 @@ on:
 env:
   MPIEXE: "mpirun --oversubscribe"
   CC: mpicc
+  INST_DIR: ${{ github.workspace }}/install/
+  BIN_DIR: ${{ github.workspace }}/install/bin
 jobs:
-  graph:
+  install:
     runs-on: ubuntu-latest
+    steps:
+    - name: Checkout actions
+      uses: actions/checkout@v6
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ inputs.debug_enabled }}
+    - name: Install apt dependencies
+      shell: bash
+      run: |
+        sudo apt -y update
+        sudo apt install -y openmpi-bin libopenmpi-dev
+        sudo apt install -y build-essential cmake
+    - name: Build gslib
+      shell: bash
+      run: |
+        git clone https://github.com/thilinarmtb/gslib.git -b general_graph
+        cmake -B ./gslib/build -S ./gslib -DCMAKE_INSTALL_PREFIX=./gslib/install
+        cmake --build ./gslib/build --target install
+    - name: Install parRSB
+      shell: bash
+      run: |
+        cmake -B build -S . -DCMAKE_INSTALL_PREFIX=${INST_DIR} -Dgs_DIR=./gslib/install/lib/cmake/gs
+        cmake --build build --target install
+    - name: Upload parRSB workspace
+      uses: actions/upload-artifact@v6
+      with:
+        name: assets
+        include-hidden-files: true
+        path: |
+          ./install
+          ./gslib/install
+        if-no-files-found: error
+  unit:
+    runs-on: ubuntu-latest
+    needs: install
     strategy:
       matrix:
         np: [1, 2, 3, 4]
-      fail-fast: false
-    env:
-      TESTDIR: ${{ github.workspace }}/install/bin
     steps:
-      - name: Checkout actions
-        uses: actions/checkout@v6
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ inputs.debug_enabled }}
-      - name: Install apt dependencies
-        shell: bash
-        run: |
-          sudo apt -y update
-          sudo apt install -y openmpi-bin libopenmpi-dev
-          sudo apt install -y build-essential cmake
-      - name: Build gslib
-        shell: bash
-        run: |
-          git clone https://github.com/thilinarmtb/gslib.git -b general_graph
-          cmake -B ./gslib/build -S ./gslib -DCMAKE_INSTALL_PREFIX=./gslib/install
-          cmake --build ./gslib/build --target install
-      - name: Build parRSB
-        shell: bash
-        run: |
-          cmake -B build -S . -DCMAKE_INSTALL_PREFIX=./install -Dgs_DIR=./gslib/install/lib/cmake/gs
-          cmake --build build --target install
-      - name: Test graph laplacian matrix
-        shell: bash
-        run: |
-          ${MPIEXE} -np ${{ matrix.np }} ${TESTDIR}/parrsb_000_graph_laplacian
-      - name: Test graph laplacian operator
-        shell: bash
-        run: |
-          ${MPIEXE} -np ${{ matrix.np }} ${TESTDIR}/parrsb_050_graph_laplacian_op
-      - name: Test graph laplacian eigenvalues
-        shell: bash
-        run: |
-          ${MPIEXE} -np ${{ matrix.np }} ${TESTDIR}/parrsb_100_graph_eigenvalues
-      - name: Block to allow inspecting failures
-        run: sleep 120m
-        if: ${{ failure() && inputs.debug_enabled }}
+    - name: Checkout actions
+      uses: actions/checkout@v6
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ inputs.debug_enabled }}
+    - name: Install apt dependencies
+      shell: bash
+      run: |
+        sudo apt -y update
+        sudo apt install -y openmpi-bin libopenmpi-dev
+        sudo apt install -y build-essential cmake
+    - name: Download parRSB workspace
+      uses: actions/download-artifact@v6
+      with:
+        name: assets
+        path: ${{ github.workspace }}
+    - name: Make binaries executable
+      shell: bash
+      run: |
+        chmod -R +x ${BIN_DIR}/*
+    - name: Test Laplacian matrix
+      shell: bash
+      run: |
+        ${MPIEXE} -np ${{ matrix.np }} ${BIN_DIR}/parrsb_000_graph_laplacian
+    - name: Test Laplacian operator
+      shell: bash
+      run: |
+        ${MPIEXE} -np ${{ matrix.np }} ${BIN_DIR}/parrsb_050_graph_laplacian_op
+    - name: Test Laplacian eigenvalues
+      shell: bash
+      run: |
+        ${MPIEXE} -np ${{ matrix.np }} ${BIN_DIR}/parrsb_100_graph_eigenvalues
+    - name: Block to allow inspecting failures
+      run: sleep 120m
+      if: ${{ failure() && inputs.debug_enabled }}
+  cmake:
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+    - name: Checkout actions
+      uses: actions/checkout@v6
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ inputs.debug_enabled }}
+    - name: Install apt dependencies
+      shell: bash
+      run: |
+        sudo apt -y update
+        sudo apt install -y openmpi-bin libopenmpi-dev
+        sudo apt install -y build-essential cmake
+    - name: Download parRSB workspace
+      uses: actions/download-artifact@v6
+      with:
+        name: assets
+        path: ${{ github.workspace }}
+    - name: Test exported CMake targets
+      shell: bash
+      run: |
+        cd ./test/cmake
+        cmake -S . -B build -DCMAKE_INSTALL_PREFIX=./install -DparRSB_DIR=${INST_DIR}/lib/cmake/parRSB
+        cmake --build build --target install
+    - name: Block to allow inspecting failures
+      run: sleep 120m
+      if: ${{ failure() && inputs.debug_enabled }}
