@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
   unsigned nelt, nbcs, nv, err;
   double *coord = 0;
   long long *bcs = 0;
-  err = parrsb_read_mesh(&nelt, &nv, 0, &coord, &nbcs, &bcs, in->mesh, comm, 1);
+  err = parrsb_read_mesh(&nelt, &nv, &coord, &nbcs, &bcs, in->mesh, comm);
   parrsb_check_error(err, comm);
 
   // Find connectivity.
