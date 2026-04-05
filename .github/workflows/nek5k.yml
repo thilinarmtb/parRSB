@@ -21,10 +21,12 @@ jobs:
         np: [1, 2, 3, 4]
       fail-fast: false
     name: "${{ matrix.test }}, np = ${{ matrix.np }}"
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v3
       - name: Install apt dependencies
-        shell: bash
         run: |
           sudo apt -y update
           sudo apt install -y openmpi-bin libopenmpi-dev
@@ -34,16 +36,13 @@ jobs:
           git clone https://github.com/Nek5000/gslib.git
           make -C gslib -j4
       - name: Build parRSB and clone tests
-        shell: bash
         run: |
           export GSLIB_DIR=`pwd`/gslib/build/
           make -j4 example
       - name: Clone tests
-        shell: bash
         run: |
           git clone https://github.com/thilinarmtb/${CIDIR}.git
       - name: gencon
-        shell: bash
         run: |
           cp ${EXAMPLEDIR}/gencon ${CIDIR}/${{ matrix.test }}
           cd ${CIDIR}/${{ matrix.test }}
@@ -52,7 +51,6 @@ jobs:
           ${MPIEXE} -np ${{ matrix.np }} ./gencon --mesh ${{ matrix.test }} \
             --tol=${tol} --dump=0 --test=1
       - name: genmap-lanczos
-        shell: bash
         run: |
           export PARRSB_RSB_ALGO=0
           export PARRSB_VERBOSE_LEVEL=2
@@ -65,7 +63,6 @@ jobs:
             --tol=${tol} --dump=0 --test=1
       # - name: genmap-mg-factor-2
       #   if: always()
-      #   shell: bash
       #   run: |
       #     export PARRSB_RSB_ALGO=1
       #     export PARRSB_RSB_MG_FACTOR=2
@@ -79,7 +76,6 @@ jobs:
       #       --tol=${tol} --dump=0 --test=1
       # - name: genmap-mg-factor-4
       #   if: always()
-      #   shell: bash
       #   run: |
       #     export PARRSB_RSB_ALGO=1
       #     export PARRSB_RSB_MG_FACTOR=4
