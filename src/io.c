@@ -18,19 +18,21 @@
 #define GC_CO2_HEADER_LEN 132
 #define HEADER_LEN 132
 
-static void check_call_(sint err, const char *msg, const char *file,
-                        unsigned line, struct comm *c) {
+static int check_call_(sint err, const char *msg, const char *file,
+                       unsigned line, struct comm *c) {
   sint wrk;
   comm_allreduce(c, gs_int, gs_add, &err, 1, &wrk);
-  if (err > 0) {
-    if (c->id == 0) {
-      fprintf(stderr, "%s:%d Error: %s", file, line, msg);
-      fflush(stderr);
-    }
-    MPI_Finalize();
-    exit(EXIT_FAILURE);
+  if (err > 0) goto fail;
+
+  if (c->id == 0) {
+    fprintf(stderr, "%s:%d Error: %s", file, line, msg);
+    fflush(stderr);
   }
+
+fail:
+  return err;
 }
+
 #define check_call(retval, msg, comm)                                          \
   check_call_(retval, msg, __FILE__, __LINE__, comm)
 
@@ -213,9 +215,9 @@ static void re2_boundary(unsigned int *nbcs_, long long **bcs_, int nv,
   free(buf);
 }
 
-static void read_geometry(unsigned *nelt, unsigned *nv, double **coord,
-                          unsigned *nbcs, long long **bcs, char *fname,
-                          struct comm *c) {
+static int read_geometry(unsigned *nelt, unsigned *nv, double **coord,
+                         unsigned *nbcs, long long **bcs, char *fname,
+                         struct comm *c) {
   MPI_Info info;
   check_mpi_call(MPI_Info_create(&info), "MPI_Info_create", c);
 
@@ -230,6 +232,8 @@ static void read_geometry(unsigned *nelt, unsigned *nv, double **coord,
 
   check_mpi_call(MPI_File_close(&file), "MPI_File_close", c);
   check_mpi_call(MPI_Info_free(&info), "MPI_Info_free", c);
+
+  return 0;
 }
 
 static int read_connectivity(unsigned int *nelt_, unsigned *nv_,
@@ -323,35 +327,21 @@ static int read_connectivity(unsigned int *nelt_, unsigned *nv_,
   return 0;
 }
 
-int parrsb_read_mesh(unsigned *nel, unsigned *nv, long long **vl,
-                     double **coord, unsigned *nbcs, long long **bcs,
-                     char *name, MPI_Comm comm, int read) {
+int parrsb_read_mesh(unsigned *nel, unsigned *nv, double **coord,
+                     unsigned *nbcs, long long **bcs, char *name,
+                     MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
 
-  // Set nv and nelt to 0 so we know if .re2 file is read before .co2 in the
-  // case where we are reading both.
+  char geom_name[BUFSIZ + 1];
+  strncpy(geom_name, name, BUFSIZ);
+  strncat(geom_name, ".re2", 5);
+
   *nv = 0, *nel = 0;
-
-  // Read geometry from .re2 file
-  if (read & 1) {
-    char geom_name[BUFSIZ + 1];
-    strncpy(geom_name, name, BUFSIZ);
-    strncat(geom_name, ".re2", 5);
-    read_geometry(nel, nv, coord, nbcs, bcs, geom_name, &c);
-  }
-
-  // Read connectivity from .co2 file if the user asks us to read it.
-  if (read & 2) {
-    char conn_name[BUFSIZ + 1];
-    strncpy(conn_name, name, BUFSIZ);
-    strncat(conn_name, ".co2", 5);
-    read_connectivity(nel, nv, vl, conn_name, &c);
-  }
+  int err = read_geometry(nel, nv, coord, nbcs, bcs, geom_name, &c);
 
   comm_free(&c);
-
-  return 0;
+  return err;
 }
 
 int parrsb_dump_con(char *name, unsigned nelt, unsigned nv, long long *vl,
