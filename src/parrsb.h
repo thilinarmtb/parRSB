@@ -50,6 +50,9 @@ int parrsb_read_mesh(unsigned *nel, unsigned *nv, double **coord,
                      unsigned *nbcs, long long **bcs, char *name,
                      MPI_Comm comm);
 
+int parrsb_read_conn(unsigned *nel, unsigned *nv, long long **vtx, char *name,
+                     MPI_Comm comm);
+
 int parrsb_dump_con(char *name, unsigned nelt, unsigned nv, long long *vl,
                     MPI_Comm comm);
 
