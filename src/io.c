@@ -242,72 +242,39 @@ static int read_connectivity(unsigned int *nelt_, unsigned *nv_,
   MPI_Comm comm = c->c;
 
   MPI_File file;
-  int err = MPI_File_open(comm, fname, MPI_MODE_RDONLY, MPI_INFO_NULL, &file);
-  if (err != MPI_SUCCESS) {
-    if (rank == 0) {
-      fprintf(stderr, "Error opening %s for reading.\n", fname);
-      fflush(stderr);
-    }
-    MPI_Abort(comm, 911);
-  }
+  check_mpi_call(
+      MPI_File_open(comm, fname, MPI_MODE_RDONLY, MPI_INFO_NULL, &file),
+      "MPI_File_open", c);
 
   char *buf = (char *)calloc(GC_CO2_HEADER_LEN + 1, sizeof(char));
   MPI_Status st;
-  err = MPI_File_read_all(file, buf, GC_CO2_HEADER_LEN, MPI_BYTE, &st);
+  check_mpi_call(MPI_File_read_all(file, buf, GC_CO2_HEADER_LEN, MPI_BYTE, &st),
+                 "MPI_File_read_all", c);
 
   long long nelgt, nelgv;
   unsigned nv;
+  // TODO: Assert version
   char version[6];
   sscanf(buf, "%5s %12lld %12lld %u", version, &nelgt, &nelgv, &nv);
 
-  // TODO: Assert version
   uint nelt = nelgt / size, nrem = nelgt - nelt * size;
   nelt += (rank > (size - 1 - nrem) ? 1 : 0);
 
-  if (*nv_ != 0) {
-    if (*nv_ != nv) {
-      if (rank == 0) {
-        fprintf(stderr, "%s:%d nv values don't match: %d %d\n", __FILE__,
-                __LINE__, *nv_, nv);
-        fflush(stderr);
-        return 1;
-      }
-    }
-  } else {
-    *nv_ = nv;
-  }
-
-  if (*nelt_ != 0) {
-    if (*nelt_ != nelt) {
-      if (rank == 0) {
-        fprintf(stderr, "%s:%d nelt values don't match: %d %d\n", __FILE__,
-                __LINE__, *nelt_, nelt);
-        fflush(stderr);
-        return 1;
-      }
-    }
-  } else {
-    *nelt_ = nelt;
-  }
+  *nv_ = nv, *nelt_ = nelt;
 
   float byte_test = 0;
-  MPI_File_read_all(file, &byte_test, 4, MPI_BYTE, &st);
-  if (fabs(byte_test - 6.543210) > 1e-7) {
-    if (rank == 0) {
-      fprintf(stderr, "%s:%d ERROR: byte_test failed! %f\n", __FILE__, __LINE__,
-              byte_test);
-      fflush(stderr);
-    }
-    MPI_Abort(comm, 911);
-  }
+  check_mpi_call(MPI_File_read_all(file, &byte_test, 4, MPI_BYTE, &st),
+                 "MPI_File_read_all", c);
+  if (fabs(byte_test - 6.543210) > 1e-7) return 1;
 
   size_t read_size = nelt * (nv + 1) * sizeof(int);
   size_t header_size = GC_CO2_HEADER_LEN + sizeof(float);
   if (rank == 0) read_size += header_size;
 
   buf = (char *)realloc(buf, read_size * sizeof(char));
-  err = MPI_File_read_ordered(file, buf, read_size, MPI_BYTE, &st);
-  err = MPI_File_close(&file);
+  check_mpi_call(MPI_File_read_ordered(file, buf, read_size, MPI_BYTE, &st),
+                 "MPI_File_read_ordered", c);
+  check_mpi_call(MPI_File_close(&file), "MPI_File_close", c);
 
   char *buf0 = buf + (rank == 0) * header_size;
   long long *vl = *vl_ = tcalloc(long long, nv *nelt);
@@ -337,8 +304,21 @@ int parrsb_read_mesh(unsigned *nel, unsigned *nv, double **coord,
   strncpy(geom_name, name, BUFSIZ);
   strncat(geom_name, ".re2", 5);
 
-  *nv = 0, *nel = 0;
   int err = read_geometry(nel, nv, coord, nbcs, bcs, geom_name, &c);
+
+  comm_free(&c);
+  return err;
+}
+
+int parrsb_read_conn(unsigned *nel, unsigned *nv, long long **vtx, char *name,
+                     MPI_Comm comm) {
+  struct comm c;
+  comm_init(&c, comm);
+
+  char con_name[BUFSIZ + 1];
+  strncpy(con_name, name, BUFSIZ);
+  strncat(con_name, ".co2", 5);
+  int err = read_connectivity(nel, nv, vtx, con_name, &c);
 
   comm_free(&c);
   return err;

@@ -32,7 +32,7 @@ static void check_connectivity_aux(unsigned nelt, unsigned nv,
 static void check_connectivity(long long *vlp, char *name, MPI_Comm comm) {
   unsigned nelt, nv, err;
   long long *vls = NULL;
-  err = parrsb_read_mesh(&nelt, &nv, &vls, NULL, NULL, NULL, name, comm, 2);
+  err = parrsb_read_conn(&nelt, &nv, &vls, name, comm);
   parrsb_check_error(err, comm);
 
   struct comm c;
