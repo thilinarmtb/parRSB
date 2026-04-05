@@ -32,9 +32,10 @@ else()
   add_library(parRSB STATIC ${SRCS})
 endif()
 set_target_properties(parRSB PROPERTIES OUTPUT_NAME parRSB)
-set_target_properties(parRSB PROPERTIES VERSION ${PROJECT_VERSION}
-    PUBLIC_HEADER src/parrsb.h)
-target_include_directories(parRSB PRIVATE "${CMAKE_SOURCE_DIR}/src")
+set_target_properties(parRSB PROPERTIES VERSION ${PROJECT_VERSION})
+target_include_directories(parRSB PUBLIC $<INSTALL_INTERFACE:include>
+  PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+)
 target_compile_options(parRSB PRIVATE ${PARRSB_FLAGS})
 target_link_libraries(parRSB PRIVATE gs::gs MPI::MPI_C m)
 
@@ -52,11 +53,7 @@ function(add_binary src)
   get_filename_component(name "${src}" NAME_WE)
   add_executable(${name} "${src}")
   target_compile_options(${name} PRIVATE ${PARRSB_FLAGS})
-  if(PARRSB_SHARED)
-    target_link_libraries(${name} PRIVATE parRSB gs::gs MPI::MPI_C m)
-  else()
-    target_link_libraries(${name} PRIVATE parRSB gs::gs MPI::MPI_C m)
-  endif()
+  target_link_libraries(${name} PRIVATE parRSB gs::gs MPI::MPI_C m)
   install(TARGETS ${name} RUNTIME DESTINATION bin)
   target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src")
 endfunction()
@@ -75,13 +72,16 @@ if(PARRSB_EXAMPLES)
   endforeach()
 endif()
 
+# install parRSB
 install(TARGETS parRSB
   EXPORT parRSBTargets
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
-  PUBLIC_HEADER DESTINATION include
 )
+file(GLOB HEADERS "${CMAKE_SOURCE_DIR}/src/*.h")
+install(FILES ${HEADERS} DESTINATION include)
 
+# export targets/configs
 set(EXPORT_TARGETS_FILE "parRSBTargets.cmake")
 install(EXPORT parRSBTargets
   FILE parRSBTargets.cmake
@@ -105,6 +105,7 @@ install(FILES
   DESTINATION lib/cmake/parRSB
 )
 
+# `format` target
 find_program(CLANG_FORMAT clang-format)
 if(CLANG_FORMAT)
   file(GLOB_RECURSE ALL_C_FILES
