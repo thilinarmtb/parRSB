@@ -70,6 +70,12 @@ void fparrsb_conn_mesh(long long *vtx, double *coord, int *nel, int *nDim,
                        double *tol, MPI_Fint *fcomm, int *verbose, int *err);
 
 //==============================================================================
+// Neighbors
+//
+void parrsb_fetch_nbrs_v3(unsigned *nei, slong *vids, double *va, sint *wids,
+                          unsigned nv, unsigned ndim, unsigned nw, unsigned max_ne,
+                          MPI_Comm comm);
+//==============================================================================
 // I/O routines
 //
 int parrsb_read_mesh(unsigned *nel, unsigned *nv, long long **vl,
