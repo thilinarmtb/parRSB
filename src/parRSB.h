@@ -3,7 +3,7 @@
 
 #include "gslib.h"
 
-#if !defined(MPI)
+#if !defined(GSLIB_USE_MPI) && !defined(MPI)
 #error "gslib needs to be compiled with MPI"
 #endif
 
