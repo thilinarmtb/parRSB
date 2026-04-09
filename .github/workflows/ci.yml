@@ -37,7 +37,7 @@ jobs:
         sudo apt install -y build-essential cmake
     - name: Build gslib
       run: |
-        git clone https://github.com/thilinarmtb/gslib.git -b general_graph
+        git clone https://github.com/thilinarmtb/gslib.git
         cmake -B ./gslib/build -S ./gslib -DCMAKE_INSTALL_PREFIX=./gslib/install
         cmake --build ./gslib/build --target install
     - name: Install parRSB
