@@ -20,12 +20,13 @@ find_package(MPI REQUIRED)
 find_package(gs REQUIRED)
 
 #Link:https://gitlab.kitware.com/cmake/community/wikis/doc/cmake/RPATH-handling
-set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH};${CMAKE_INSTALL_PREFIX}/lib;${gs_LIBRARY_DIR}")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
+set(SRCROOT ${CMAKE_CURRENT_SOURCE_DIR})
+set(BLDROOT ${CMAKE_CURRENT_BINARY_DIR})
 
-file(GLOB SRCS  "${CMAKE_SOURCE_DIR}/src/*.c")
+file(GLOB SRCS "${SRCROOT}/src/*.c")
 if(PARRSB_SHARED)
   add_library(parRSB SHARED ${SRCS})
 else()
@@ -34,7 +35,7 @@ endif()
 set_target_properties(parRSB PROPERTIES OUTPUT_NAME parRSB)
 set_target_properties(parRSB PROPERTIES VERSION ${PROJECT_VERSION})
 target_include_directories(parRSB PUBLIC $<INSTALL_INTERFACE:include>
-  PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+  $<BUILD_INTERFACE:${SRCROOT}/src>
 )
 target_compile_options(parRSB PRIVATE ${PARRSB_FLAGS})
 target_link_libraries(parRSB PRIVATE gs::gs MPI::MPI_C m)
@@ -55,18 +56,18 @@ function(add_binary src)
   target_compile_options(${name} PRIVATE ${PARRSB_FLAGS})
   target_link_libraries(${name} PRIVATE parRSB gs::gs MPI::MPI_C m)
   install(TARGETS ${name} RUNTIME DESTINATION bin)
-  target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src")
+  target_include_directories(${name} PRIVATE "${SRCROOT}/src")
 endfunction()
 
 if(PARRSB_EXAMPLES)
-  file(GLOB EXAMPLE_SRCS "${CMAKE_SOURCE_DIR}/example/*.c")
+  file(GLOB EXAMPLE_SRCS "${SRCROOT}/example/*.c")
   foreach(src ${EXAMPLE_SRCS})
     add_binary(${src})
   endforeach()
 endif()
 
 if(PARRSB_EXAMPLES)
-  file(GLOB EXAMPLE_SRCS "${CMAKE_SOURCE_DIR}/test/*.c")
+  file(GLOB EXAMPLE_SRCS "${SRCROOT}/test/*.c")
   foreach(src ${EXAMPLE_SRCS})
     add_binary(${src})
   endforeach()
@@ -78,7 +79,7 @@ install(TARGETS parRSB
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
 )
-file(GLOB HEADERS "${CMAKE_SOURCE_DIR}/src/*.h")
+file(GLOB HEADERS "${SRCROOT}/src/*.h")
 install(FILES ${HEADERS} DESTINATION include)
 
 # export targets/configs
@@ -90,18 +91,18 @@ install(EXPORT parRSBTargets
 )
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
-  "${CMAKE_BINARY_DIR}/parRSBConfigVersion.cmake"
+  "${BLDROOT}/parRSBConfigVersion.cmake"
   VERSION ${PROJECT_VERSION}
   COMPATIBILITY AnyNewerVersion
 )
 configure_file(
-  "${CMAKE_SOURCE_DIR}/parRSBConfig.cmake.in"
-  "${CMAKE_BINARY_DIR}/parRSBConfig.cmake"
+  "${SRCROOT}/parRSBConfig.cmake.in"
+  "${BLDROOT}/parRSBConfig.cmake"
   @ONLY
 )
 install(FILES
-  "${CMAKE_BINARY_DIR}/parRSBConfig.cmake"
-  "${CMAKE_BINARY_DIR}/parRSBConfigVersion.cmake"
+  "${BLDROOT}/parRSBConfig.cmake"
+  "${BLDROOT}/parRSBConfigVersion.cmake"
   DESTINATION lib/cmake/parRSB
 )
 
@@ -109,10 +110,10 @@ install(FILES
 find_program(CLANG_FORMAT clang-format)
 if(CLANG_FORMAT)
   file(GLOB_RECURSE ALL_C_FILES
-    "${CMAKE_SOURCE_DIR}/src/*.c"
-    "${CMAKE_SOURCE_DIR}/src/*.h"
-    "${CMAKE_SOURCE_DIR}/example/*.c"
-    "${CMAKE_SOURCE_DIR}/test/*.c"
+    "${SRCROOT}/src/*.c"
+    "${SRCROOT}/src/*.h"
+    "${SRCROOT}/example/*.c"
+    "${SRCROOT}/test/*.c"
   )
   add_custom_target(format
     COMMAND ${CLANG_FORMAT} -i ${ALL_C_FILES}
