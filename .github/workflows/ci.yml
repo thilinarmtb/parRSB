@@ -111,21 +111,9 @@ jobs:
         sudo apt -y update
         sudo apt install -y openmpi-bin libopenmpi-dev
         sudo apt install -y build-essential cmake
-    - name: Download parRSB workspace
-      uses: actions/download-artifact@v6
-      with:
-        name: assets
-        path: ${{ github.workspace }}
-    - name: Test exported CMake targets
+    - name: Run CMake tests
       run: |
-        cd ./test/cmake/find_package
-        cmake -S . -B build -DCMAKE_INSTALL_PREFIX=./install -DparRSB_DIR=${INSTDIR}/lib/cmake/parRSB
-        cmake --build build --target install
-    - name: Test inclusion in another project with FetchContent
-      run: |
-        cd ./test/cmake/fetch_content
-        cmake -S . -B build -DCMAKE_INSTALL_PREFIX=./install
-        cmake --build build --target install
+        ./bin/test_cmake.sh
     - name: Block to allow inspecting failures
       run: sleep 120m
       if: ${{ failure() && inputs.debug_enabled }}
