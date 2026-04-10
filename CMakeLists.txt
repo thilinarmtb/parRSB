@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.24)
 project(parRSB LANGUAGES C VERSION 0.9.3)
 
 option(PARRSB_DEBUG "Build with debug symbols instead of -O2" OFF)
