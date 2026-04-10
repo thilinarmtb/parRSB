@@ -17,7 +17,13 @@ set(PARRSB_FLAGS
 )
 
 find_package(MPI REQUIRED)
-find_package(gs REQUIRED)
+include(FetchContent)
+FetchContent_Declare(gs
+  GIT_REPOSITORY https://github.com/thilinarmtb/gslib.git
+  GIT_TAG master
+  FIND_PACKAGE_ARGS
+)
+FetchContent_MakeAvailable(gs)
 
 #Link:https://gitlab.kitware.com/cmake/community/wikis/doc/cmake/RPATH-handling
 set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH};${CMAKE_INSTALL_PREFIX}/lib;${gs_LIBRARY_DIR}")
