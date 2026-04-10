@@ -45,6 +45,7 @@ target_include_directories(parRSB PUBLIC $<INSTALL_INTERFACE:include>
 )
 target_compile_options(parRSB PRIVATE ${PARRSB_FLAGS})
 target_link_libraries(parRSB PRIVATE gs::gs MPI::MPI_C m)
+add_library(parRSB::parRSB ALIAS parRSB)
 
 if(PARRSB_SYNC STREQUAL "reduction")
   target_compile_definitions(parRSB PRIVATE PARRSB_SYNC_REDUCTION)
