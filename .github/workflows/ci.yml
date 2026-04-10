@@ -124,7 +124,7 @@ jobs:
     - name: Test inclusion in another project with FetchContent
       run: |
         cd ./test/cmake/fetch_content
-        cmake -S . -B build -DCMAKE_INSTALL_PREFIX=./install -Dgs_DIR=${GSDIR}/lib/cmake/gs
+        cmake -S . -B build -DCMAKE_INSTALL_PREFIX=./install
         cmake --build build --target install
     - name: Block to allow inspecting failures
       run: sleep 120m
