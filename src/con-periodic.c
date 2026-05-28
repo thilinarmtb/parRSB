@@ -258,33 +258,33 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
       "find_connected_periodic_faces ", "renumber_periodic_vertices    ",
       "compress_periodic_vertices    ", "send_back                     "};
 
-  parrsb_print(c, verbose, "\t\tcheck if there are periodic faces ...");
+  parrsb_info(c, verbose, "\t\tcheck if there are periodic faces ...");
   slong n = mesh->boundary.n, wrk;
   comm_allreduce(c, gs_long, gs_add, &n, 1, &wrk);
-  parrsb_print(c, verbose, "\t\t\tnumber of periodic faces = %lld", n);
+  parrsb_info(c, verbose, "\t\t\tnumber of periodic faces = %lld", n);
   if (n == 0) return 0;
 
-  parrsb_print(c, verbose, "\t\t%s ...", functions[0]);
+  parrsb_info(c, verbose, "\t\t%s ...", functions[0]);
   setPeriodicFaceCoordinates(mesh, c, bfr);
 
-  parrsb_print(c, verbose, "\t\t%s ...", functions[1]);
+  parrsb_info(c, verbose, "\t\t%s ...", functions[1]);
   gatherMatchingPeriodicFaces(mesh, c);
 
   struct array matched;
   array_init(struct mpair_t, &matched, 10);
   matched.n = 0;
 
-  parrsb_print(c, verbose, "\t\t%s ...", functions[2]);
+  parrsb_info(c, verbose, "\t\t%s ...", functions[2]);
   findConnectedPeriodicFaces(mesh, &matched);
 
-  parrsb_print(c, verbose, "\t\t%s ...", functions[3]);
+  parrsb_info(c, verbose, "\t\t%s ...", functions[3]);
   renumberPeriodicVertices(mesh, c, &matched, bfr);
   array_free(&matched);
 
-  parrsb_print(c, verbose, "\t\t%s ...", functions[4]);
+  parrsb_info(c, verbose, "\t\t%s ...", functions[4]);
   compressPeriodicVertices(mesh, c, bfr);
 
-  parrsb_print(c, verbose, "\t\t%s ...", functions[5]);
+  parrsb_info(c, verbose, "\t\t%s ...", functions[5]);
   send_back(mesh, c, bfr);
 
   return 0;

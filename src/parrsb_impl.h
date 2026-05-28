@@ -211,8 +211,8 @@ INTERN slong get_components(sint *component, const struct array *elems,
  */
 INTERN void parrsb_barrier(struct comm *c);
 
-INTERN void parrsb_print(const struct comm *c, int verbose, const char *fmt,
-                         ...);
+INTERN void parrsb_info(const struct comm *c, int verbose, const char *fmt,
+                        ...);
 
 INTERN void parrsb_error(int cond, const struct comm *c, int verbose,
                          const char *fmt, ...);
