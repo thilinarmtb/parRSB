@@ -22,12 +22,6 @@ int parrsb_options_get_default(parrsb_options_t *options) {
   return 0;
 }
 
-int parrsb_options_copy(parrsb_options_t *dest, const parrsb_options_t src) {
-  *dest = tcalloc(struct parrsb_options, 1);
-  memcpy(*dest, src, sizeof(struct parrsb_options));
-  return 0;
-}
-
 void parrsb_options_print(const parrsb_options_t options) {
 #define PRINT_OPTION(OPT, STR, FMT) printf("%s = " FMT "\n", STR, options->OPT)
 
