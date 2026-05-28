@@ -214,6 +214,9 @@ INTERN void parrsb_barrier(struct comm *c);
 INTERN void parrsb_print(const struct comm *c, int verbose, const char *fmt,
                          ...);
 
+INTERN void parrsb_error(int cond, const struct comm *c, int verbose,
+                         const char *fmt, ...);
+
 INTERN void parrsb_print_stack(void);
 
 INTERN int log2ll(long long n);
