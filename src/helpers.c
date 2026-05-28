@@ -16,6 +16,24 @@ void parrsb_barrier(struct comm *c) {
 #endif
 }
 
+void parrsb_error(int cond, const struct comm *c, int verbose, const char *fmt,
+                  ...) {
+  comm_barrier(c);
+
+  if (cond) return;
+
+  va_list vargs;
+  if (c->id == 0 && verbose > 0) {
+    va_start(vargs, fmt);
+    vfprintf(stderr, fmt, vargs);
+    va_end(vargs);
+    fprintf(stderr, "\n");
+    fflush(stderr);
+  }
+
+  MPI_Abort(c->c, EXIT_FAILURE);
+}
+
 void parrsb_print(const struct comm *c, int verbose, const char *fmt, ...) {
   comm_barrier(c);
 
