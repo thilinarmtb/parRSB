@@ -34,7 +34,7 @@ void parrsb_error(int cond, const struct comm *c, int verbose, const char *fmt,
   MPI_Abort(c->c, EXIT_FAILURE);
 }
 
-void parrsb_print(const struct comm *c, int verbose, const char *fmt, ...) {
+void parrsb_info(const struct comm *c, int verbose, const char *fmt, ...) {
   comm_barrier(c);
 
   va_list vargs;

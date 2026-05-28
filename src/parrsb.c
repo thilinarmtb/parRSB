@@ -74,15 +74,15 @@ static void initialize_levels(struct comm *const comms,
 
   // Check invariant: rpn must be larger than 0.
   assert(rpn > 0);
-  parrsb_print(c, verbose, "parRSB: nodes = %u, ranks per node = %u", nn, rpn);
+  parrsb_info(c, verbose, "parRSB: nodes = %u, ranks per node = %u", nn, rpn);
 
   // Hardcode the maximum number of levels to two for now.
   sint levels = MIN(2, options->levels);
   if (levels > 1) comm_dup(&comms[levels - 1], &nc);
   comm_free(&nc);
 
-  parrsb_print(c, verbose, "parRSB: levels requested %u, enabled = %u",
-               options->levels, levels);
+  parrsb_info(c, verbose, "parRSB: levels requested %u, enabled = %u",
+              options->levels, levels);
   options->levels = levels;
 }
 
@@ -192,7 +192,7 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   initialize_levels(comms, options, &ca);
 
   const int verbose = options->verbose_level;
-  parrsb_print(c, verbose, "parrsb_part_mesh_v0: running partitioner ...");
+  parrsb_info(c, verbose, "parrsb_part_mesh_v0: running partitioner ...");
   if (elist.n > 0) {
     switch (options->partitioner) {
     case 0: rsb(&elist, ei, options, comms, bfr); break;
@@ -205,7 +205,7 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   for (int l = 0; l < options->levels; l++) comm_free(&comms[l]);
   comm_free(&ca);
 
-  parrsb_print(c, verbose, "parrsb_part_mesh_v0: restore original input");
+  parrsb_info(c, verbose, "parrsb_part_mesh_v0: restore original input");
   mesh_restore(part, &elist, ei->size, cr, bfr);
 
   free(ei);
@@ -216,7 +216,7 @@ static void check_tagged_partitions(const long long *const eids,
                                     const unsigned nv, const uint ntags,
                                     const struct comm *const c,
                                     const int verbose) {
-  parrsb_print(c, verbose, "Check if the input elements are sorted locally.");
+  parrsb_info(c, verbose, "Check if the input elements are sorted locally.");
   {
     sint sorted = 1;
     for (uint i = 1; i < nel; i++) {
@@ -239,7 +239,7 @@ static void check_tagged_partitions(const long long *const eids,
 
   // Number the elements within the each tag id and setup a gs handle based on
   // 2D element id.
-  parrsb_print(c, verbose, "Number elements within each layer.");
+  parrsb_info(c, verbose, "Number elements within each layer.");
   const uint tag_id = c->id / ntags;
   struct comm lc;
   struct gs_data *gse = NULL;
@@ -258,7 +258,7 @@ static void check_tagged_partitions(const long long *const eids,
   }
 
   // Setup a local gs handle based on the original gs vertex ids.
-  parrsb_print(c, verbose, "Setup multiplicity.");
+  parrsb_info(c, verbose, "Setup multiplicity.");
   const size_t size = nel * nv;
   buffer bfr;
   buffer_init(&bfr, size);
@@ -271,7 +271,7 @@ static void check_tagged_partitions(const long long *const eids,
   }
 
   // Now let's compare the multiplicity across the layers.
-  parrsb_print(c, verbose, "Check multiplicity across the layers.");
+  parrsb_info(c, verbose, "Check multiplicity across the layers.");
   {
     sint *lmin = tcalloc(sint, nel);
     sint *lmax = tcalloc(sint, nel);
@@ -305,7 +305,7 @@ static void parrsb_part_mesh_v1(int *part, const long long *const vtx,
                                 const struct comm *const c,
                                 struct crystal *const cr, buffer *const bfr) {
   const int verbose = options->verbose_level;
-  parrsb_print(c, verbose, "Find number of tags in the mesh ...");
+  parrsb_info(c, verbose, "Find number of tags in the mesh ...");
 
   struct tag_t {
     uint p, tag, seq, tagn;
@@ -354,7 +354,7 @@ static void parrsb_part_mesh_v1(int *part, const long long *const vtx,
   }
   const uint num_tags = out[1][0], tag_start = out[0][0];
 
-  parrsb_print(c, verbose, "Num tags: %d", num_tags);
+  parrsb_info(c, verbose, "Num tags: %d", num_tags);
   if (c->np % num_tags != 0) {
     if (c->id == 0) {
       fprintf(stderr,
@@ -381,7 +381,7 @@ static void parrsb_part_mesh_v1(int *part, const long long *const vtx,
   }
 
   const uint chunk_size = c->np / num_tags;
-  parrsb_print(c, verbose, "Processes per tag: %d", chunk_size);
+  parrsb_info(c, verbose, "Processes per tag: %d", chunk_size);
   {
     struct tag_t *const pt = (struct tag_t *const)tags.ptr;
     const struct tag_t *const pu = (const struct tag_t *const)unique.ptr;
@@ -407,9 +407,9 @@ static void parrsb_part_mesh_v1(int *part, const long long *const vtx,
   struct array elements;
   array_init(struct element_t, &elements, nel);
 
-  parrsb_print(c, verbose,
-               "Pack element data for transfering. tags.n=%u, nel=%u", tags.n,
-               nel);
+  parrsb_info(c, verbose,
+              "Pack element data for transfering. tags.n=%u, nel=%u", tags.n,
+              nel);
   const unsigned ndim = (nv == 8) ? 3 : 2;
   {
     assert(tags.n == nel);
@@ -429,7 +429,7 @@ static void parrsb_part_mesh_v1(int *part, const long long *const vtx,
   }
   array_free(&tags);
 
-  parrsb_print(c, verbose, "Copy element data for feeding to parRSB.");
+  parrsb_info(c, verbose, "Copy element data for feeding to parRSB.");
   long long *lvtx = tcalloc(long long, (elements.n + 1) * nv);
   double *lxyz = tcalloc(double, (elements.n + 1) * nv * ndim);
   {
@@ -444,7 +444,7 @@ static void parrsb_part_mesh_v1(int *part, const long long *const vtx,
     }
   }
 
-  parrsb_print(c, verbose, "Run parRSB locally within a tag now.");
+  parrsb_info(c, verbose, "Run parRSB locally within a tag now.");
   {
     int *lpart = tcalloc(int, elements.n + 1);
 
@@ -541,8 +541,8 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
                        const MPI_Comm comm) {
   struct comm c;
   comm_init(&c, comm);
-  parrsb_print(&c, 1, "Running greedy solid ... nel1 = %d nel2 = %d", nel1,
-               nel2);
+  parrsb_info(&c, 1, "Running greedy solid ... nel1 = %d nel2 = %d", nel1,
+              nel2);
 
   for (uint i = 0; i < nel2; i++) part[i] = -1;
 
@@ -559,7 +559,7 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
     slong wrk;
     comm_allreduce(&c, gs_long, gs_add, &nelg, 1, &wrk);
     if (nelg == 0) {
-      parrsb_print(&c, 1, "Mesh is empty ...");
+      parrsb_info(&c, 1, "Mesh is empty ...");
       crystal_free(&cr);
       buffer_free(&bfr);
       comm_free(&c);
@@ -572,7 +572,7 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
   const size_t size = size1 + size2;
 
   // Setup the gather-scatter handle to find connectivity through BFS.
-  parrsb_print(&c, 1, "Setup gather-scatter handle ...");
+  parrsb_info(&c, 1, "Setup gather-scatter handle ...");
   struct gs_data *gsh = NULL;
   {
     slong *vtx = tcalloc(slong, size);
@@ -585,7 +585,7 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
 
   // Check if the solid + fluid mesh is connected. Otherwise, we cannot use
   // the greedy solid partitioner.
-  parrsb_print(&c, 1, "Check if fluid + solid is connected ...");
+  parrsb_info(&c, 1, "Check if fluid + solid is connected ...");
   {
     slong wrk;
     sint idmin = (c.id + 1) * (size > 0);
@@ -613,8 +613,8 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
       }
 
       comm_allreduce(&c, gs_long, gs_add, &marked1, 1, &wrk);
-      parrsb_print(&c, 1, "\tepoch = %d marked0 = %lld marked1 = %lld", epoch,
-                   marked0, marked1);
+      parrsb_info(&c, 1, "\tepoch = %d marked0 = %lld marked1 = %lld", epoch,
+                  marked0, marked1);
       epoch++;
     }
     free(component);
@@ -630,7 +630,7 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
 
   // Calculate the global number of elements in solid mesh and expected number
   // of elements in each partition.
-  parrsb_print(&c, 1, "Calculate expected number of elements ...");
+  parrsb_info(&c, 1, "Calculate expected number of elements ...");
   slong nelgt2 = nel2;
   uint nexp2;
   {
@@ -666,7 +666,7 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
   uint nrecv2 = 0;
   slong nrem2 = nelgt2;
   while (nrem2 > 0) {
-    parrsb_print(&c, 1, "nrem2 = %lld", nrem2);
+    parrsb_info(&c, 1, "nrem2 = %lld", nrem2);
 
     // Check for invariant: nrecv2 <= nexp2.
     assert(nrecv2 <= nexp2);
@@ -695,7 +695,7 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
 
     // Then perform a BFS till we assign all the elements in the solid mesh with
     // a potential partition id.
-    parrsb_print(&c, 1, "Assign partition id ...");
+    parrsb_info(&c, 1, "Assign partition id ...");
     {
       sint assigned = 0;
       slong wrk;
@@ -713,8 +713,8 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
 
         comm_allreduce(&c, gs_int, gs_min, &assigned, 1, &wrk);
         comm_allreduce(&c, gs_long, gs_add, &unassigned, 1, &wrk);
-        parrsb_print(&c, 1, "hid = %d, assigned = %d unassigned = %d", hid,
-                     assigned, unassigned);
+        parrsb_info(&c, 1, "hid = %d, assigned = %d unassigned = %d", hid,
+                    assigned, unassigned);
       }
     }
 
@@ -728,7 +728,7 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
         array_cat(struct elem_t, &arr, &et, 1);
       }
 
-      parrsb_print(&c, 1, "Send elemenets to the target partition ...");
+      parrsb_info(&c, 1, "Send elemenets to the target partition ...");
       sarray_transfer(struct elem_t, &arr, target, 1, &cr);
     }
 
@@ -747,7 +747,7 @@ void parrsb_part_solid(int *part, const long long *const vtx2,
 
     // Send everything back with updated partition id and update the part array.
     {
-      parrsb_print(&c, 1, "Send everything back ...");
+      parrsb_info(&c, 1, "Send everything back ...");
       sarray_transfer(struct elem_t, &arr, target, 0, &cr);
 
       const struct elem_t *const pa = (const struct elem_t *const)arr.ptr;
@@ -785,33 +785,33 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
   if (c.id == 0 && verbose) parrsb_options_print(options);
 
   if (vtx == NULL && xyz == NULL) {
-    parrsb_print(&c, verbose,
-                 "parRSB: Both vertices and coordinates can't be NULL");
+    parrsb_info(&c, verbose,
+                "parRSB: Both vertices and coordinates can't be NULL");
     MPI_Abort(c.c, EXIT_FAILURE);
   }
 
   if (vtx == NULL && options->partitioner == 0) {
-    parrsb_print(&c, verbose,
-                 "parRSB: Vertices can't be NULL if the partitioner is RSB");
+    parrsb_info(&c, verbose,
+                "parRSB: Vertices can't be NULL if the partitioner is RSB");
     MPI_Abort(c.c, EXIT_FAILURE);
   }
 
   if (xyz == NULL && options->partitioner > 0) {
-    parrsb_print(&c, verbose,
-                 "parRSB: Coordinates can't be NULL if the partitioner is "
-                 "RCB or RIB");
+    parrsb_info(&c, verbose,
+                "parRSB: Coordinates can't be NULL if the partitioner is "
+                "RCB or RIB");
     MPI_Abort(c.c, EXIT_FAILURE);
   }
 
   if (xyz == NULL && options->rsb_pre != 0) {
-    parrsb_print(&c, verbose,
-                 "parRSB: Coordinates can't be NULL if the pre-partitioner is "
-                 "RCB or RIB");
+    parrsb_info(&c, verbose,
+                "parRSB: Coordinates can't be NULL if the pre-partitioner is "
+                "RCB or RIB");
     MPI_Abort(c.c, EXIT_FAILURE);
   }
 
   if (options->tagged == 1 && !tag) {
-    parrsb_print(
+    parrsb_info(
         &c, verbose,
         "parRSB: Tagged partitioning requested but the tag array is NULL");
     MPI_Abort(c.c, EXIT_FAILURE);
@@ -819,8 +819,8 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
 
   slong ng = ne, wrk;
   comm_allreduce(&c, gs_long, gs_add, &ng, 1, &wrk);
-  parrsb_print(&c, verbose,
-               "parRSB: # elements = %lld, # vertices/element = %d", ng, nv);
+  parrsb_info(&c, verbose, "parRSB: # elements = %lld, # vertices/element = %d",
+              ng, nv);
 
   buffer bfr;
   buffer_init(&bfr, (ne + 1) * 72);
@@ -838,8 +838,8 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
   if (options->tagged == 0)
     parrsb_part_mesh_v0(part, vtx, xyz, ne, nv, options, &c, &cr, &bfr);
 
-  parrsb_print(&c, verbose, "par%s finished in %g seconds.",
-               ALGO[options->partitioner], comm_time() - t);
+  parrsb_info(&c, verbose, "par%s finished in %g seconds.",
+              ALGO[options->partitioner], comm_time() - t);
   metric_rsb_print(&c, options->profile_level);
 
   metric_finalize();
@@ -936,7 +936,7 @@ int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
 
   slong n = num_nodes, wrk;
   comm_allreduce(&c, gs_long, gs_add, &n, 1, &wrk);
-  parrsb_print(&c, verbose, "parRSB: # vertices = %lld\n", n);
+  parrsb_info(&c, verbose, "parRSB: # vertices = %lld\n", n);
 
   parrsb_barrier(&c);
   double t = comm_time();
@@ -961,7 +961,7 @@ int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
   struct comm comms[8];
   initialize_levels(comms, options, &ca);
 
-  parrsb_print(&c, verbose, "parrsb_part_graph: running partitioner ...");
+  parrsb_info(&c, verbose, "parrsb_part_graph: running partitioner ...");
   if (nlist.n > 0) {
     switch (options->partitioner) {
     case 0: rsb(&nlist, ei, options, comms, &bfr); break;
@@ -972,7 +972,7 @@ int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
   for (int i = 0; i < options->levels; i++) comm_free(&comms[i]);
   comm_free(&ca);
 
-  parrsb_print(&c, verbose, "parrsb_part_graph: restore original input");
+  parrsb_info(&c, verbose, "parrsb_part_graph: restore original input");
   metric_rsb_print(&c, options->profile_level);
 
   graph_restore(part, &nlist, &cr, &bfr);
@@ -982,8 +982,8 @@ int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
   buffer_free(&bfr);
 
   t = comm_time() - t;
-  parrsb_print(&c, verbose, "par%s finished in %g seconds.",
-               ALGO[options->partitioner], t);
+  parrsb_info(&c, verbose, "par%s finished in %g seconds.",
+              ALGO[options->partitioner], t);
 
   comm_free(&c);
 
