@@ -116,14 +116,17 @@ install(FILES
 # `format` target
 find_program(CLANG_FORMAT clang-format)
 if(CLANG_FORMAT)
-  file(GLOB_RECURSE ALL_C_FILES
+  file(GLOB_RECURSE SRCFILES
     "${SRCROOT}/src/*.c"
     "${SRCROOT}/src/*.h"
     "${SRCROOT}/example/*.c"
     "${SRCROOT}/test/*.c"
   )
   add_custom_target(format
-    COMMAND ${CLANG_FORMAT} -i ${ALL_C_FILES}
+    COMMAND ${CLANG_FORMAT} -i ${SRCFILES}
     COMMENT "Running clang-format"
   )
+  add_custom_target(format-check
+    COMMAND ${CLANG_FORMAT} --dry-run -Werror -i ${SRCFILES}
+    COMMENT "Running clang-format check ...")
 endif()
