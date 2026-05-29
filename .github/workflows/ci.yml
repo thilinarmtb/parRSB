@@ -36,6 +36,7 @@ jobs:
         sudo apt -y update
         sudo apt install -y openmpi-bin libopenmpi-dev
         sudo apt install -y build-essential cmake
+        sudo apt install -y clang-format
     - name: Build gslib
       run: |
         git clone https://github.com/thilinarmtb/gslib.git
@@ -43,7 +44,8 @@ jobs:
         cmake --build ./gslib/build --target install
     - name: Install parRSB
       run: |
-        cmake -B build -S . -DCMAKE_INSTALL_PREFIX=${INSTDIR} -Dgs_DIR=${GSDIR}/lib/cmake/gs
+        cmake -B build -S . -DCMAKE_INSTALL_PREFIX=${INSTDIR} \
+          -Dgs_DIR=${GSDIR}/lib/cmake/gs
         cmake --build build --target install
     - name: Upload parRSB workspace
       uses: actions/upload-artifact@v6
@@ -55,7 +57,7 @@ jobs:
           ./install
           ./gslib/install
         if-no-files-found: error
-  format:
+  format-check:
     runs-on: ubuntu-latest
     needs: install
     defaults:
@@ -67,10 +69,12 @@ jobs:
     - name: Setup tmate session
       uses: mxschmitt/action-tmate@v3.13
       if: ${{ inputs.debug_enabled }}
-    - name: Install clang-format
+    - name: Install apt dependencies
       run: |
-        sudo apt update
-        sudo apt install clang-format-22 -y
+        sudo apt -y update
+        sudo apt install -y openmpi-bin libopenmpi-dev
+        sudo apt install -y build-essential cmake
+        sudo apt install -y clang-format
     - name: Download parRSB workspace
       uses: actions/download-artifact@v6
       with:
@@ -87,7 +91,7 @@ jobs:
     needs: install
     defaults:
       run:
-        shell: bash
+        shell: bash -l {0}
     strategy:
       matrix:
         np: [1, 2, 3, 4]
@@ -127,7 +131,7 @@ jobs:
     needs: install
     defaults:
       run:
-        shell: bash
+        shell: bash -l {0}
     steps:
     - name: Checkout actions
       uses: actions/checkout@v6
@@ -147,7 +151,8 @@ jobs:
     - name: Test exported CMake targets
       run: |
         cd ./test/cmake/find_package
-        cmake -S . -B build -DCMAKE_INSTALL_PREFIX=./install -DparRSB_DIR=${INSTDIR}/lib/cmake/parRSB
+        cmake -S . -B build -DCMAKE_INSTALL_PREFIX=./install \
+          -DparRSB_DIR=${INSTDIR}/lib/cmake/parRSB
         cmake --build build --target install
     - name: Test inclusion in another project with FetchContent
       run: |
