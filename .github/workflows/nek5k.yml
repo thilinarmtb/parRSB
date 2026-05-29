@@ -11,7 +11,7 @@ env:
   MPIEXE: "mpirun --oversubscribe"
   CC: mpicc
   CIDIR: parRSB-github-ci
-  EXAMPLEDIR: build/example
+  EXAMPLESDIR: build/examples
 jobs:
   mesh:
     runs-on: ubuntu-latest
@@ -38,13 +38,13 @@ jobs:
       - name: Build parRSB and clone tests
         run: |
           export GSLIB_DIR=`pwd`/gslib/build/
-          make -j4 example
+          make -j4 examples
       - name: Clone tests
         run: |
           git clone https://github.com/thilinarmtb/${CIDIR}.git
       - name: gencon
         run: |
-          cp ${EXAMPLEDIR}/gencon ${CIDIR}/${{ matrix.test }}
+          cp ${EXAMPLESDIR}/gencon ${CIDIR}/${{ matrix.test }}
           cd ${CIDIR}/${{ matrix.test }}
 
           tol=(`cat test.txt | grep tol`); tol=${tol[2]}
@@ -55,7 +55,7 @@ jobs:
           export PARRSB_RSB_ALGO=0
           export PARRSB_VERBOSE_LEVEL=2
 
-          cp ${EXAMPLEDIR}/genmap ${CIDIR}/${{ matrix.test }}
+          cp ${EXAMPLESDIR}/genmap ${CIDIR}/${{ matrix.test }}
           cd ${CIDIR}/${{ matrix.test }}
 
           tol=(`cat test.txt | grep tol`); tol=${tol[2]}
@@ -68,7 +68,7 @@ jobs:
       #     export PARRSB_RSB_MG_FACTOR=2
       #     export PARRSB_VERBOSE_LEVEL=2
 
-      #     cp ${EXAMPLEDIR}/genmap ${CIDIR}/${{ matrix.test }}
+      #     cp ${EXAMPLESDIR}/genmap ${CIDIR}/${{ matrix.test }}
       #     cd ${CIDIR}/${{ matrix.test }}
 
       #     tol=(`cat test.txt | grep tol`); tol=${tol[2]}
@@ -81,7 +81,7 @@ jobs:
       #     export PARRSB_RSB_MG_FACTOR=4
       #     export PARRSB_VERBOSE_LEVEL=2
 
-      #     cp ${EXAMPLEDIR}/genmap ${CIDIR}/${{ matrix.test }}
+      #     cp ${EXAMPLESDIR}/genmap ${CIDIR}/${{ matrix.test }}
       #     cd ${CIDIR}/${{ matrix.test }}
 
       #     tol=(`cat test.txt | grep tol`); tol=${tol[2]}
