@@ -57,10 +57,10 @@ endif
 
 SRC.c = $(wildcard $(SRCDIR)/*.c)
 SRC.o = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%.o,$(SRC.c))
-EXAMPLE.c = $(wildcard $(PROJDIR)/example/*.c)
-EXAMPLE.bin = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%,$(EXAMPLE.c))
-TEST.c = $(wildcard $(PROJDIR)/test/*.c)
-TEST.bin = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%,$(TEST.c))
+EXAMPLES.c = $(wildcard $(PROJDIR)/examples/*.c)
+EXAMPLES.bin = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%,$(EXAMPLES.c))
+TESTS.c = $(wildcard $(PROJDIR)/tests/*.c)
+TESTS.bin = $(patsubst $(PROJDIR)/%.c,$(BUILDDIR)/%,$(TESTS.c))
 LIB = $(BUILDDIR)/lib/libparRSB.$(LIB.ext)
 LIB.a = $(BUILDDIR)/lib/libparRSB.a
 LIB.so = $(BUILDDIR)/lib/libparRSB.so
@@ -68,9 +68,9 @@ LIB.so = $(BUILDDIR)/lib/libparRSB.so
 LDFLAGS += -lm
 INCFLAGS += -I$(SRCDIR)
 
-.PHONY: all lib install example format clean
+.PHONY: all lib install examples format clean
 
-all: lib install example test
+all: lib install examples tests
 
 lib: $(LIB)
 
@@ -87,9 +87,9 @@ install: lib
 	@cp -v $(LIB) $(INSTALLDIR)/lib/
 	@cp -v $(SRCDIR)/*.h $(INSTALLDIR)/include/
 
-example: $(EXAMPLE.bin) | lib install
+examples: $(EXAMPLES.bin) | lib install
 
-test: $(TEST.bin) | lib install
+tests: $(TESTS.bin) | lib install
 
 format:
 	find . -iname *.h -o -iname *.c | xargs clang-format -i
@@ -109,10 +109,10 @@ $(BUILDDIR)/%.o: $(PROJDIR)/%.c | build
 	$(CC) $(CFLAGS) $(INCFLAGS) $(PP) -c $< -o $@
 
 $(BUILDDIR)/%: $(PROJDIR)/%.c | lib install
-	$(CC) $(INCFLAGS) -I$(SRCDIR)/test $< -o $@ -L$(INSTALLDIR)/lib -lparRSB $(LDFLAGS)
+	$(CC) $(INCFLAGS) -I$(SRCDIR)/tests $< -o $@ -L$(INSTALLDIR)/lib -lparRSB $(LDFLAGS)
 
 build:
 	@mkdir -p $(BUILDDIR)/lib
 	@mkdir -p $(BUILDDIR)/src
-	@mkdir -p $(BUILDDIR)/example
-	@mkdir -p $(BUILDDIR)/test
+	@mkdir -p $(BUILDDIR)/examples
+	@mkdir -p $(BUILDDIR)/tests
