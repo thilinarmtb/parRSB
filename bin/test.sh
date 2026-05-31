@@ -39,7 +39,7 @@ function build_parrsb() {
 #############
 # Run tests #
 #############
-function check_formatting() {
+function run_format_check() {
   echo "Running format checks ..."
   ${CMAKE} --build ${BLD_DIR} --target format-check
 }
@@ -70,7 +70,7 @@ function run_unit_tests() {
   for np in ${NP}; do
     for test_bin in `ls ${INS_DIR}/bin/[0-9][0-9][0-9]_*`; do
       echo -n "Running test: ${test_bin}"
-      ${MPIRUN} ${MPIOPTS} -np ${np} -- ${test_bin}
+      ${MPIRUN} ${MPIOPTS} -np ${np} ${test_bin}
       echo " ... ok"
     done
   done
@@ -120,7 +120,7 @@ echo -e "${RESET}"
 build_gslib
 build_parrsb
 echo -e "${GREEN}"
-check_formatting
+run_format_check
 run_cmake_tests
 run_unit_tests
 run_nek5k_tests
