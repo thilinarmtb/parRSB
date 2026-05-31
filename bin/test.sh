@@ -16,6 +16,7 @@ WRK_DIR=$(mktemp -d)
 TST_DIR=${WRK_DIR}/tests
 BLD_DIR=${WRK_DIR}/build
 INS_DIR=${WRK_DIR}/install
+NEK_DIR=${WRK_DIR}/nek5k_ci
 GS_SRC_DIR=${WRK_DIR}/gslib
 GS_BLD_DIR=${GS_SRC_DIR}/build
 GS_INS_DIR=${GS_SRC_DIR}/install
@@ -75,6 +76,39 @@ function run_unit_tests() {
   done
 }
 
+function run_nek5k_tests() {
+  git clone https://github.com/thilinarmtb/parRSB-github-ci.git ${NEK_DIR}
+  cd ${NEK_DIR}
+
+  export PARRSB_RSB_ALGO=0
+  export PARRSB_VERBOSE_LEVEL=2
+  err_cnt=0
+  for np in ${NP}; do
+    for mesh in box_2x2x2 pyramid tgv e3q solid ethier vortex expansion; do
+      cd ${NEK_DIR}/${mesh}
+      tol=(`cat test.txt | grep tol`); tol=${tol[2]}
+
+      # run gencon tests
+      ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/gencon --mesh ${mesh} \
+            --tol=${tol} --dump=0 --test=1
+
+      # run genmap tests
+      # there are some allowed failures
+      set +e
+      ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/genmap --mesh ${mesh} \
+        --tol=${tol} --dump=0 --test=1
+      if [ $? -ne 0 ]; then
+        err_cnt=$(( err_cnt + 1 ))
+      fi
+      set -e
+    done
+  done
+
+  if [ $err_cnt -gt 5 ]; then
+    exit 1
+  fi
+}
+
 GREEN='\033[0;32m'
 RESET='\033[0m'
 
@@ -90,5 +124,6 @@ echo -e "${GREEN}"
 check_formatting
 run_cmake_tests
 run_unit_tests
+run_nek5k_tests
 echo -e "Tests passed."
 echo -e "${RESET}"
