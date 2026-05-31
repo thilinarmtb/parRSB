@@ -86,6 +86,22 @@ static void initialize_levels(struct comm *const comms,
   options->levels = levels;
 }
 
+static void initialize_levels_v1(struct comm *const comms, unsigned num_levels,
+                                 unsigned *id, const struct comm *const c,
+                                 unsigned verbose) {
+  if (num_levels == 0) return;
+
+  for (unsigned i = 0; i <= (num_levels - 1); i++) {
+    int rank = c->id;
+    if (i < (num_levels - 1)) rank = id[i + 1];
+
+    struct comm tmp;
+    comm_split(c, id[i], rank, &tmp);
+    comm_dup(&comms[i], &tmp);
+    comm_free(&tmp);
+  }
+}
+
 static void mesh_load_balance(struct array *elist, uint nel,
                               const double *const xyz,
                               const long long *const vtx, const element_info ei,
