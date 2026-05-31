@@ -46,14 +46,14 @@ function check_formatting() {
 
 function test_cmake_exported_target() {
   cd ${TST_DIR}/cmake/find_package
-  cmake -S . -B build -DCMAKE_INSTALL_PREFIX=${INS_DIR} \
+  cmake -S . -B build -DCMAKE_INSTALL_PREFIX=./install \
     -DparRSB_DIR=${INS_DIR}/lib/cmake/parRSB
   cmake --build build --target install
 }
 
 function test_cmake_inclusion_with_fetch_content() {
   cd ${TST_DIR}/cmake/find_package
-  cmake -S . -B build -DCMAKE_INSTALL_PREFIX=${INS_DIR}
+  cmake -S . -B build -DCMAKE_INSTALL_PREFIX=./install
   cmake --build build --target install
 }
 
