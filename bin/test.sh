@@ -7,7 +7,7 @@ set -o pipefail
 : ${CMAKE:=cmake}
 : ${MPIRUN:=mpirun}
 : ${MPIOPTS:=}
-: ${NP:=4}
+: ${NP:="1 2 3 4"}
 
 ############################
 # Don't touch what follows #
@@ -49,14 +49,12 @@ function test_cmake_exported_target() {
   cmake -S . -B build -DCMAKE_INSTALL_PREFIX=${INS_DIR} \
     -DparRSB_DIR=${INS_DIR}/lib/cmake/parRSB
   cmake --build build --target install
-  cd -
 }
 
 function test_cmake_inclusion_with_fetch_content() {
   cd ${TST_DIR}/cmake/find_package
   cmake -S . -B build -DCMAKE_INSTALL_PREFIX=${INS_DIR}
   cmake --build build --target install
-  cd -
 }
 
 function run_cmake_tests() {
@@ -69,16 +67,17 @@ function run_cmake_tests() {
 
 function run_unit_tests() {
   echo "Running unit tests ..."
-  for test_bin in `ls ${INS_DIR}/bin/[0-9][0-9][0-9]_*`; do
-    echo -n "Running test: ${test_bin}"
-    ${MPIRUN} ${MPIOPTS} -np ${NP} -- ${test_bin}
-    echo " ... ok"
+  for np in ${NP}; do
+    for test_bin in `ls ${INS_DIR}/bin/[0-9][0-9][0-9]_*`; do
+      echo -n "Running test: ${test_bin}"
+      ${MPIRUN} ${MPIOPTS} -np ${np} -- ${test_bin}
+      echo " ... ok"
+    done
   done
 }
 
 function run_nek5k_tests() {
   git clone https://github.com/thilinarmtb/parRSB-github-ci.git ${NEK_DIR}
-  cd ${NEK_DIR}
 
   export PARRSB_RSB_ALGO=0
   export PARRSB_VERBOSE_LEVEL=2
