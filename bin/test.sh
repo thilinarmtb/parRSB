@@ -25,15 +25,25 @@ GS_INS_DIR=${GS_SRC_DIR}/install
 # Functions to help build gslib/parRSB #
 ########################################
 function build_gslib() {
+  echo "Building gslib ..."
   git clone https://github.com/thilinarmtb/gslib.git ${GS_SRC_DIR}
   cmake -B ${GS_BLD_DIR} -S ${GS_SRC_DIR} -DCMAKE_INSTALL_PREFIX=${GS_INS_DIR}
   cmake --build ${GS_BLD_DIR} --target install
 }
 
-function build_parrsb() {
+function configure_parrsb() {
   CC=${CC} ${CMAKE} -B ${BLD_DIR} -S . -DCMAKE_INSTALL_PREFIX=${INS_DIR} \
     -Dgs_DIR=${GS_INS_DIR}/lib/cmake/gs
+}
+
+function build_parrsb() {
+  echo "Building parRSB ..."
   ${CMAKE} --build ${BLD_DIR} --target install
+}
+
+function run_format() {
+  echo "Running format checks ..."
+  ${CMAKE} --build ${BLD_DIR} --target format
 }
 
 #############
@@ -96,14 +106,14 @@ function run_nek5k_tests() {
       set +e
       ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/genmap --mesh ${mesh} \
         --tol=${tol} --dump=0 --test=1
-      if [ $? -ne 0 ]; then
+      if [[ $? -ne 0 ]]; then
         err_cnt=$(( err_cnt + 1 ))
       fi
       set -e
     done
   done
 
-  if [ $err_cnt -gt 5 ]; then
+  if [[ $err_cnt -gt 5 ]]; then
     exit 1
   fi
 }
@@ -111,18 +121,22 @@ function run_nek5k_tests() {
 GREEN='\033[0;32m'
 RESET='\033[0m'
 
-echo -e "${GREEN}"
-echo "Running tests in ${WRK_DIR} ..."
-echo "  CC    : ${CC}"
-echo "  cmake : `which ${CMAKE}`"
-echo "  mpirun: `which ${MPIRUN}`, opts: \"${MPIOPTS}\", np: ${NP}"
-echo -e "${RESET}"
 build_gslib
-build_parrsb
-echo -e "${GREEN}"
-run_format_check
-run_cmake_tests
-run_unit_tests
-run_nek5k_tests
-echo -e "Tests passed."
-echo -e "${RESET}"
+configure_parrsb
+
+if [[ "$1" == "-fmt" ]]; then
+  run_format
+else
+  echo -e "${GREEN}"
+  echo "Running tests in ${WRK_DIR} ..."
+  echo "  CC    : ${CC}"
+  echo "  cmake : `which ${CMAKE}`"
+  echo "  mpirun: `which ${MPIRUN}`, opts: \"${MPIOPTS}\", np: ${NP}"
+  build_parrsb
+  run_format_check
+  run_cmake_tests
+  run_unit_tests
+  run_nek5k_tests
+  echo -e "Tests passed."
+  echo -e "${RESET}"
+fi
