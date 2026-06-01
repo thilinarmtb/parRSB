@@ -23,10 +23,16 @@ GS_INS_DIR=${GS_SRC_DIR}/install
 
 SRC_FILES=
 
+###################
+# Redirect output #
+###################
 exec 4>&1
 exec  >${WRK_DIR}/out.log
 exec 2>${WRK_DIR}/err.log
 
+####################
+# Helper functions #
+####################
 function msg() {
   printf "%s" "$1" >&4
 }
@@ -109,9 +115,9 @@ function run_cmake_tests() {
 
 function run_unit_tests() {
   msgln "Running unit tests ..."
-  for np in ${NP}; do
-    for test_bin in `ls ${INS_DIR}/bin/[0-9][0-9][0-9]_*`; do
-      msg "  $(basename ${test_bin}) ... "
+  for test_bin in `ls ${INS_DIR}/bin/[0-9][0-9][0-9]_*`; do
+    for np in ${NP}; do
+      msg "  NP=${np}, $(basename ${test_bin}) ... "
       ${MPIRUN} ${MPIOPTS} -np ${np} ${test_bin}
       msgln "ok"
     done
@@ -127,11 +133,11 @@ function run_nek5k_tests() {
   export PARRSB_VERBOSE_LEVEL=2
 
   msgln "Running gencon tests ..."
-  for np in ${NP}; do
-    for mesh in "${meshes[@]}"; do
-      cd ${NEK_DIR}/${mesh}
-      tol=(`cat test.txt | grep tol`); tol=${tol[2]}
+  for mesh in "${meshes[@]}"; do
+    cd ${NEK_DIR}/${mesh}
+    tol=(`cat test.txt | grep tol`); tol=${tol[2]}
 
+    for np in ${NP}; do
       msg "  NP=${np}, ${mesh} ... "
       ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/gencon --mesh ${mesh} \
             --tol=${tol} --dump=0 --test=1
@@ -143,11 +149,11 @@ function run_nek5k_tests() {
   msgln "Running genmap tests ..."
   # there are some allowed failures
   set +e
-  for np in ${NP}; do
-    for mesh in "${meshes[@]}"; do
-      cd ${NEK_DIR}/${mesh}
-      tol=(`cat test.txt | grep tol`); tol=${tol[2]}
+  for mesh in "${meshes[@]}"; do
+    cd ${NEK_DIR}/${mesh}
+    tol=(`cat test.txt | grep tol`); tol=${tol[2]}
 
+    for np in ${NP}; do
       msg "  NP=${np}, ${mesh} ... "
       ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/genmap --mesh ${mesh} \
         --tol=${tol} --dump=0 --test=1
