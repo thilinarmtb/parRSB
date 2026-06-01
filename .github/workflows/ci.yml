@@ -37,6 +37,9 @@ jobs:
         sudo apt install -y openmpi-bin libopenmpi-dev
         sudo apt install -y build-essential cmake
         sudo apt install -y clang-format
+    - name: Run format checks
+      run: |
+        ./bin/fmt.sh
     - name: Build parRSB and run tests
       run: |
-        MPIOPTS="--oversubscribe" ./bin/test.sh
+        CC=mpicc MPIOPTS="--oversubscribe" ./bin/test.sh
