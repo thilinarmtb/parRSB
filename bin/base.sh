@@ -52,13 +52,10 @@ function build_gslib() {
   msgln "ok"
 }
 
-function configure_parrsb() {
-  CC=${CC} ${CMAKE} -B ${BLD_DIR} -S . -DCMAKE_INSTALL_PREFIX=${INS_DIR} \
-    -Dgs_DIR=${GS_INS_DIR}/lib/cmake/gs
-}
-
 function build_parrsb() {
   msg "Building parRSB ... "
+  CC=${CC} ${CMAKE} -B ${BLD_DIR} -S . -DCMAKE_INSTALL_PREFIX=${INS_DIR} \
+    -Dgs_DIR=${GS_INS_DIR}/lib/cmake/gs
   ${CMAKE} --build ${BLD_DIR} --target install
   msgln "ok"
 }
@@ -74,7 +71,7 @@ function setup_format() {
   SRC_FILES=$(find ${SRC_DIR} -type f -name "*.[ch]")
 }
 
-function run_format() {
+function format() {
   msg "Running clang-format ... "
   setup_format
   ${CLANG_FORMAT} -i ${SRC_FILES}
@@ -84,8 +81,8 @@ function run_format() {
 #############
 # Run tests #
 #############
-function run_check_format() {
-  msgln "Running clang-format checks ... "
+function check_format() {
+  msg "Running clang-format checks ... "
   setup_format
   ${CLANG_FORMAT} --dry-run -Werror -i ${SRC_FILES}
   msgln "ok"
@@ -104,7 +101,7 @@ function test_cmake_inclusion_with_fetch_content() {
   cmake --build build --target install
 }
 
-function run_cmake_tests() {
+function cmake_tests() {
   msg "Running cmake tests ... "
   mkdir -p ${TST_DIR}
   cp -r tests/* ${TST_DIR}
@@ -113,7 +110,7 @@ function run_cmake_tests() {
   msgln "ok"
 }
 
-function run_unit_tests() {
+function unit_tests() {
   msgln "Running unit tests ..."
   for test_bin in `ls ${INS_DIR}/bin/[0-9][0-9][0-9]_*`; do
     for np in ${NP}; do
@@ -124,7 +121,7 @@ function run_unit_tests() {
   done
 }
 
-function run_nek5k_tests() {
+function nek5k_tests() {
   meshes=(box_2x2x2 pyramid tgv e3q solid ethier vortex expansion)
 
   git clone https://github.com/thilinarmtb/parRSB-github-ci.git ${NEK_DIR}
@@ -172,25 +169,20 @@ function run_nek5k_tests() {
   fi
 }
 
-GREEN='\033[0;32m'
-RESET='\033[0m'
-
-echo -e "${GREEN}"
 if [[ "$1" == "-fmt" ]]; then
-  run_format
+  format
+  exit 0
 elif [[ "$1" == "-check-fmt" ]]; then
-  run_check_format
-else
-  msgln "Running tests in ${WRK_DIR} ..."
-  msgln "  CC    : ${CC}"
-  msgln "  cmake : `which ${CMAKE}`"
-  msgln "  mpirun: `which ${MPIRUN}`, opts: \"${MPIOPTS}\", np: ${NP}"
-  build_gslib
-  configure_parrsb
-  build_parrsb
-  run_cmake_tests
-  run_unit_tests
-  run_nek5k_tests
-  msgln "Tests passed."
+  check_format
+  exit 0
 fi
-echo -e "${RESET}"
+msgln "Running tests in ${WRK_DIR} ..."
+msgln "  CC    : ${CC}"
+msgln "  cmake : `which ${CMAKE}`"
+msgln "  mpirun: `which ${MPIRUN}`, opts: \"${MPIOPTS}\", np: ${NP}"
+build_gslib
+build_parrsb
+cmake_tests
+unit_tests
+nek5k_tests
+msgln "Tests passed."
