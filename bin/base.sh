@@ -119,31 +119,47 @@ function run_unit_tests() {
 }
 
 function run_nek5k_tests() {
+  meshes=(box_2x2x2 pyramid tgv e3q solid ethier vortex expansion)
+
   git clone https://github.com/thilinarmtb/parRSB-github-ci.git ${NEK_DIR}
 
   export PARRSB_RSB_ALGO=0
   export PARRSB_VERBOSE_LEVEL=2
-  err_cnt=0
+
+  msgln "Running gencon tests ..."
   for np in ${NP}; do
-    for mesh in box_2x2x2 pyramid tgv e3q solid ethier vortex expansion; do
+    for mesh in "${meshes[@]}"; do
       cd ${NEK_DIR}/${mesh}
       tol=(`cat test.txt | grep tol`); tol=${tol[2]}
 
-      # run gencon tests
+      msg "  NP=${np}, ${mesh} ... "
       ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/gencon --mesh ${mesh} \
             --tol=${tol} --dump=0 --test=1
+      msgln "ok"
+    done
+  done
 
-      # run genmap tests
-      # there are some allowed failures
-      set +e
+  err_cnt=0
+  msgln "Running genmap tests ..."
+  # there are some allowed failures
+  set +e
+  for np in ${NP}; do
+    for mesh in "${meshes[@]}"; do
+      cd ${NEK_DIR}/${mesh}
+      tol=(`cat test.txt | grep tol`); tol=${tol[2]}
+
+      msg "  NP=${np}, ${mesh} ... "
       ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/genmap --mesh ${mesh} \
         --tol=${tol} --dump=0 --test=1
       if [[ $? -ne 0 ]]; then
         err_cnt=$(( err_cnt + 1 ))
+        msgln "not ok"
+      else
+        msgln "ok"
       fi
-      set -e
     done
   done
+  set -e
 
   if [[ $err_cnt -gt 5 ]]; then
     exit 1
