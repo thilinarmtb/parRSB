@@ -7,6 +7,7 @@ set -o pipefail
 : ${MPIRUN:=mpirun}
 : ${MPIOPTS:=}
 : ${NP:="1 2 3 4"}
+: ${CLANG_FORMAT:=clang-format}
 
 ############################
 # Don't touch what follows #
@@ -19,6 +20,8 @@ NEK_DIR=${WRK_DIR}/nek5k_ci
 GS_SRC_DIR=${WRK_DIR}/gslib
 GS_BLD_DIR=${GS_SRC_DIR}/build
 GS_INS_DIR=${GS_SRC_DIR}/install
+
+SRC_FILES=
 
 ########################################
 # Functions to help build gslib/parRSB #
@@ -40,17 +43,30 @@ function build_parrsb() {
   ${CMAKE} --build ${BLD_DIR} --target install
 }
 
+function setup_format() {
+  if ! command -v clang-format >/dev/null 2>&1; then
+    echo "clang-format not found in PATH!"
+    exit 1
+  fi
+
+  SCRIPT_DIR=$(dirname -- "$(realpath -- "${BASH_SOURCE[0]}")")
+  SRC_DIR=${SCRIPT_DIR}/../
+  SRC_FILES=$(find ${SRC_DIR} -type f -name "*.[ch]")
+}
+
 function run_format() {
   echo "Running clang-format ..."
-  ${CMAKE} --build ${BLD_DIR} --target format
+  setup_format
+  ${CLANG_FORMAT} -i ${SRC_FILES}
 }
 
 #############
 # Run tests #
 #############
-function run_format_check() {
-  echo "Running format checks ..."
-  ${CMAKE} --build ${BLD_DIR} --target format-check
+function run_check_format() {
+  echo "Running clang-format checks ..."
+  setup_format
+  ${CLANG_FORMAT} --dry-run -Werror -i ${SRC_FILES}
 }
 
 function test_cmake_exported_target() {
@@ -120,22 +136,22 @@ function run_nek5k_tests() {
 GREEN='\033[0;32m'
 RESET='\033[0m'
 
-build_gslib
-configure_parrsb
-
+echo -e "${GREEN}"
 if [[ "$1" == "-fmt" ]]; then
   run_format
+elif [[ "$1" == "-check-fmt" ]]; then
+  run_check_format
 else
-  echo -e "${GREEN}"
   echo "Running tests in ${WRK_DIR} ..."
   echo "  CC    : ${CC}"
   echo "  cmake : `which ${CMAKE}`"
   echo "  mpirun: `which ${MPIRUN}`, opts: \"${MPIOPTS}\", np: ${NP}"
+  build_gslib
+  configure_parrsb
   build_parrsb
-  run_format_check
   run_cmake_tests
   run_unit_tests
   run_nek5k_tests
   echo -e "Tests passed."
-  echo -e "${RESET}"
 fi
+echo -e "${RESET}"
