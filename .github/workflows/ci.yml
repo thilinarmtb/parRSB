@@ -39,7 +39,7 @@ jobs:
         sudo apt install -y clang-format
     - name: Run format checks
       run: |
-        ./bin/fmt.sh
+        ./bin/check_fmt.sh
     - name: Build parRSB and run tests
       run: |
         CC=mpicc MPIOPTS="--oversubscribe" ./bin/test.sh
