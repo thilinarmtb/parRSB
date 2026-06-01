@@ -23,14 +23,27 @@ GS_INS_DIR=${GS_SRC_DIR}/install
 
 SRC_FILES=
 
+exec 4>&1
+exec  >${WRK_DIR}/out.log
+exec 2>${WRK_DIR}/err.log
+
+function msg() {
+  printf "%s" "$1" >&4
+}
+
+function msgln() {
+  printf "%s\n" "$1" >&4
+}
+
 ########################################
 # Functions to help build gslib/parRSB #
 ########################################
 function build_gslib() {
-  echo "Building gslib ..."
+  msg "Building gslib ... "
   git clone https://github.com/thilinarmtb/gslib.git ${GS_SRC_DIR}
   cmake -B ${GS_BLD_DIR} -S ${GS_SRC_DIR} -DCMAKE_INSTALL_PREFIX=${GS_INS_DIR}
   cmake --build ${GS_BLD_DIR} --target install
+  msgln "ok"
 }
 
 function configure_parrsb() {
@@ -39,13 +52,14 @@ function configure_parrsb() {
 }
 
 function build_parrsb() {
-  echo "Building parRSB ..."
+  msg "Building parRSB ... "
   ${CMAKE} --build ${BLD_DIR} --target install
+  msgln "ok"
 }
 
 function setup_format() {
   if ! command -v clang-format >/dev/null 2>&1; then
-    echo "clang-format not found in PATH!"
+    msgln "clang-format not found in PATH!"
     exit 1
   fi
 
@@ -55,18 +69,20 @@ function setup_format() {
 }
 
 function run_format() {
-  echo "Running clang-format ..."
+  msg "Running clang-format ... "
   setup_format
   ${CLANG_FORMAT} -i ${SRC_FILES}
+  msgln "ok"
 }
 
 #############
 # Run tests #
 #############
 function run_check_format() {
-  echo "Running clang-format checks ..."
+  msgln "Running clang-format checks ... "
   setup_format
   ${CLANG_FORMAT} --dry-run -Werror -i ${SRC_FILES}
+  msgln "ok"
 }
 
 function test_cmake_exported_target() {
@@ -83,20 +99,21 @@ function test_cmake_inclusion_with_fetch_content() {
 }
 
 function run_cmake_tests() {
-  echo "Running cmake tests ..."
+  msg "Running cmake tests ... "
   mkdir -p ${TST_DIR}
   cp -r tests/* ${TST_DIR}
   test_cmake_exported_target
   test_cmake_inclusion_with_fetch_content
+  msgln "ok"
 }
 
 function run_unit_tests() {
-  echo "Running unit tests ..."
+  msgln "Running unit tests ..."
   for np in ${NP}; do
     for test_bin in `ls ${INS_DIR}/bin/[0-9][0-9][0-9]_*`; do
-      echo -n "Running test: ${test_bin}"
+      msg "  $(basename ${test_bin}) ... "
       ${MPIRUN} ${MPIOPTS} -np ${np} ${test_bin}
-      echo " ... ok"
+      msgln "ok"
     done
   done
 }
@@ -142,16 +159,16 @@ if [[ "$1" == "-fmt" ]]; then
 elif [[ "$1" == "-check-fmt" ]]; then
   run_check_format
 else
-  echo "Running tests in ${WRK_DIR} ..."
-  echo "  CC    : ${CC}"
-  echo "  cmake : `which ${CMAKE}`"
-  echo "  mpirun: `which ${MPIRUN}`, opts: \"${MPIOPTS}\", np: ${NP}"
+  msgln "Running tests in ${WRK_DIR} ..."
+  msgln "  CC    : ${CC}"
+  msgln "  cmake : `which ${CMAKE}`"
+  msgln "  mpirun: `which ${MPIRUN}`, opts: \"${MPIOPTS}\", np: ${NP}"
   build_gslib
   configure_parrsb
   build_parrsb
   run_cmake_tests
   run_unit_tests
   run_nek5k_tests
-  echo -e "Tests passed."
+  msgln "Tests passed."
 fi
 echo -e "${RESET}"
