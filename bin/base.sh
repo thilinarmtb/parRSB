@@ -113,9 +113,9 @@ function unit_tests() {
   msgln "Running unit tests ..."
   for test_bin in `ls ${INS_DIR}/bin/[0-9][0-9][0-9]_*`; do
     for np in ${NP}; do
-      msg "  NP=${np}, $(basename ${test_bin}) ... "
+      msg "  NP=${np}, $(basename ${test_bin}) "
       ${MPIRUN} ${MPIOPTS} -np ${np} ${test_bin}
-      msgln "ok"
+      msgln "... ok"
     done
   done
 }
@@ -134,10 +134,10 @@ function nek5k_tests() {
     tol=(`cat test.txt | grep tol`); tol=${tol[2]}
 
     for np in ${NP}; do
-      msg "  NP=${np}, ${mesh} ... "
+      msg "  NP=${np}, ${mesh} "
       ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/gencon --mesh ${mesh} \
             --tol=${tol} --dump=0 --test=1
-      msgln "ok"
+      msgln "... ok"
     done
   done
 
@@ -150,14 +150,14 @@ function nek5k_tests() {
     tol=(`cat test.txt | grep tol`); tol=${tol[2]}
 
     for np in ${NP}; do
-      msg "  NP=${np}, ${mesh} ... "
+      msg "  NP=${np}, ${mesh} "
       ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/genmap --mesh ${mesh} \
         --tol=${tol} --dump=0 --test=1
       if [[ $? -ne 0 ]]; then
         err_cnt=$(( err_cnt + 1 ))
-        msgln "not ok"
+        msgln "... not ok"
       else
-        msgln "ok"
+        msgln "... ok"
       fi
     done
   done
