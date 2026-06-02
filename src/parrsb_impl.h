@@ -209,8 +209,12 @@ INTERN slong get_components(sint *component, const struct array *elems,
 /*
  * Topology aware partitioning.
  */
-INTERN void mpi_topology(unsigned *num_levels, struct comm *const comms,
+INTERN void mpi_topology(uint *num_levels, struct comm *const comms,
                          const struct comm *const c, const int verbose);
+
+INTERN void slingshot_topology(uint *num_levels, const char *const fmt,
+                               struct comm *const comms,
+                               const struct comm *const c, const int verbose);
 
 /*
  * Helper routines.
