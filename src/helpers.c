@@ -16,8 +16,8 @@ void parrsb_barrier(struct comm *c) {
 #endif
 }
 
-void parrsb_error(int cond, const struct comm *c, int verbose, const char *fmt,
-                  ...) {
+void parrsb_error(int cond, const struct comm *const c, int verbose,
+                  const char *fmt, ...) {
   comm_barrier(c);
 
   if (cond) return;
@@ -27,7 +27,6 @@ void parrsb_error(int cond, const struct comm *c, int verbose, const char *fmt,
     va_start(vargs, fmt);
     vfprintf(stderr, fmt, vargs);
     va_end(vargs);
-    fprintf(stderr, "\n");
     fflush(stderr);
   }
 
@@ -42,7 +41,6 @@ void parrsb_info(const struct comm *c, int verbose, const char *fmt, ...) {
     va_start(vargs, fmt);
     vprintf(fmt, vargs);
     va_end(vargs);
-    printf("\n");
     fflush(stdout);
   }
 }
