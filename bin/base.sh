@@ -28,7 +28,6 @@ SRC_FILES=
 ###################
 exec 4>&1
 exec  >${WRK_DIR}/out.log
-exec 2>${WRK_DIR}/err.log
 
 ####################
 # Helper functions #
@@ -46,7 +45,7 @@ function msgln() {
 ########################################
 function build_gslib() {
   msg "Building gslib ... "
-  git clone https://github.com/thilinarmtb/gslib.git ${GS_SRC_DIR}
+  git clone -q https://github.com/thilinarmtb/gslib.git ${GS_SRC_DIR}
   cmake -B ${GS_BLD_DIR} -S ${GS_SRC_DIR} -DCMAKE_INSTALL_PREFIX=${GS_INS_DIR}
   cmake --build ${GS_BLD_DIR} --target install
   msgln "ok"
@@ -124,7 +123,7 @@ function unit_tests() {
 function nek5k_tests() {
   meshes=(box_2x2x2 pyramid tgv e3q solid ethier vortex expansion)
 
-  git clone https://github.com/thilinarmtb/parRSB-github-ci.git ${NEK_DIR}
+  git clone -q https://github.com/thilinarmtb/parRSB-github-ci.git ${NEK_DIR}
 
   export PARRSB_RSB_ALGO=0
   export PARRSB_VERBOSE_LEVEL=2
