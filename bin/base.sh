@@ -44,19 +44,19 @@ function msgln() {
 # Functions to help build gslib/parRSB #
 ########################################
 function build_gslib() {
-  msg "Building gslib ... "
+  msg "Building gslib ..."
   git clone -q https://github.com/thilinarmtb/gslib.git ${GS_SRC_DIR}
   cmake -B ${GS_BLD_DIR} -S ${GS_SRC_DIR} -DCMAKE_INSTALL_PREFIX=${GS_INS_DIR}
   cmake --build ${GS_BLD_DIR} --target install
-  msgln "ok"
+  msgln " ok"
 }
 
 function build_parrsb() {
-  msg "Building parRSB ... "
+  msg "Building parRSB ..."
   CC=${CC} ${CMAKE} -B ${BLD_DIR} -S . -DCMAKE_INSTALL_PREFIX=${INS_DIR} \
     -Dgs_DIR=${GS_INS_DIR}/lib/cmake/gs
   ${CMAKE} --build ${BLD_DIR} --target install
-  msgln "ok"
+  msgln " ok"
 }
 
 function setup_format() {
@@ -71,20 +71,20 @@ function setup_format() {
 }
 
 function format() {
-  msg "Running clang-format ... "
+  msg "Running clang-format ..."
   setup_format
   ${CLANG_FORMAT} -i ${SRC_FILES}
-  msgln "ok"
+  msgln " ok"
 }
 
 #############
 # Run tests #
 #############
 function check_format() {
-  msg "Running clang-format checks ... "
+  msg "Running clang-format checks ..."
   setup_format
   ${CLANG_FORMAT} --dry-run -Werror -i ${SRC_FILES}
-  msgln "ok"
+  msgln " ok"
 }
 
 function test_cmake_exported_target() {
@@ -101,21 +101,21 @@ function test_cmake_inclusion_with_fetch_content() {
 }
 
 function cmake_tests() {
-  msg "Running cmake tests ... "
+  msg "Running cmake tests ..."
   mkdir -p ${TST_DIR}
   cp -r tests/* ${TST_DIR}
   test_cmake_exported_target
   test_cmake_inclusion_with_fetch_content
-  msgln "ok"
+  msgln " ok"
 }
 
 function unit_tests() {
   msgln "Running unit tests ..."
   for test_bin in `ls ${INS_DIR}/bin/[0-9][0-9][0-9]_*`; do
     for np in ${NP}; do
-      msg "  NP=${np}, $(basename ${test_bin}) "
+      msg "  NP=${np}, $(basename ${test_bin})"
       ${MPIRUN} ${MPIOPTS} -np ${np} ${test_bin}
-      msgln "... ok"
+      msgln " ... ok"
     done
   done
 }
@@ -134,10 +134,10 @@ function nek5k_tests() {
     tol=(`cat test.txt | grep tol`); tol=${tol[2]}
 
     for np in ${NP}; do
-      msg "  NP=${np}, ${mesh} "
+      msg "  NP=${np}, ${mesh}"
       ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/gencon --mesh ${mesh} \
             --tol=${tol} --dump=0 --test=1
-      msgln "... ok"
+      msgln " ... ok"
     done
   done
 
@@ -150,14 +150,14 @@ function nek5k_tests() {
     tol=(`cat test.txt | grep tol`); tol=${tol[2]}
 
     for np in ${NP}; do
-      msg "  NP=${np}, ${mesh} "
+      msg "  NP=${np}, ${mesh}"
       ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/genmap --mesh ${mesh} \
         --tol=${tol} --dump=0 --test=1
       if [[ $? -ne 0 ]]; then
         err_cnt=$(( err_cnt + 1 ))
-        msgln "... not ok"
+        msgln " ... not ok"
       else
-        msgln "... ok"
+        msgln " ... ok"
       fi
     done
   done
