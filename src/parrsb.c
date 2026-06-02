@@ -39,69 +39,6 @@ static void options_update(parrsb_options_t options) {
 #undef OPT_UPDATE
 }
 
-static void initialize_node_comm(struct comm *c, const struct comm *const gc) {
-  MPI_Comm node;
-  MPI_Comm_split_type(gc->c, MPI_COMM_TYPE_SHARED, gc->id, MPI_INFO_NULL,
-                      &node);
-  comm_init(c, node);
-  MPI_Comm_free(&node);
-}
-
-static void initialize_levels(struct comm *const comms,
-                              parrsb_options_t options,
-                              const struct comm *const c) {
-  const int verbose = options->verbose_level;
-
-  // Level 1 communicator is the global communicator.
-  comm_dup(&comms[0], c);
-  // Node level communicator is the last level communicator.
-  struct comm nc;
-  initialize_node_comm(&nc, c);
-
-  // Find the number of nodes under the global communicator.
-  sint in = (nc.id == 0), wrk;
-  comm_allreduce(c, gs_int, gs_add, &in, 1, &wrk);
-  uint nn = in;
-
-  // Number of MPI ranks in the node level communicator.
-  uint rpn = nc.np;
-
-  // Check invariant: rpn should be the same across all the nodes.
-  sint max = rpn, min = rpn;
-  comm_allreduce(&comms[0], gs_int, gs_max, &max, 1, &wrk);
-  comm_allreduce(&comms[0], gs_int, gs_min, &min, 1, &wrk);
-  assert(max == min);
-
-  // Check invariant: rpn must be larger than 0.
-  assert(rpn > 0);
-  parrsb_info(c, verbose, "parRSB: nodes = %u, ranks per node = %u", nn, rpn);
-
-  // Hardcode the maximum number of levels to two for now.
-  sint levels = MIN(2, options->levels);
-  if (levels > 1) comm_dup(&comms[levels - 1], &nc);
-  comm_free(&nc);
-
-  parrsb_info(c, verbose, "parRSB: levels requested %u, enabled = %u",
-              options->levels, levels);
-  options->levels = levels;
-}
-
-static void initialize_levels_v1(struct comm *const comms, unsigned num_levels,
-                                 unsigned *id, const struct comm *const c,
-                                 unsigned verbose) {
-  if (num_levels == 0) return;
-
-  for (unsigned i = 0; i <= (num_levels - 1); i++) {
-    int rank = c->id;
-    if (i < (num_levels - 1)) rank = id[i + 1];
-
-    struct comm tmp;
-    comm_split(c, id[i], rank, &tmp);
-    comm_dup(&comms[i], &tmp);
-    comm_free(&tmp);
-  }
-}
-
 static void mesh_load_balance(struct array *elist, uint nel,
                               const double *const xyz,
                               const long long *const vtx, const element_info ei,
@@ -200,26 +137,28 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
   struct array elist;
   mesh_load_balance(&elist, nel, xyz, vtx, ei, cr, bfr);
 
-  struct comm ca;
-  comm_split(c, elist.n > 0, c->id, &ca);
-
-  // Setup communicators for each level of the partitioning.
-  struct comm comms[8];
-  initialize_levels(comms, options, &ca);
+  struct comm active;
+  comm_split(c, elist.n > 0, c->id, &active);
 
   const int verbose = options->verbose_level;
+
+  // Setup topology aware partitioning.
+  struct comm comms[8];
+  mpi_topology(&options->levels, comms, &active, verbose);
+
+  // Run the partitioner.
   parrsb_info(c, verbose, "parrsb_part_mesh_v0: running partitioner ...");
   if (elist.n > 0) {
     switch (options->partitioner) {
     case 0: rsb(&elist, ei, options, comms, bfr); break;
-    case 1: rcb(&elist, ei, &ca, bfr); break;
-    case 2: rib(&elist, ei, &ca, bfr); break;
+    case 1: rcb(&elist, ei, &active, bfr); break;
+    case 2: rib(&elist, ei, &active, bfr); break;
     default: break;
     }
   }
 
   for (int l = 0; l < options->levels; l++) comm_free(&comms[l]);
-  comm_free(&ca);
+  comm_free(&active);
 
   parrsb_info(c, verbose, "parrsb_part_mesh_v0: restore original input");
   mesh_restore(part, &elist, ei->size, cr, bfr);
@@ -971,11 +910,11 @@ int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
   struct array nlist;
   graph_load_balance(&nlist, num_nodes, nodes, offsets, neighbors, &cr, &bfr);
 
-  struct comm ca;
-  comm_split(&c, nlist.n > 0, c.id, &ca);
+  struct comm active;
+  comm_split(&c, nlist.n > 0, c.id, &active);
 
   struct comm comms[8];
-  initialize_levels(comms, options, &ca);
+  mpi_topology(&options->levels, comms, &active, verbose);
 
   parrsb_info(&c, verbose, "parrsb_part_graph: running partitioner ...");
   if (nlist.n > 0) {
@@ -986,7 +925,7 @@ int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
   }
 
   for (int i = 0; i < options->levels; i++) comm_free(&comms[i]);
-  comm_free(&ca);
+  comm_free(&active);
 
   parrsb_info(&c, verbose, "parrsb_part_graph: restore original input");
   metric_rsb_print(&c, options->profile_level);

@@ -207,6 +207,12 @@ INTERN slong get_components(sint *component, const struct array *elems,
                             buffer *buf);
 
 /*
+ * Topology aware partitioning.
+ */
+INTERN void mpi_topology(unsigned *num_levels, struct comm *const comms,
+                         const struct comm *const c, const int verbose);
+
+/*
  * Helper routines.
  */
 INTERN void parrsb_barrier(struct comm *c);
