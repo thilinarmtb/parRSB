@@ -131,7 +131,7 @@ static void parrsb_check_error_(int err, char *file, int line, MPI_Comm comm) {
   MPI_Comm_rank(comm, &id);
 
   if (id == 0) {
-    fprintf(stderr, "parrsb_check_error failure in %s:%d\n", file, line);
+    fprintf(stderr, "parrsb_check_error failure in %s:%d", file, line);
     fflush(stderr);
   }
   MPI_Finalize();
