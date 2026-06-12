@@ -44,6 +44,12 @@ int parrsb_conn_mesh(long long *vtx, const double *const coord, unsigned nel,
                      double tol, MPI_Comm comm);
 
 /*
+ * Find neighbor elements.
+ */
+void parrsb_fetch_nbrs_v3(unsigned *nei, long long *vids, double *va, int *wids,
+                          unsigned nv, unsigned ndim, unsigned nw,
+                          unsigned max_ne, MPI_Comm comm);
+/*
  * I/O routines.
  */
 int parrsb_read_mesh(unsigned *nel, unsigned *nv, double **coord,
