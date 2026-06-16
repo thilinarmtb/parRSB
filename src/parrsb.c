@@ -9,36 +9,6 @@
 
 static char *ALGO[3] = {"RSB", "RCB", "RIB"};
 
-static void options_update(parrsb_options_t options) {
-#define OPT_UPDATE(opt, var, is_int)                                           \
-  do {                                                                         \
-    const char *val = getenv(var);                                             \
-    if (val != NULL) {                                                         \
-      if (is_int)                                                              \
-        options->opt = atoi(val);                                              \
-      else                                                                     \
-        options->opt = atof(val);                                              \
-    }                                                                          \
-  } while (0)
-
-  OPT_UPDATE(partitioner, "PARRSB_PARTITIONER", 1);
-  OPT_UPDATE(tagged, "PARRSB_TAGGED", 1);
-  OPT_UPDATE(levels, "PARRSB_LEVELS", 1);
-  OPT_UPDATE(find_disconnected_comps, "PARRSB_FIND_DISCONNECTED_COMPONENTS", 1);
-  OPT_UPDATE(repair, "PARRSB_REPAIR", 1);
-  OPT_UPDATE(verbose_level, "PARRSB_VERBOSE_LEVEL", 1);
-  OPT_UPDATE(profile_level, "PARRSB_PROFILE_LEVEL", 1);
-  OPT_UPDATE(rsb_algo, "PARRSB_RSB_ALGO", 1);
-  OPT_UPDATE(rsb_pre, "PARRSB_RSB_PRE", 1);
-  OPT_UPDATE(rsb_max_iter, "PARRSB_RSB_MAX_ITER", 1);
-  OPT_UPDATE(rsb_max_passes, "PARRSB_RSB_MAX_PASSES", 1);
-  OPT_UPDATE(rsb_tol, "PARRSB_RSB_TOL", 0);
-  OPT_UPDATE(rsb_mg_grammian, "PARRSB_RSB_MG_GRAMMIAN", 1);
-  OPT_UPDATE(rsb_mg_factor, "PARRSB_RSB_MG_FACTOR", 1);
-
-#undef OPT_UPDATE
-}
-
 static void mesh_load_balance(struct array *elist, uint nel,
                               const double *const xyz,
                               const long long *const vtx, const element_info ei,

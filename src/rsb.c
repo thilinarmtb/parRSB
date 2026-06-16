@@ -267,7 +267,7 @@ static void calc_stats(const struct array *elements, const struct comm *gc,
                        const struct comm *lc, const parrsb_options_t options,
                        const element_info ei, buffer *bfr) {
   // Find the number of disconnected components.
-  if (options->find_disconnected_comps == 1) {
+  if (options->find_cc) {
     slong nc = get_components(NULL, elements, ei, lc, bfr);
     metric_acc(RSB_COMPONENTS_NCOMP, nc);
   }
@@ -289,48 +289,34 @@ static void check_partition(const struct comm *gc,
   comm_allreduce(gc, gs_int, gs_max, &max_levels, 1, (void *)wrk);
 
   for (sint i = 0; i < max_levels; i++) {
-    sint converged = 1;
-    uint val = (uint)metric_get_value(i, RSB_FIEDLER_CALC_NITER);
-    if (opts->rsb_algo == 0) {
-      if (val == miter * mpass) converged = 0;
-    } else if (opts->rsb_algo == 1) {
-      if (val == mpass) converged = 0;
-    }
-
     struct comm c;
+
+    uint val = (uint)metric_get_value(i, RSB_FIEDLER_CALC_NITER);
+    sint converged = (val == miter * mpass) ? 0 : 1;
+
     comm_split(gc, converged, gc->id, &c);
     if (converged == 1) goto print_components;
 
-    if (opts->rsb_algo == 0) {
-      double init = metric_get_value(i, TOL_INIT);
-      comm_allreduce(&c, gs_double, gs_min, &init, 1, (void *)wrk);
+    double init = metric_get_value(i, TOL_INIT);
+    comm_allreduce(&c, gs_double, gs_min, &init, 1, (void *)wrk);
 
-      double target = metric_get_value(i, TOL_TGT);
-      comm_allreduce(&c, gs_double, gs_min, &target, 1, (void *)wrk);
+    double target = metric_get_value(i, TOL_TGT);
+    comm_allreduce(&c, gs_double, gs_min, &target, 1, (void *)wrk);
 
-      double final = metric_get_value(i, TOL_FNL);
-      comm_allreduce(&c, gs_double, gs_min, &final, 1, (void *)wrk);
+    double final = metric_get_value(i, TOL_FNL);
+    comm_allreduce(&c, gs_double, gs_min, &final, 1, (void *)wrk);
 
-      if (c.id == 0) {
-        fprintf(stderr,
-                "Warning: Lanczos reached a residual of %lf (target: %lf) "
-                "after %u x %u iterations in Level=%d!\n",
-                final, target, mpass, miter, i);
-        fflush(stderr);
-      }
-    } else if (opts->rsb_algo == 1) {
-      if (c.id == 0) {
-        fprintf(stderr,
-                "Warning: Inverse iteration didn't converge after %d "
-                "iterations in Level = %d\n",
-                mpass, i);
-        fflush(stderr);
-      }
+    if (c.id == 0) {
+      fprintf(stderr,
+              "Warning: Lanczos reached a residual of %lf (target: %lf) "
+              "after %u x %u iterations in Level=%d!\n",
+              final, target, mpass, miter, i);
+      fflush(stderr);
     }
     comm_free(&c);
 
   print_components:
-    if (opts->find_disconnected_comps == 0) continue;
+    if (!opts->find_cc) continue;
 
     slong minc = (slong)metric_get_value(i, RSB_COMPONENTS_NCOMP);
     slong maxc = minc;

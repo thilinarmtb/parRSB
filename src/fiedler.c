@@ -168,8 +168,6 @@ int fiedler(scalar *f, laplacian l, const parrsb_options_t opts,
             const struct comm *c) {
   // Return if the number of processes is equal to 1.
   if (c->np == 1) return 0;
-  // Or if rsb algorithm is set to something other than lanczos.
-  if (opts->rsb_algo > 0) return 1;
 
   metric_tic(c, RSB_FIEDLER);
 
