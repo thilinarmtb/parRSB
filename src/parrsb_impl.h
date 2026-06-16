@@ -74,8 +74,8 @@ typedef double scalar;
  */
 struct parrsb_options {
   // General options
-  int partitioner;   // Partition algo: 0 - RSB, 1 - RCB, 2 - RIB (Default: 0)
-  int levels;        // Number of levels: 1, or 2 (Default: 2)
+  uint partitioner;  // Partition algo: 0 - RSB, 1 - RCB, 2 - RIB (Default: 0)
+  uint levels;       // Number of levels: 1, or 2 (Default: 2)
   int verbose_level; // Verbose level: 0, 1, 2, .. etc (Default: 1)
   int profile_level; // Profile level: 0, 1, 2, .. etc (Default: 0)
   int find_cc; // Find number of connected components: 0 - No, 1 - Yes (Default:

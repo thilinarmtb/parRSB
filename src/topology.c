@@ -74,4 +74,5 @@ INTERN void slingshot_topology(uint *num_levels, const char *const template,
   free(elements);
 
   *num_levels = size + 1;
+  parrsb_info(c, verbose, "parRSB: levels enabled = %u", *num_levels);
 }
