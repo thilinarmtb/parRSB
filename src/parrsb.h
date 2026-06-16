@@ -24,8 +24,7 @@ int parrsb_options_free(parrsb_options_t *options);
  * parRSB partitioning algorithms.
  */
 int parrsb_part_mesh(int *part, const long long *const vtx,
-                     const double *const xyz, const int *const tag,
-                     const int nel, const int nv,
+                     const double *const xyz, const int nel, const int nv,
                      const parrsb_options_t options, MPI_Comm comm);
 
 int parrsb_part_graph(int *part, unsigned num_nodes,
