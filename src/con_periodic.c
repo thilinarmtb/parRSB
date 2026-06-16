@@ -21,7 +21,7 @@ struct mpair_t {
   ulong orig, min;
 };
 
-static int compressPeriodicVertices(Mesh mesh, struct comm *c, buffer *bfr) {
+static int compress_periodic_vertices(Mesh mesh, struct comm *c, buffer *bfr) {
   parallel_sort(struct point_t, &mesh->elements, globalId, gs_long, 0, 0, c,
                 bfr);
 
@@ -61,8 +61,8 @@ static ulong findMinBelowI(ulong min, uint I, struct array *arr) {
   return min;
 }
 
-static int renumberPeriodicVertices(Mesh mesh, struct comm *c,
-                                    struct array *matched, buffer *bfr) {
+static int renumber_periodic_vertices(Mesh mesh, struct comm *c,
+                                      struct array *matched, buffer *bfr) {
   uint size1 = mesh->elements.n, size2 = matched->n;
   slong *mids = tcalloc(slong, size1 + 2 * size2);
   slong *mnew = tcalloc(slong, size1 + 2 * size2);
@@ -171,7 +171,7 @@ static int findConnectedPeriodicPairs(Mesh mesh, BoundaryFace f_,
   return 0;
 }
 
-static int findConnectedPeriodicFaces(Mesh mesh, struct array *matched) {
+static int find_connected_periodic_faces(Mesh mesh, struct array *matched) {
   sint bSize = mesh->boundary.n;
   BoundaryFace ptr = mesh->boundary.ptr;
   sint i, j;
@@ -186,7 +186,7 @@ static int findConnectedPeriodicFaces(Mesh mesh, struct array *matched) {
   return 0;
 }
 
-static int gatherMatchingPeriodicFaces(Mesh mesh, struct comm *c) {
+static int gather_matching_periodic_faces(Mesh mesh, struct comm *c) {
   uint size = c->np;
 
   BoundaryFace bPtr = mesh->boundary.ptr;
@@ -215,7 +215,7 @@ static int gatherMatchingPeriodicFaces(Mesh mesh, struct comm *c) {
   return 0;
 }
 
-static int setPeriodicFaceCoordinates(Mesh mesh, struct comm *c, buffer *buf) {
+static int set_periodic_face_coords(Mesh mesh, buffer *buf) {
   BoundaryFace bPtr = mesh->boundary.ptr;
   sint bSize = mesh->boundary.n;
   if (bSize == 0) return 0;
@@ -265,24 +265,24 @@ int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr) {
   if (n == 0) return 0;
 
   parrsb_info(c, verbose, "\t\t%s ...", functions[0]);
-  setPeriodicFaceCoordinates(mesh, c, bfr);
+  set_periodic_face_coords(mesh, bfr);
 
   parrsb_info(c, verbose, "\t\t%s ...", functions[1]);
-  gatherMatchingPeriodicFaces(mesh, c);
+  gather_matching_periodic_faces(mesh, c);
 
   struct array matched;
   array_init(struct mpair_t, &matched, 10);
   matched.n = 0;
 
   parrsb_info(c, verbose, "\t\t%s ...", functions[2]);
-  findConnectedPeriodicFaces(mesh, &matched);
+  find_connected_periodic_faces(mesh, &matched);
 
   parrsb_info(c, verbose, "\t\t%s ...", functions[3]);
-  renumberPeriodicVertices(mesh, c, &matched, bfr);
+  renumber_periodic_vertices(mesh, c, &matched, bfr);
   array_free(&matched);
 
   parrsb_info(c, verbose, "\t\t%s ...", functions[4]);
-  compressPeriodicVertices(mesh, c, bfr);
+  compress_periodic_vertices(mesh, c, bfr);
 
   parrsb_info(c, verbose, "\t\t%s ...", functions[5]);
   send_back(mesh, c, bfr);
