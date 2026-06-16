@@ -24,7 +24,7 @@ static void partition(long long *vl, double *coord, unsigned nelt, unsigned nv,
 
   parrsb_options_t options;
   parrsb_options_get_default(&options);
-  int err = parrsb_part_mesh(part, vl, coord, NULL, nelt, nv, options, comm);
+  int err = parrsb_part_mesh(part, vl, coord, nelt, nv, options, comm);
   parrsb_options_free(&options);
   parrsb_check_error(err, comm);
 
