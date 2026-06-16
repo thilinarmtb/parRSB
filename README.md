@@ -63,56 +63,25 @@ seq  [out]: Order of element `i` in processor `part[i]` after partition
             (size = nel).
 ```
 
-`opts` is a `struct` of type `parrsb_options` declared in `parRSB.h`.
+`opts` is a `struct` of type `parrsb_options` declared in `parRSB.h`. User can use
+`parrsb_default_options` struct instance to pass default options to `parrsb_part_mesh`
+routine.
 
-```C
-typedef struct {
-  // General options
-  int partitioner; // Partition algo: 0 - RSB, 1 - RCB, 2 - RIB (Default: 0)
-  int tagged;      // Tagged partitioning: 0 - No, 1 - Yes (Default: 0)
-  int levels;      // Number of levels: 1, or 2 (Default: 2)
-  int find_disconnected_comps; // Find number of components: 0 - No, 1 - Yes
-                               // (Default: 1)
-  int repair; // Repair disconnected components: 0 - No, 1 - Yes (Default: 0)
-  int verbose_level; // Verbose level: 0, 1, 2, .. etc (Default: 1)
-  int profile_level; // Profile level: 0, 1, 2, .. etc (Default: 0)
-  // RSB common (Lanczos and MG) options
-  int rsb_algo; // RSB algo: 0 - Lanczos, 1 - MG (Default: 0)
-  int rsb_pre;  // RSB pre-partition : 0 - None, 1 - RCB , 2 - RIB (Default: 1)
-  int rsb_max_iter;   // Max iterations in Lanczos / MG (Default: 50)
-  int rsb_max_passes; // Max Lanczos restarts / Inverse iterations (Default: 50)
-  double rsb_tol;     // Tolerance for Lanczos or RQI (Default: 1e-5)
-  int rsb_dump_stats; // Dump partition statistics to a text file.
-  // RSB MG specific options
-  int rsb_mg_grammian; // MG Grammian: 0 or 1 (Default: 0)
-  int rsb_mg_factor;   // MG Coarsening factor (Default: 2, should be > 1)
-} parrsb_options;
-```
-
-User can use `parrsb_default_options` struct instance to pass default options
-to `parrsb_part_mesh` routine.
-
-All of these options can be controlled at runtime by setting the relevant
-environment variable (named `PARRSB_<OPT_NAME>`) as well. Enviornment variable
-values will override what is passed to `parrsb_part_mesh` routine.
+All of these options can be controlled at runtime by setting the relevant environment
+variable (named `PARRSB_<OPT_NAME>`) as well. Enviornment variable values will override
+what is passed to `parrsb_part_mesh` routine.
 
 Below is a full list of some of environment variables:
 
 ```
 PARRSB_PARTITIONER
-PARRSB_TAGGED
 PARRSB_LEVELS
-PARRSB_FIND_DISCONNECTED_COMPONENTS
-PARRSB_REPAIR
 PARRSB_VERBOSE_LEVEL
 PARRSB_PROFILE_LEVEL
-
-PARRSB_RSB_ALGO
+PARRSB_FIND_CONNECTED_COMPONENTS
+PARRSB_REPAIR
 PARRSB_RSB_PRE
 PARRSB_RSB_MAX_ITER
 PARRSB_RSB_MAX_PASSES
 PARRSB_RSB_TOL
-
-PARRSB_RSB_MG_GRAMMIAN
-PARRSB_RSB_MG_FACTOR
 ```
