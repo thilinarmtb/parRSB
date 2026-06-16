@@ -14,6 +14,8 @@ typedef struct parrsb_options *parrsb_options_t;
 
 int parrsb_options_get_default(parrsb_options_t *options);
 
+int parrsb_options_update(parrsb_options_t options);
+
 int parrsb_options_set_partitioner(parrsb_options_t options, int partitioner);
 
 void parrsb_options_print(const parrsb_options_t options);

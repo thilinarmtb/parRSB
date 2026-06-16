@@ -195,9 +195,8 @@ int parrsb_part_mesh(int *part, const long long *const vtx,
   struct comm c;
   comm_init(&c, comm);
 
-  options_update(options);
+  parrsb_options_update(options);
   // TODO: parrsb_options_validate(options, c);
-
   const int verbose = options->verbose_level;
   if (c.id == 0 && verbose) parrsb_options_print(options);
 
@@ -337,8 +336,9 @@ int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
   struct comm c;
   comm_init(&c, comm);
 
-  options_update(options);
-  int verbose = options->verbose_level;
+  parrsb_options_update(options);
+  // TODO: parrsb_options_validate(options, c);
+  const int verbose = options->verbose_level;
   if (c.id == 0 && verbose) parrsb_options_print(options);
 
   slong n = num_nodes, wrk;
