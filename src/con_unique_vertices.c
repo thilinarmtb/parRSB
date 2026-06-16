@@ -1,4 +1,4 @@
-#include "con-impl.h"
+#include "con_impl.h"
 
 static struct comm COMM_NULL = {.id = 0, .np = 0, .c = MPI_COMM_NULL};
 
