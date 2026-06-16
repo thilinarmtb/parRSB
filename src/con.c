@@ -11,8 +11,9 @@ double diff_sqr(double x, double y) { return (x - y) * (x - y); }
 //==============================================================================
 // Mesh struct
 //
-static struct mesh_t *mesh_init(uint nelt, unsigned ndim, double *coord,
-                                long long *pinfo, uint npinfo,
+static struct mesh_t *mesh_init(uint nelt, unsigned ndim,
+                                const double *const coord,
+                                const long long *const pinfo, uint npinfo,
                                 const struct comm *c) {
   struct mesh_t *m = tcalloc(struct mesh_t, 1);
   m->nelt = nelt, m->ndim = ndim, m->nnbrs = ndim;
@@ -249,7 +250,7 @@ int parrsb_conn_mesh(long long *vtx, const double *const coord, unsigned nelt,
 
   parrsb_info(&c, verbose - 1, "\t%s ...", name[4]);
   parrsb_barrier(&c), t = comm_time();
-  check_error(element_check(mesh, &c, &bfr), "\t%s:%d element_check failed.");
+  check_error(element_check(mesh, &bfr), "\t%s:%d element_check failed.");
   duration[4] = comm_time() - t;
 
   parrsb_info(&c, verbose - 1, "\t%s ...", name[5]);

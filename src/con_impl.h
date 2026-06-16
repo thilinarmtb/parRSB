@@ -123,7 +123,7 @@ int find_unique_vertices(Mesh mesh, struct comm *c, scalar tol, int verbose,
 
 int match_periodic_faces(Mesh mesh, struct comm *c, int verbose, buffer *bfr);
 
-int element_check(Mesh mesh, struct comm *c, buffer *bfr);
+int element_check(Mesh mesh, buffer *bfr);
 
 int face_check(Mesh mesh, struct comm *c, buffer *bfr);
 
