@@ -1,4 +1,4 @@
-#include "con-impl.h"
+#include "con_impl.h"
 
 int PRE_TO_SYM_VERTEX[GC_MAX_VERTICES] = {0, 1, 3, 2, 4, 5, 7, 6};
 int PRE_TO_SYM_FACE[GC_MAX_FACES] = {2, 1, 3, 0, 4, 5};
