@@ -262,7 +262,7 @@ int face_check(Mesh mesh, struct comm *c, buffer *bfr) {
   return err;
 }
 
-int element_check(Mesh mesh, struct comm *c, buffer *bfr) {
+int element_check(Mesh mesh, buffer *bfr) {
   uint nelt = mesh->nelt;
   uint ndim = mesh->ndim;
   uint nv = (ndim == 3) ? 8 : 4;

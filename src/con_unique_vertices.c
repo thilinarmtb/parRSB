@@ -24,7 +24,7 @@ static void tuple_sort_(void *ra, uint n, uint usize, uint offset) {
   for (;;) {
     if (l > 1) {
       --l;
-      assert(l >= 1 && l <= n && "l");
+      assert(l >= 1 && l <= (sint)n && "l");
       cpy(rra, 1, ra, l);
     } else {
       cpy(rra, 1, ra, ir);
@@ -38,8 +38,8 @@ static void tuple_sort_(void *ra, uint n, uint usize, uint offset) {
     j = l + l;
     while (j <= ir) {
       if (j < ir && get(ra, j) < get(ra, j + 1)) j++;
-      assert(j >= 1 && j <= n && "j2");
-      assert(i >= 1 && i <= n && "i");
+      assert(j >= 1 && j <= (sint)n && "j2");
+      assert(i >= 1 && i <= (sint)n && "i");
       if (get(rra, 1) < get(ra, j)) {
         cpy(ra, i, ra, j);
         i = j;
@@ -47,7 +47,7 @@ static void tuple_sort_(void *ra, uint n, uint usize, uint offset) {
       } else
         break;
     }
-    assert(i >= 1 && i <= n && "i2");
+    assert(i >= 1 && i <= (sint)n && "i2");
     cpy(ra, i, rra, 1);
   }
 
@@ -118,8 +118,7 @@ static void sort_segments_shared_aux(struct array *arr, int dim, struct comm *c,
   parrsb_info(c, verbose, "\t\t\t\tsss_aux_mark_first_point: done.");
 }
 
-static uint find_bin_scan(const sint sum, const struct comm *c,
-                          const int verbose, buffer *bfr) {
+static uint find_bin_scan(const sint sum, const struct comm *c) {
   sint out[2][1], wrk[2][1], in = sum;
   comm_scan(out, c, gs_int, gs_add, &in, 1, wrk);
   return out[0][0];
@@ -137,8 +136,7 @@ static uint find_bin_gs(const slong id, const struct comm *c, const int verbose,
   return bin;
 }
 
-static uint find_bin_cr(const slong id, const struct comm *c, const int verbose,
-                        buffer *bfr) {
+static uint find_bin_cr(const slong id, const struct comm *c, buffer *bfr) {
   struct gid_t {
     ulong id;
     uint proc, procm;
@@ -234,11 +232,11 @@ static void sort_segments_shared(struct array *shared, int dim, struct comm *c,
       sint bin = -1;
       if (algo == 0) {
         uint off = (ngids == 1 && sum == 1) || (ngids == 2 && index == 1);
-        bin = find_bin_scan(sum, &active, verbose - 1, bfr) + off;
+        bin = find_bin_scan(sum, &active) + off;
       } else if (algo == 1) {
         bin = find_bin_gs(gids[index], &active, verbose - 1, bfr);
       } else if (algo == 2) {
-        bin = find_bin_cr(gids[index], &active, verbose - 1, bfr);
+        bin = find_bin_cr(gids[index], &active, bfr);
       }
       parrsb_info(&active, verbose,
                   "\t\t\tsss_find_bin_algo_%d_parity_%d: done.", algo, parity);
