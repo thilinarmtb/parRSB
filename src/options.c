@@ -22,8 +22,8 @@ int parrsb_options_get_default(parrsb_options_t *options) {
 void parrsb_options_print(const parrsb_options_t options) {
 #define PRINT_OPTION(OPT, STR, FMT) printf("%s = " FMT "\n", STR, options->OPT)
 
-  PRINT_OPTION(partitioner, "PARRSB_PARTITIONER", "%d");
-  PRINT_OPTION(levels, "PARRSB_LEVELS", "%d");
+  PRINT_OPTION(partitioner, "PARRSB_PARTITIONER", "%u");
+  PRINT_OPTION(levels, "PARRSB_LEVELS", "%u");
   PRINT_OPTION(verbose_level, "PARRSB_VERBOSE_LEVEL", "%d");
   PRINT_OPTION(profile_level, "PARRSB_PROFILE_LEVEL", "%d");
   PRINT_OPTION(find_cc, "PARRSB_FIND_CONNECTED_COMPONENTS", "%d");
@@ -60,6 +60,8 @@ int parrsb_options_update(parrsb_options_t options) {
   OPT_UPDATE(rsb_tol, "PARRSB_RSB_TOL", 0);
 
 #undef OPT_UPDATE
+
+  return 0;
 }
 
 int parrsb_options_set_partitioner(parrsb_options_t options, int partitioner) {

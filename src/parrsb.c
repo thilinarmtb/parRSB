@@ -127,7 +127,7 @@ static void parrsb_part_mesh_v0(int *part, const long long *const vtx,
     }
   }
 
-  for (int l = 0; l < options->levels; l++) comm_free(&comms[l]);
+  for (uint l = 0; l < options->levels; l++) comm_free(&comms[l]);
   comm_free(&active);
 
   parrsb_info(c, verbose, "parrsb_part_mesh_v0: restore original input");
@@ -376,7 +376,7 @@ int parrsb_part_graph(int *part, unsigned num_nodes, const long long *nodes,
     }
   }
 
-  for (int i = 0; i < options->levels; i++) comm_free(&comms[i]);
+  for (uint i = 0; i < options->levels; i++) comm_free(&comms[i]);
   comm_free(&active);
 
   parrsb_info(&c, verbose, "parrsb_part_graph: restore original input");
