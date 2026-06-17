@@ -25,7 +25,7 @@ static void parrsb_print_part_stat(long long *vtx, unsigned nelt, unsigned nv,
   MPI_Comm_size(ce, &np);
 
   int nc[3], ns[3], nss[3], nel[3];
-  parrsb_get_part_stat(&nc[0], &ns[0], &nss[0], &nel[0], vtx, nelt, nv, ce);
+  parrsb_part_stat(&nc[0], &ns[0], &nss[0], &nel[0], vtx, nelt, nv, ce);
 
   if (id == 0) goto flush;
   printf("Min neighbors: %d | Max neighbors: %d | Avg neighbors: %lf\n", nc[0],
@@ -43,7 +43,6 @@ struct parrsb_example_opts {
   char *mesh;  // Mesh name, required.
   double tol;  // gencon tolerance, default: 0.2
   int test;    // run tests, default: 0
-  int dump;    // dump the connectivity or map file, default: 1
   int nactive; // # of active MPI ranks, default: INT_MAX
   int verbose; // Verbosity, default: 0
 };
@@ -63,7 +62,6 @@ static parrsb_example_opts parrsb_example_opts_parse(int argc, char *argv[],
   in->mesh = 0;
   in->tol = 2e-1;
   in->test = 0;
-  in->dump = 0;
   in->verbose = 0;
   in->nactive = INT_MAX;
 
@@ -73,7 +71,6 @@ static parrsb_example_opts parrsb_example_opts_parse(int argc, char *argv[],
   static struct option long_options[] = {{"mesh", required_argument, 0, 0},
                                          {"tol", optional_argument, 0, 10},
                                          {"test", optional_argument, 0, 20},
-                                         {"dump", optional_argument, 0, 30},
                                          {"nactive", optional_argument, 0, 40},
                                          {"verbose", optional_argument, 0, 50},
                                          {"help", optional_argument, 0, 99},
@@ -92,7 +89,6 @@ static parrsb_example_opts parrsb_example_opts_parse(int argc, char *argv[],
       break;
     case 10: in->tol = atof(optarg); break;
     case 20: in->test = 1; break;
-    case 30: in->dump = 1; break;
     case 40: in->nactive = atoi(optarg); break;
     case 50: in->verbose = atoi(optarg); break;
     case 99:
@@ -101,8 +97,6 @@ static parrsb_example_opts parrsb_example_opts_parse(int argc, char *argv[],
         printf("--tol (optional, default = 0.2), Tolerance used for mesh "
                "connectivity.\n");
         printf("--test (optional), Run tests in `genmap`/`gencon` examples.\n");
-        printf("--dump (optional), Dump `.co2`/`.ma2` file(s) after running "
-               "`gencon`/`genmap`.\n");
         printf("--nactive (optional, default: `INT_MAX`), Number of active "
                "processes.\n");
       }

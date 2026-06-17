@@ -64,8 +64,8 @@ int parrsb_dump_map(char *name, unsigned nelt, unsigned nv, long long *vl,
 int parrsb_dist_mesh(unsigned *nelt, long long **vl, double **coord, int *part,
                      unsigned nv, MPI_Comm comm);
 
-void parrsb_get_part_stat(int *nc, int *ns, int *nss, int *nel, long long *vtx,
-                          int nelt, int nv, MPI_Comm comm);
+void parrsb_part_stat(int *nc, int *ns, int *nss, int *nel, long long *vtx,
+                      int nelt, int nv, MPI_Comm comm);
 
 #ifdef __cplusplus
 }

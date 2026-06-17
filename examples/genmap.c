@@ -1,5 +1,5 @@
 /*
- * Generate partitions (.ma2) from Nek5000's mesh (.re2) file.
+ * Generate partitions from Nek5000's mesh (.re2) file.
  */
 #include "parrsb_example.h"
 
@@ -17,7 +17,7 @@ static void partition(long long *vl, double *coord, unsigned nelt, unsigned nv,
   }
 
   int nss[6];
-  parrsb_get_part_stat(NULL, NULL, nss, NULL, vl, nelt, nv, comm);
+  parrsb_part_stat(NULL, NULL, nss, NULL, vl, nelt, nv, comm);
 
   // Partition the mesh.
   int *part = (int *)calloc(nelt, sizeof(int));
@@ -29,8 +29,8 @@ static void partition(long long *vl, double *coord, unsigned nelt, unsigned nv,
   parrsb_check_error(err, comm);
 
   // Redistribute data based on identified partitions.
-  err = parrsb_dist_mesh(&nelt, &vl, &coord, part, nv, comm);
-  parrsb_check_error(err, comm);
+  parrsb_check_error(parrsb_dist_mesh(&nelt, &vl, &coord, part, nv, comm),
+                     comm);
 
   // Store post-partition statistics.
   if (in->verbose > 0) {
@@ -38,18 +38,9 @@ static void partition(long long *vl, double *coord, unsigned nelt, unsigned nv,
     fflush(stdout);
     parrsb_print_part_stat(vl, nelt, nv, comm);
   }
-  parrsb_get_part_stat(NULL, NULL, &nss[3], NULL, vl, nelt, nv, comm);
+  parrsb_part_stat(NULL, NULL, &nss[3], NULL, vl, nelt, nv, comm);
 
-  // Write partition to .ma2 file.
-  if (in->dump) {
-    err = parrsb_dump_map(in->mesh, nelt, nv, vl, comm);
-    parrsb_check_error(err, comm);
-  }
-
-  if (in->test && in->nactive > 1) {
-    err = (nss[2] < nss[5]);
-    parrsb_check_error(err, comm);
-  }
+  if (in->test && in->nactive > 1) parrsb_check_error((nss[2] < nss[5]), comm);
 
   free(part);
 }
