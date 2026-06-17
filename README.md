@@ -31,7 +31,6 @@ mpirun -np 4 ./gencon --mesh ethier --tol=0.2 --test
 - `--mesh` (required), Name of the input mesh (.re2 file).
 - `--tol` (optional, default = 0.2), Tolerance for finding mesh connectivity.
 - `--test` (optional), Run tests in `genmap` or `gencon` examples.
-- `--dump` (optional), Dump `.co2`/`.ma2` file(s) after running `gencon`/`genmap`.
 - `--nactive` (optional, default: `INT_MAX`), Number of active processes.
 
 Please note that all the optional arguments requires a `=` sign when being

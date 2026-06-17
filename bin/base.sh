@@ -136,7 +136,7 @@ function nek5k_tests() {
     for np in ${NP}; do
       msg "  NP=${np}, ${mesh}"
       ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/gencon --mesh ${mesh} \
-            --tol=${tol} --dump=0 --test=1
+            --tol=${tol} --test=1
       msgln " ... ok"
     done
   done
@@ -152,7 +152,7 @@ function nek5k_tests() {
     for np in ${NP}; do
       msg "  NP=${np}, ${mesh}"
       ${MPIRUN} ${MPIOPTS} -np ${np} ${INS_DIR}/bin/genmap --mesh ${mesh} \
-        --tol=${tol} --dump=0 --test=1
+        --tol=${tol} --test=1
       if [[ $? -ne 0 ]]; then
         err_cnt=$(( err_cnt + 1 ))
         msgln " ... not ok"

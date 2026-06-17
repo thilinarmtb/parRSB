@@ -187,8 +187,8 @@ int parrsb_dist_mesh(unsigned int *nelt_, long long **vl_, double **coord_,
   return 0;
 }
 
-void parrsb_get_part_stat(int *nc, int *ns, int *nss, int *nel, long long *vtx,
-                          int nelt, int nv, MPI_Comm ce) {
+void parrsb_part_stat(int *nc, int *ns, int *nss, int *nel, long long *vtx,
+                      int nelt, int nv, MPI_Comm ce) {
   struct comm comm;
   comm_init(&comm, ce);
 
